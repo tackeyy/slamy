@@ -1,15 +1,16 @@
-# slamy — Slack in your terminal.
+# slamy — Slack MCP server & CLI
 
-A CLI tool for Slack operations with MCP (Model Context Protocol) server support. Both human-friendly and AI-agent-ready.
+A Slack [MCP (Model Context Protocol)](https://modelcontextprotocol.io/) server that also works as a standalone CLI. Connect AI agents like Claude to your Slack workspace, or use it directly from the terminal.
 
 ## Features
 
+- **MCP Server** — expose Slack operations as MCP tools for AI agents (Claude Code, Claude Desktop, etc.)
+- **CLI** — use the same operations directly from the terminal
 - **Channels** — list channels, retrieve message history
 - **Messages** — post messages, reply to threads
 - **Users** — list workspace members, view profiles
 - **Reactions** — add emoji reactions to messages
 - **Search** — search messages across channels with Slack query syntax
-- **MCP Server** — expose all operations as MCP tools for AI agent integration
 - **Multiple output formats** — human-readable text, JSON, and TSV
 
 ## Installation
@@ -211,9 +212,34 @@ C01234ABCDE	general	42	public
 C01234FGHIJ	random	15	private
 ```
 
-## MCP Tools
+## MCP Server
 
-When running `slamy mcp`, the following tools are available:
+### Usage with Claude Code
+
+```bash
+claude mcp add slamy /path/to/slamy mcp
+```
+
+### Usage with Claude Desktop
+
+Add to your `claude_desktop_config.json`:
+
+```json
+{
+  "mcpServers": {
+    "slamy": {
+      "command": "/path/to/slamy",
+      "args": ["mcp"],
+      "env": {
+        "SLACK_BOT_TOKEN": "xoxb-your-bot-token",
+        "SLACK_USER_TOKEN": "xoxp-your-user-token"
+      }
+    }
+  }
+}
+```
+
+### Available Tools
 
 | Tool | Description |
 |---|---|
