@@ -7,29 +7,21 @@ import (
 	"github.com/slack-go/slack"
 )
 
-// Client wraps Slack API clients for both Bot and User tokens.
+// Client wraps the Slack API client using a User Token.
 type Client struct {
-	Bot  *slack.Client
-	User *slack.Client // for search.messages (requires User Token)
+	User *slack.Client
 }
 
 // NewClient creates a new Slack client from environment variables.
 func NewClient() (*Client, error) {
-	botToken := os.Getenv("SLACK_BOT_TOKEN")
-	if botToken == "" {
-		return nil, fmt.Errorf("SLACK_BOT_TOKEN is not set")
-	}
-
-	c := &Client{
-		Bot: slack.New(botToken),
-	}
-
 	userToken := os.Getenv("SLACK_USER_TOKEN")
-	if userToken != "" {
-		c.User = slack.New(userToken)
+	if userToken == "" {
+		return nil, fmt.Errorf("SLACK_USER_TOKEN is not set")
 	}
 
-	return c, nil
+	return &Client{
+		User: slack.New(userToken),
+	}, nil
 }
 
 // TeamID returns the configured team ID.

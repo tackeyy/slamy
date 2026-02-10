@@ -38,7 +38,7 @@ var threadsRepliesCmd = &cobra.Command{
 			Limit:     limit,
 		}
 
-		msgs, _, _, err := client.Bot.GetConversationReplies(params)
+		msgs, _, _, err := client.User.GetConversationReplies(params)
 		if err != nil {
 			return fmt.Errorf("failed to get replies: %w", err)
 		}

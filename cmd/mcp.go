@@ -137,7 +137,7 @@ func registerMCPTools(s *server.MCPServer) {
 	// slack_search_messages
 	s.AddTool(
 		mcp.NewTool("slack_search_messages",
-			mcp.WithDescription("Search messages in Slack (requires User Token)"),
+			mcp.WithDescription("Search messages in Slack"),
 			mcp.WithString("query", mcp.Required(), mcp.Description("Search query. Supports Slack search modifiers like in:#channel, from:@user")),
 			mcp.WithNumber("count", mcp.Description("Number of results per page (default 20)")),
 			mcp.WithNumber("page", mcp.Description("Page number (default 1)")),
@@ -169,7 +169,7 @@ func handleListChannels(ctx context.Context, request mcp.CallToolRequest) (*mcp.
 
 	var allChannels []slackapi.Channel
 	for {
-		channels, nextCursor, err := client.Bot.GetConversations(params)
+		channels, nextCursor, err := client.User.GetConversations(params)
 		if err != nil {
 			return mcp.NewToolResultError(fmt.Sprintf("failed to list channels: %v", err)), nil
 		}
@@ -226,7 +226,7 @@ func handleGetChannelHistory(ctx context.Context, request mcp.CallToolRequest) (
 		Limit:     limit,
 	}
 
-	resp, err := client.Bot.GetConversationHistory(params)
+	resp, err := client.User.GetConversationHistory(params)
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("failed to get history: %v", err)), nil
 	}
@@ -276,7 +276,7 @@ func handleGetThreadReplies(ctx context.Context, request mcp.CallToolRequest) (*
 		Limit:     limit,
 	}
 
-	msgs, _, _, err := client.Bot.GetConversationReplies(params)
+	msgs, _, _, err := client.User.GetConversationReplies(params)
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("failed to get replies: %v", err)), nil
 	}
@@ -315,7 +315,7 @@ func handlePostMessage(ctx context.Context, request mcp.CallToolRequest) (*mcp.C
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	_, ts, err := client.Bot.PostMessage(channelID,
+	_, ts, err := client.User.PostMessage(channelID,
 		slackapi.MsgOptionText(text, false),
 	)
 	if err != nil {
@@ -344,7 +344,7 @@ func handleReplyToThread(ctx context.Context, request mcp.CallToolRequest) (*mcp
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	_, ts, err := client.Bot.PostMessage(channelID,
+	_, ts, err := client.User.PostMessage(channelID,
 		slackapi.MsgOptionText(text, false),
 		slackapi.MsgOptionTS(threadTs),
 	)
@@ -375,7 +375,7 @@ func handleAddReaction(ctx context.Context, request mcp.CallToolRequest) (*mcp.C
 	}
 
 	ref := slackapi.NewRefToMessage(channelID, timestamp)
-	err = client.Bot.AddReaction(reaction, ref)
+	err = client.User.AddReaction(reaction, ref)
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("failed to add reaction: %v", err)), nil
 	}
@@ -391,7 +391,7 @@ func handleGetUsers(ctx context.Context, request mcp.CallToolRequest) (*mcp.Call
 
 	includeBots := request.GetBool("include_bots", false)
 
-	users, err := client.Bot.GetUsers()
+	users, err := client.User.GetUsers()
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("failed to list users: %v", err)), nil
 	}
@@ -437,7 +437,7 @@ func handleGetUserProfile(ctx context.Context, request mcp.CallToolRequest) (*mc
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	user, err := client.Bot.GetUserInfo(userID)
+	user, err := client.User.GetUserInfo(userID)
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("failed to get user profile: %v", err)), nil
 	}
@@ -464,10 +464,6 @@ func handleSearchMessages(ctx context.Context, request mcp.CallToolRequest) (*mc
 	client, err := getClient()
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
-	}
-
-	if client.User == nil {
-		return mcp.NewToolResultError("SLACK_USER_TOKEN is required for search"), nil
 	}
 
 	query, err := request.RequireString("query")

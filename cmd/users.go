@@ -24,7 +24,7 @@ var usersListCmd = &cobra.Command{
 			return err
 		}
 
-		users, err := client.Bot.GetUsers()
+		users, err := client.User.GetUsers()
 		if err != nil {
 			return fmt.Errorf("failed to list users: %w", err)
 		}
@@ -105,7 +105,7 @@ var usersProfileCmd = &cobra.Command{
 			return err
 		}
 
-		user, err := client.Bot.GetUserInfo(userID)
+		user, err := client.User.GetUserInfo(userID)
 		if err != nil {
 			return fmt.Errorf("failed to get user profile: %w", err)
 		}

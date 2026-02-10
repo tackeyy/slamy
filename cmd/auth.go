@@ -24,7 +24,7 @@ var authTestCmd = &cobra.Command{
 			return err
 		}
 
-		resp, err := client.Bot.AuthTest()
+		resp, err := client.User.AuthTest()
 		if err != nil {
 			return fmt.Errorf("auth test failed: %w", err)
 		}
@@ -50,16 +50,6 @@ var authTestCmd = &cobra.Command{
 		fmt.Printf("Authenticated as: %s (%s)\n", resp.User, resp.UserID)
 		fmt.Printf("Team: %s (%s)\n", resp.Team, resp.TeamID)
 		fmt.Printf("URL: %s\n", resp.URL)
-
-		// Test user token if available
-		if client.User != nil {
-			userResp, err := client.User.AuthTest()
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "User token auth failed: %v\n", err)
-			} else {
-				fmt.Printf("User token: %s (%s)\n", userResp.User, userResp.UserID)
-			}
-		}
 
 		return nil
 	},

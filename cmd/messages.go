@@ -37,7 +37,7 @@ var messagesPostCmd = &cobra.Command{
 			slack.MsgOptionText(text, false),
 		}
 
-		_, ts, err := client.Bot.PostMessage(channelID, opts...)
+		_, ts, err := client.User.PostMessage(channelID, opts...)
 		if err != nil {
 			return fmt.Errorf("failed to post message: %w", err)
 		}
@@ -85,7 +85,7 @@ var messagesReplyCmd = &cobra.Command{
 			slack.MsgOptionTS(threadTs),
 		}
 
-		_, ts, err := client.Bot.PostMessage(channelID, opts...)
+		_, ts, err := client.User.PostMessage(channelID, opts...)
 		if err != nil {
 			return fmt.Errorf("failed to reply: %w", err)
 		}

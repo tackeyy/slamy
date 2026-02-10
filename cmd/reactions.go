@@ -35,7 +35,7 @@ var reactionsAddCmd = &cobra.Command{
 		}
 
 		ref := slack.NewRefToMessage(channelID, timestamp)
-		err = client.Bot.AddReaction(name, ref)
+		err = client.User.AddReaction(name, ref)
 		if err != nil {
 			return fmt.Errorf("failed to add reaction: %w", err)
 		}
