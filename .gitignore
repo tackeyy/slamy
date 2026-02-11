@@ -1,3 +1,4 @@
 slamy
 *.exe
 .env
+dist/

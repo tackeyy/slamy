@@ -26,7 +26,7 @@ var mcpCmd = &cobra.Command{
 }
 
 func runMCPServer() error {
-	mcpServer := server.NewMCPServer("slamy", "0.1.0",
+	mcpServer := server.NewMCPServer("slamy", version,
 		server.WithToolCapabilities(true),
 		server.WithRecovery(),
 	)

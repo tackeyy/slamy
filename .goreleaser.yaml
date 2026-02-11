@@ -1,0 +1,39 @@
+version: 2
+
+builds:
+  - env:
+      - CGO_ENABLED=0
+    goos:
+      - darwin
+      - linux
+    goarch:
+      - amd64
+      - arm64
+    ldflags:
+      - -s -w
+      - -X github.com/tackeyy/slamy/cmd.version={{.Version}}
+      - -X github.com/tackeyy/slamy/cmd.commit={{.Commit}}
+      - -X github.com/tackeyy/slamy/cmd.date={{.Date}}
+
+archives:
+  - formats:
+      - tar.gz
+
+nfpms:
+  - package_name: slamy
+    vendor: tackeyy
+    homepage: https://github.com/tackeyy/slamy
+    maintainer: tackeyy
+    description: A CLI tool and MCP server for Slack operations
+    license: MIT
+    formats:
+      - deb
+      - rpm
+
+homebrew_casks:
+  - repository:
+      owner: tackeyy
+      name: homebrew-tap
+      token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
+    homepage: https://github.com/tackeyy/slamy
+    description: A CLI tool and MCP server for Slack operations

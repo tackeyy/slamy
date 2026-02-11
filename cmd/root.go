@@ -8,14 +8,21 @@ import (
 )
 
 var (
+	version = "dev"
+	commit  = "none"
+	date    = "unknown"
+)
+
+var (
 	outputJSON  bool
 	outputPlain bool
 )
 
 var rootCmd = &cobra.Command{
-	Use:   "slamy",
-	Short: "Slack CLI tool",
-	Long:  "slamy — A CLI tool for Slack operations. Designed for both human use and AI agent integration.",
+	Use:     "slamy",
+	Short:   "Slack CLI tool",
+	Long:    "slamy — A CLI tool for Slack operations. Designed for both human use and AI agent integration.",
+	Version: version,
 }
 
 func Execute() {
