@@ -17,11 +17,19 @@ Slack 用の [MCP (Model Context Protocol)](https://modelcontextprotocol.io/) �
 
 ## インストール
 
+### Homebrew
+
+```bash
+brew install tackeyy/tap/slamy
+```
+
+### Go
+
 ```bash
 go install github.com/tackeyy/slamy@latest
 ```
 
-ソースからビルドする場合:
+### ソースからビルド
 
 ```bash
 git clone https://github.com/tackeyy/slamy.git

@@ -17,11 +17,19 @@ A Slack [MCP (Model Context Protocol)](https://modelcontextprotocol.io/) server 
 
 ## Installation
 
+### Homebrew
+
+```bash
+brew install tackeyy/tap/slamy
+```
+
+### Go
+
 ```bash
 go install github.com/tackeyy/slamy@latest
 ```
 
-Or build from source:
+### Build from source
 
 ```bash
 git clone https://github.com/tackeyy/slamy.git
