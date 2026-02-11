@@ -30,7 +30,7 @@ nfpms:
       - deb
       - rpm
 
-homebrew_casks:
+brews:
   - repository:
       owner: tackeyy
       name: homebrew-tap
