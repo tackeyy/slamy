@@ -1,4 +1,4 @@
-name: Feature Request
+name: 💡 Feature Request
 description: Suggest a new feature or enhancement
 labels: ["enhancement", "needs-discussion"]
 body:
@@ -24,7 +24,7 @@ body:
       label: Proposed solution
       description: How would you like this feature to work?
       placeholder: |
-        Add a new command `slamy <command>` that allows users to...
+        Add a new command `slamy export` that allows users to...
     validations:
       required: true
 

@@ -1,15 +1,16 @@
-# Contributing to Slamy
+# Contributing to slamy
 
-Thank you for your interest in contributing to Slamy! This document provides guidelines and instructions for contributing to the project.
+Thank you for your interest in contributing to slamy! This document provides guidelines and
+instructions for contributing to the project.
 
-## Welcome
+## 🙏 Welcome!
 
-Slamy is a Slack MCP server and CLI tool written in Go. We welcome contributions from everyone, whether you're fixing a bug, adding a feature, or improving documentation.
+slamy is a Go application. We welcome contributions from everyone, whether you're fixing
+a bug, adding a feature, or improving documentation.
 
-## Table of Contents
+## 📖 Table of Contents
 
 - [Ways to Contribute](#ways-to-contribute)
-- [Before You Start](#before-you-start)
 - [Development Setup](#development-setup)
 - [Coding Standards](#coding-standards)
 - [Testing Requirements](#testing-requirements)
@@ -18,103 +19,83 @@ Slamy is a Slack MCP server and CLI tool written in Go. We welcome contributions
 - [Community Guidelines](#community-guidelines)
 - [Getting Help](#getting-help)
 
-## Ways to Contribute
+## 🎯 Ways to Contribute
 
-### You can contribute by:
+- **Bug Reports**: Found a bug? Open an issue with reproduction steps
+- **Feature Requests**: Have an idea? Share it in a feature request issue
+- **Code Contributions**: Submit pull requests for bug fixes or features
+- **Documentation**: Improve README, add examples, or fix typos
+- **Testing**: Add test cases or improve test coverage
+- **Code Review**: Review open pull requests
 
-- **Reporting bugs** - Found an issue? Let us know!
-- **Suggesting features** - Have an idea? We'd love to hear it
-- **Improving documentation** - Help make our docs clearer
-- **Submitting bug fixes** - Fix issues and help improve stability
-- **Adding new features** - Expand Slamy's capabilities (discuss first!)
-
-## Before You Start
-
-1. **Check existing issues/PRs** to avoid duplication
-2. **For new features**, open an issue first to discuss the proposal
-3. **Read our [Testing Guide](docs/TESTING.md)** to understand our testing approach
-4. **Ensure you understand our [Code of Conduct](CODE_OF_CONDUCT.md)**
-
-## Development Setup
+## 🛠️ Development Setup
 
 ### Prerequisites
 
-- Go 1.25.2+
-- A Slack User Token ([How to get one](https://api.slack.com/authentication/token-types#user))
+- Go 1.21 or higher
+- Git
 
-### Setup Steps
+### Getting Started
 
-```bash
-# 1. Fork and clone the repository
-git clone https://github.com/YOUR_USERNAME/slamy.git
-cd slamy
+1. **Fork and clone the repository**
+   ```bash
+   git clone https://github.com/tackeyy/slamy.git
+   cd slamy
+   ```
 
-# 2. Set up environment variables
-export SLACK_USER_TOKEN=xoxp-your-user-token
-# Optional: export SLACK_TEAM_ID=T0123456789
+2. **Install dependencies**
+   ```bash
+   go mod download
+   ```
 
-# 3. Run tests to verify setup
-go test -race ./...
+3. **Run tests to verify setup**
+   ```bash
+   go test ./...
+   ```
 
-# 4. Build the project
-go build -o slamy .
+4. **Build the project**
+   ```bash
+   go build
+   ```
 
-# 5. Test the CLI locally
-./slamy --version
-
-# 6. Test the MCP server locally
-./slamy mcp
-```
-
-## Coding Standards
+## 📝 Coding Standards
 
 ### Go Style
 
-- Run `gofmt` on all code (already enforced by Go tooling)
-- Follow [Effective Go](https://go.dev/doc/effective_go) conventions
-- Use descriptive variable names (`channelID` not `id`)
-- Export only what needs to be exported
+- Follow official [Go Code Review Comments](https://github.com/golang/go/wiki/CodeReviewComments)
+- Use `gofmt` for formatting (enforced by CI)
+- Use `golangci-lint` for static analysis
+- Keep functions small and focused
+- Write descriptive variable names (avoid single letters except for loops)
 - Add comments for exported functions and types
 
-### Code Organization
+### Commit Messages
 
-- Keep functions small and focused (single responsibility)
-- Extract complex logic into separate functions
-- Add comments only when logic isn't self-evident
-- Follow existing patterns in the codebase
-
-### Commit Message Convention
-
-Format: `<type>: <subject>`
-
-**Types:**
+Follow [Conventional Commits](https://www.conventionalcommits.org/):
 - `feat:` New feature
 - `fix:` Bug fix
-- `test:` Test additions/changes
 - `docs:` Documentation changes
-- `refactor:` Code refactoring (no functional changes)
-- `chore:` Maintenance tasks (dependencies, tooling)
+- `test:` Adding or updating tests
+- `refactor:` Code refactoring
+- `chore:` Maintenance tasks
 
-**Examples:**
+Example:
 ```
-feat: add support for listing DMs
-fix: correct timestamp parsing in formatTimestamp function
-test: add validation tests for handlePostMessage handler
-docs: update README with new --json flag
-refactor: extract Slack client initialization to separate module
-chore: update dependencies to latest versions
+feat: add user authentication handler
+
+Implements JWT-based authentication for API endpoints.
+Includes middleware for token validation.
 ```
 
-## Testing Requirements
+## ✅ Testing Requirements
 
-**All code contributions MUST include tests.**
+See [docs/TESTING.md](docs/TESTING.md) for detailed testing guidelines.
 
 ### Test Types
 
-1. **Unit Tests** - Test individual functions in isolation (e.g., `formatTimestamp`, `tsToTime`)
-2. **Handler Tests** - Test MCP handler functions with mocked Slack API
-3. **Concurrency Tests** - Verify data-race-free concurrent operations
-4. **Error Handling Tests** - Test error scenarios and edge cases
+1. **Unit Tests**: For individual functions and methods
+2. **Integration Tests**: For component interactions
+3. **Table-driven Tests**: For testing multiple scenarios
 
 ### Running Tests
 
@@ -122,137 +103,91 @@ chore: update dependencies to latest versions
 # Run all tests
 go test ./...
 
-# Run all tests with race detector (required before submitting)
+# Run with coverage
+go test -cover ./...
+
+# Run with race detector
 go test -race ./...
 
-# Run specific test file
-go test -v ./cmd/ -run TestFormatTimestamp
-
-# Run tests with coverage
-go test -cover ./...
+# Run specific package
+go test ./pkg/auth/...
 ```
-
-### Test Writing Guidelines
-
-- Follow **Arrange/Act/Assert** pattern
-- Use descriptive test names: `TestFormatTimestamp_WithMicroseconds`
-- Use the hand-written `MockSlackAPI` in `internal/slack/mock.go` for mocking
-- Use `getClientFunc` substitution for handler-level mocking
-- See **[docs/TESTING.md](docs/TESTING.md)** for the comprehensive testing guide
 
 ### Test Coverage Expectations
 
-- **New features**: Tests required for new code
-- **Bug fixes**: Add regression test reproducing the bug
-- **Refactoring**: Maintain or improve existing coverage
+- New features: 80%+ coverage required
+- Bug fixes: Add test that reproduces the bug
+- All tests must pass before merging
 
-## Submitting Changes
+## 📤 Submitting Changes
 
-### Pull Request Process
+### Before Submitting
 
-#### 1. Create a branch
+1. **Create a feature branch**
+   ```bash
+   git checkout -b feat/your-feature-name
+   ```
 
-```bash
-git checkout -b feat/your-feature-name
-# or
-git checkout -b fix/your-bug-fix
-```
+2. **Make your changes**
+   - Write clean, readable code
+   - Add tests for new functionality
+   - Update documentation as needed
 
-#### 2. Make your changes
+3. **Run tests and linters**
+   ```bash
+   go test ./...
+   golangci-lint run
+   ```
 
-- Write code
-- Add tests
-- Update documentation if needed
+4. **Commit your changes**
+   ```bash
+   git add .
+   git commit -m "feat: add your feature description"
+   ```
 
-#### 3. Ensure quality
+5. **Push to your fork**
+   ```bash
+   git push origin feat/your-feature-name
+   ```
 
-```bash
-go test -race ./...    # All tests must pass with race detector
-go build ./...         # Build must succeed
-gofmt -l .             # No formatting issues
-```
+6. **Open a Pull Request**
+   - Use the PR template
+   - Link related issues
+   - Describe your changes clearly
 
-#### 4. Commit your changes
-
-```bash
-git add .
-git commit -m "feat: add your feature description"
-```
-
-#### 5. Push and create PR
-
-```bash
-git push origin feat/your-feature-name
-# Then create PR via GitHub UI
-```
-
-#### 6. Fill out PR template
-
-- Describe what changed and why
-- Link related issues with `Closes #123`
-- Provide testing evidence
-- Check all applicable boxes in the template
-
-### PR Requirements Checklist
-
-Before submitting, ensure:
-
-- All tests pass (`go test -race ./...`)
-- Build succeeds (`go build ./...`)
-- Code is formatted (`gofmt`)
-- Code follows project style
-- Commit messages follow convention
-- Tests added for new functionality
-- Documentation updated (if applicable)
-- PR template fully completed
-
-### What to Expect
-
-- **Initial review** within 2-3 business days
-- **Feedback** and requested changes from maintainers
-- **Approval and merge** once all requirements are met
-
-## Code Review Process
+## 🔍 Code Review Process
 
 ### For Contributors
 
-- **Be responsive** to feedback and questions
-- **Ask for clarification** if feedback is unclear
-- **Push updates** to the same branch (PR will auto-update)
-- **Be patient and respectful** throughout the process
+- Be responsive to feedback
+- Keep discussions constructive
+- Update your PR based on review comments
+- Be patient - reviews may take a few days
 
 ### Review Criteria
 
-Reviewers will check:
+- ✅ Functionality: Does it work as intended?
+- ✅ Tests: Are there adequate tests?
+- ✅ Code Quality: Is it readable and maintainable?
+- ✅ Documentation: Are changes documented?
+- ✅ Style: Does it follow Go conventions?
 
-- **Functionality** - Does it work as intended?
-- **Tests** - Are they comprehensive and passing?
-- **Code Quality** - Is it readable and maintainable?
-- **Documentation** - Is it clear and up-to-date?
-- **Performance** - Are there any obvious performance issues?
-- **Security** - Are there any potential vulnerabilities?
+## 🤝 Community Guidelines
 
-## Community Guidelines
+Please read and follow our [Code of Conduct](CODE_OF_CONDUCT.md).
 
-- Be respectful and welcoming to all contributors
-- Follow our [Code of Conduct](CODE_OF_CONDUCT.md)
-- Provide constructive feedback
-- Assume good intentions
-- Help others learn and grow
+### Recognition
 
-## Getting Help
-
-- **Bug Reports** - Open an [Issue](https://github.com/tackeyy/slamy/issues/new?template=bug_report.yml)
-- **Feature Requests** - Open an [Issue](https://github.com/tackeyy/slamy/issues/new?template=feature_request.yml)
-- **General Questions** - Open an [Issue](https://github.com/tackeyy/slamy/issues/new?template=question.yml)
-
-## Recognition
-
-All contributors are recognized in:
-
+Contributors are recognized in:
 - GitHub Contributors page
-- Release notes (for significant contributions)
+- Release notes for significant contributions
+
+## 💬 Getting Help
+
+- **Questions**: Open a [Question issue](.github/ISSUE_TEMPLATE/question.yml)
+- **Discussion**: Use GitHub Discussions (if enabled)
+- **Bugs**: Open a [Bug Report](.github/ISSUE_TEMPLATE/bug_report.yml)
 
 ---
 
-Thank you for contributing to Slamy! Your efforts help make this tool better for everyone.
+Thank you for contributing to slamy! 🎉

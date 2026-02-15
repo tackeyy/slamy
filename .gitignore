@@ -2,3 +2,4 @@ slamy
 *.exe
 .env
 dist/
+.claude/

@@ -10,13 +10,13 @@ Closes #
 ## Type of Change
 
 <!-- Check all that apply -->
-- [ ] Bug fix (non-breaking change fixing an issue)
-- [ ] New feature (non-breaking change adding functionality)
-- [ ] Breaking change (fix or feature causing existing functionality to break)
-- [ ] Documentation update
-- [ ] Test improvement
-- [ ] Refactoring (no functional changes)
-- [ ] Configuration/tooling change
+- [ ] 🐛 Bug fix (non-breaking change fixing an issue)
+- [ ] ✨ New feature (non-breaking change adding functionality)
+- [ ] 💥 Breaking change (fix or feature causing existing functionality to break)
+- [ ] 📝 Documentation update
+- [ ] 🧪 Test improvement
+- [ ] ♻️ Refactoring (no functional changes)
+- [ ] 🔧 Configuration/tooling change
 
 ## Testing
 
@@ -24,16 +24,16 @@ Closes #
 
 ### Test Coverage
 - [ ] Unit tests added/updated
-- [ ] All tests pass locally (`go test -race ./...`)
-- [ ] Build succeeds locally (`go build ./...`)
+- [ ] All tests pass locally (`npm test`)
+- [ ] Build succeeds locally (`npm run build`)
 - [ ] Manual testing performed
 
 ### Test Evidence
 <!-- Paste test output or describe manual testing steps -->
 ```bash
 # Example:
-$ go test -race ./...
-ok  	github.com/tackeyy/slamy/cmd	1.540s
+$ npm test
+✓ All 160 tests passed
 ```
 
 ## Checklist
@@ -45,7 +45,6 @@ ok  	github.com/tackeyy/slamy/cmd	1.540s
 - [ ] My changes generate no new warnings
 - [ ] I have added tests that prove my fix/feature works
 - [ ] New and existing tests pass locally
-- [ ] Code is formatted with `gofmt`
 - [ ] My commit messages follow the conventional format (e.g., `feat:`, `fix:`)
 
 ## Screenshots (if applicable)

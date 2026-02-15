@@ -1,4 +1,4 @@
-name: Bug Report
+name: 🐛 Bug Report
 description: Report a bug or unexpected behavior
 labels: ["bug", "needs-triage"]
 body:
@@ -13,7 +13,7 @@ body:
       label: Describe the bug
       description: A clear and concise description of what the bug is
       placeholder: |
-        When I run `slamy channels list --unread`, I get an error...
+        When I run `slamy create --start 2026-02-20T10:00:00 --duration 60`, I get an error...
     validations:
       required: true
 
@@ -23,10 +23,9 @@ body:
       label: Steps to reproduce
       description: Steps to reproduce the behavior
       placeholder: |
-        1. Set `SLACK_USER_TOKEN` environment variable
-        2. Run `slamy channels list --unread`
-        3. Observe error message
-        4. ...
+        1. Run `slamy create --start 2026-02-20T10:00:00 --duration 60`
+        2. Observe error message
+        3. ...
     validations:
       required: true
 
@@ -35,7 +34,7 @@ body:
     attributes:
       label: Expected behavior
       description: What you expected to happen
-      placeholder: Channels with unread messages should be listed
+      placeholder: Meeting should be created successfully
     validations:
       required: true
 
@@ -45,25 +44,25 @@ body:
       label: Actual behavior
       description: What actually happened (include error messages if any)
       placeholder: |
-        Error: failed to list channels: ...
+        Error: Authentication failed...
     validations:
       required: true
 
   - type: input
     id: version
     attributes:
-      label: Slamy version
-      description: Run `slamy --version`
-      placeholder: "0.1.0"
+      label: Zoomy version
+      description: Run `slamy --version` or `npm list slamy`
+      placeholder: "1.0.0"
     validations:
       required: true
 
   - type: input
-    id: go
+    id: node
     attributes:
-      label: Go version
-      description: Run `go version`
-      placeholder: "go1.25.2 darwin/arm64"
+      label: Node.js version
+      description: Run `node --version`
+      placeholder: "v20.10.0"
     validations:
       required: true
 
@@ -71,8 +70,8 @@ body:
     id: os
     attributes:
       label: Operating System
-      description: e.g., macOS 15.3, Ubuntu 24.04, Windows 11
-      placeholder: "macOS 15.3"
+      description: e.g., macOS 14.2, Ubuntu 22.04, Windows 11
+      placeholder: "macOS 14.2"
     validations:
       required: true
 
