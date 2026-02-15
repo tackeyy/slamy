@@ -7,13 +7,13 @@ run:
 
 linters:
   enable:
-    - errcheck      # Check for unchecked errors
-    - govet         # Reports suspicious constructs
-    - ineffassign   # Detect ineffectual assignments
-    - staticcheck   # Advanced static analysis
-    - unused        # Check for unused code
-    - misspell      # Find misspelled words
-    - revive        # Drop-in replacement for golint
+    - errcheck
+    - govet
+    - ineffassign
+    - staticcheck
+    - unused
+    - misspell
+    - revive
 
 linters-settings:
   errcheck:
@@ -25,12 +25,6 @@ linters-settings:
 
   revive:
     severity: warning
-    rules:
-      - name: exported
-      - name: indent-error-flow
-      - name: error-return
-      - name: error-strings
-      - name: error-naming
 
 issues:
   exclude-use-default: false
