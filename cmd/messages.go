@@ -28,7 +28,10 @@ var messagesPostCmd = &cobra.Command{
 			return err
 		}
 
-		text, _ := cmd.Flags().GetString("text")
+		text, err := cmd.Flags().GetString("text")
+		if err != nil {
+			return fmt.Errorf("failed to get text flag: %w", err)
+		}
 		if text == "" {
 			return fmt.Errorf("--text is required")
 		}
@@ -75,7 +78,10 @@ var messagesReplyCmd = &cobra.Command{
 			return err
 		}
 
-		text, _ := cmd.Flags().GetString("text")
+		text, err := cmd.Flags().GetString("text")
+		if err != nil {
+			return fmt.Errorf("failed to get text flag: %w", err)
+		}
 		if text == "" {
 			return fmt.Errorf("--text is required")
 		}

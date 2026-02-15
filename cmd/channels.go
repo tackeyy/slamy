@@ -34,9 +34,18 @@ var channelsListCmd = &cobra.Command{
 			return fmt.Errorf("failed to get auth info: %w", err)
 		}
 
-		limit, _ := cmd.Flags().GetInt("limit")
-		includeArchived, _ := cmd.Flags().GetBool("include-archived")
-		unreadOnly, _ := cmd.Flags().GetBool("unread")
+		limit, err := cmd.Flags().GetInt("limit")
+		if err != nil {
+			return fmt.Errorf("failed to get limit flag: %w", err)
+		}
+		includeArchived, err := cmd.Flags().GetBool("include-archived")
+		if err != nil {
+			return fmt.Errorf("failed to get include-archived flag: %w", err)
+		}
+		unreadOnly, err := cmd.Flags().GetBool("unread")
+		if err != nil {
+			return fmt.Errorf("failed to get unread flag: %w", err)
+		}
 
 		params := &slack.GetConversationsForUserParameters{
 			UserID:          authResp.UserID,
@@ -178,9 +187,9 @@ type channelWithUnread struct {
 // the latest message ts (from conversations.history) for each channel.
 func detectUnreadChannels(client *slackutil.Client, channels []slack.Channel) []channelWithUnread {
 	type result struct {
-		index int
-		ch    channelWithUnread
 		err   error
+		ch    channelWithUnread
+		index int
 	}
 
 	results := make([]result, len(channels))
@@ -277,7 +286,10 @@ var channelsHistoryCmd = &cobra.Command{
 			return err
 		}
 
-		limit, _ := cmd.Flags().GetInt("limit")
+		limit, err := cmd.Flags().GetInt("limit")
+		if err != nil {
+			return fmt.Errorf("failed to get limit flag: %w", err)
+		}
 
 		params := &slack.GetConversationHistoryParameters{
 			ChannelID: channelID,
@@ -334,8 +346,8 @@ var channelsHistoryCmd = &cobra.Command{
 
 func formatTimestamp(ts string) string {
 	var sec int64
-	fmt.Sscanf(ts, "%d", &sec)
-	if sec == 0 {
+	_, err := fmt.Sscanf(ts, "%d", &sec)
+	if err != nil || sec == 0 {
 		return ts
 	}
 	t := time.Unix(sec, 0)

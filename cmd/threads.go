@@ -30,7 +30,10 @@ var threadsRepliesCmd = &cobra.Command{
 			return err
 		}
 
-		limit, _ := cmd.Flags().GetInt("limit")
+		limit, err := cmd.Flags().GetInt("limit")
+		if err != nil {
+			return fmt.Errorf("failed to get limit flag: %w", err)
+		}
 
 		params := &slack.GetConversationRepliesParameters{
 			ChannelID: channelID,

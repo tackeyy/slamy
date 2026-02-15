@@ -29,7 +29,10 @@ var reactionsAddCmd = &cobra.Command{
 			return err
 		}
 
-		name, _ := cmd.Flags().GetString("name")
+		name, err := cmd.Flags().GetString("name")
+		if err != nil {
+			return fmt.Errorf("failed to get name flag: %w", err)
+		}
 		if name == "" {
 			return fmt.Errorf("--name is required")
 		}

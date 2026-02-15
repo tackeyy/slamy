@@ -33,10 +33,22 @@ var searchMessagesCmd = &cobra.Command{
 			return fmt.Errorf("SLACK_USER_TOKEN is required for search")
 		}
 
-		count, _ := cmd.Flags().GetInt("count")
-		page, _ := cmd.Flags().GetInt("page")
-		sortBy, _ := cmd.Flags().GetString("sort")
-		sortDir, _ := cmd.Flags().GetString("sort-dir")
+		count, err := cmd.Flags().GetInt("count")
+		if err != nil {
+			return fmt.Errorf("failed to get count flag: %w", err)
+		}
+		page, err := cmd.Flags().GetInt("page")
+		if err != nil {
+			return fmt.Errorf("failed to get page flag: %w", err)
+		}
+		sortBy, err := cmd.Flags().GetString("sort")
+		if err != nil {
+			return fmt.Errorf("failed to get sort flag: %w", err)
+		}
+		sortDir, err := cmd.Flags().GetString("sort-dir")
+		if err != nil {
+			return fmt.Errorf("failed to get sort-dir flag: %w", err)
+		}
 
 		params := slack.SearchParameters{
 			Sort:          sortBy,
@@ -60,9 +72,9 @@ var searchMessagesCmd = &cobra.Command{
 				Permalink string `json:"permalink"`
 			}
 			out := struct {
+				Matches []matchOut `json:"matches"`
 				Total   int        `json:"total"`
 				Page    int        `json:"page"`
-				Matches []matchOut `json:"matches"`
 			}{
 				Total: result.Total,
 				Page:  result.Paging.Page,

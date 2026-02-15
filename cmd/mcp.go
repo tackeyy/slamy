@@ -236,8 +236,8 @@ func handleGetChannelHistory(ctx context.Context, request mcp.CallToolRequest) (
 		User       string `json:"user"`
 		Text       string `json:"text"`
 		ThreadTs   string `json:"thread_ts,omitempty"`
-		ReplyCount int    `json:"reply_count,omitempty"`
 		Time       string `json:"time"`
+		ReplyCount int    `json:"reply_count,omitempty"`
 	}
 	out := make([]msgOut, len(resp.Messages))
 	for i, msg := range resp.Messages {
@@ -494,9 +494,9 @@ func handleSearchMessages(ctx context.Context, request mcp.CallToolRequest) (*mc
 		Permalink string `json:"permalink"`
 	}
 	out := struct {
+		Matches []matchOut `json:"matches"`
 		Total   int        `json:"total"`
 		Page    int        `json:"page"`
-		Matches []matchOut `json:"matches"`
 	}{
 		Total: result.Total,
 		Page:  result.Paging.Page,
@@ -529,8 +529,8 @@ func tsToTime(ts string) string {
 		return ts
 	}
 	var sec int64
-	fmt.Sscanf(parts[0], "%d", &sec)
-	if sec == 0 {
+	_, err := fmt.Sscanf(parts[0], "%d", &sec)
+	if err != nil || sec == 0 {
 		return ts
 	}
 	return time.Unix(sec, 0).Format("2006-01-02 15:04:05")

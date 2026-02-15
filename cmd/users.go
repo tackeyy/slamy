@@ -30,8 +30,14 @@ var usersListCmd = &cobra.Command{
 		}
 
 		// Filter out bots and deactivated users by default
-		includeDeactivated, _ := cmd.Flags().GetBool("include-deactivated")
-		includeBots, _ := cmd.Flags().GetBool("include-bots")
+		includeDeactivated, err := cmd.Flags().GetBool("include-deactivated")
+		if err != nil {
+			return fmt.Errorf("failed to get include-deactivated flag: %w", err)
+		}
+		includeBots, err := cmd.Flags().GetBool("include-bots")
+		if err != nil {
+			return fmt.Errorf("failed to get include-bots flag: %w", err)
+		}
 
 		var filtered []struct {
 			ID          string `json:"id"`
