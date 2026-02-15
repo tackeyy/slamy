@@ -296,9 +296,24 @@ Add to your `claude_desktop_config.json`:
 ## Development
 
 ```bash
+# Build
 go build -o slamy .
-go test ./...
+
+# Run all tests with race detector
+go test -race ./...
+
+# Run tests with coverage
+go test -cover ./...
 ```
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for development setup and coding standards.
+See [docs/TESTING.md](docs/TESTING.md) for the comprehensive testing guide.
+
+## Contributing
+
+Contributions are welcome! Please read our [Contributing Guide](CONTRIBUTING.md) before submitting a Pull Request.
+
+All contributors are expected to follow our [Code of Conduct](CODE_OF_CONDUCT.md).
 
 ## License
 

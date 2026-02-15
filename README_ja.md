@@ -296,9 +296,24 @@ claude mcp add slamy /path/to/slamy mcp
 ## 開発
 
 ```bash
+# ビルド
 go build -o slamy .
-go test ./...
+
+# レースディテクタ付きでテスト実行
+go test -race ./...
+
+# カバレッジ付きでテスト実行
+go test -cover ./...
 ```
+
+開発環境のセットアップやコーディング規約は [CONTRIBUTING.md](CONTRIBUTING.md) を参照してください。
+テストの詳細ガイドは [docs/TESTING.md](docs/TESTING.md) を参照してください。
+
+## コントリビューション
+
+コントリビューション歓迎です！Pull Request を送る前に [Contributing Guide](CONTRIBUTING.md) をお読みください。
+
+すべてのコントリビューターに [行動規範](CODE_OF_CONDUCT.md) の遵守をお願いしています。
 
 ## ライセンス
 
