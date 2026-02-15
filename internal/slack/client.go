@@ -4,12 +4,12 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/slack-go/slack"
+	slackapi "github.com/slack-go/slack"
 )
 
 // Client wraps the Slack API client using a User Token.
 type Client struct {
-	User *slack.Client
+	User SlackAPI
 }
 
 // NewClient creates a new Slack client from environment variables.
@@ -20,7 +20,7 @@ func NewClient() (*Client, error) {
 	}
 
 	return &Client{
-		User: slack.New(userToken),
+		User: slackapi.New(userToken),
 	}, nil
 }
 
