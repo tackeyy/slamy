@@ -443,6 +443,94 @@ func TestHandlePostMessage_MissingText(t *testing.T) {
 	}
 }
 
+func TestHandlePostMessage_LongTextSplitsIntoThread(t *testing.T) {
+	var calls []struct {
+		channelID string
+		hasTS     bool
+	}
+	cleanup := setMockClient(&slackutil.MockSlackAPI{
+		PostMessageFunc: func(channelID string, options ...slackapi.MsgOption) (string, string, error) {
+			// Detect if MsgOptionTS is present by counting options
+			hasTS := len(options) > 1
+			calls = append(calls, struct {
+				channelID string
+				hasTS     bool
+			}{channelID, hasTS})
+			return channelID, "1675382400.000000", nil
+		},
+	})
+	defer cleanup()
+
+	longText := strings.Repeat("a", 2500) + "\n\n" + strings.Repeat("b", 2500)
+	req := makeRequest(map[string]any{"channel_id": "C001", "text": longText})
+	result, err := handlePostMessage(context.Background(), req)
+
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if isErrorResult(result) {
+		t.Fatal("unexpected error result")
+	}
+	if len(calls) != 2 {
+		t.Fatalf("expected 2 PostMessage calls, got %d", len(calls))
+	}
+	if calls[0].hasTS {
+		t.Error("first call should not have thread_ts")
+	}
+	if !calls[1].hasTS {
+		t.Error("second call should have thread_ts (thread reply)")
+	}
+}
+
+func TestHandlePostMessage_ShortTextNoSplit(t *testing.T) {
+	callCount := 0
+	cleanup := setMockClient(&slackutil.MockSlackAPI{
+		PostMessageFunc: func(channelID string, options ...slackapi.MsgOption) (string, string, error) {
+			callCount++
+			return channelID, "1675382400.000000", nil
+		},
+	})
+	defer cleanup()
+
+	req := makeRequest(map[string]any{"channel_id": "C001", "text": "short message"})
+	result, err := handlePostMessage(context.Background(), req)
+
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if isErrorResult(result) {
+		t.Fatal("unexpected error result")
+	}
+	if callCount != 1 {
+		t.Fatalf("expected 1 PostMessage call, got %d", callCount)
+	}
+}
+
+func TestHandlePostMessage_ThreadReplyError(t *testing.T) {
+	callCount := 0
+	cleanup := setMockClient(&slackutil.MockSlackAPI{
+		PostMessageFunc: func(channelID string, options ...slackapi.MsgOption) (string, string, error) {
+			callCount++
+			if callCount == 2 {
+				return "", "", fmt.Errorf("thread reply failed")
+			}
+			return channelID, "1675382400.000000", nil
+		},
+	})
+	defer cleanup()
+
+	longText := strings.Repeat("a", 2500) + "\n\n" + strings.Repeat("b", 2500)
+	req := makeRequest(map[string]any{"channel_id": "C001", "text": longText})
+	result, err := handlePostMessage(context.Background(), req)
+
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !isErrorResult(result) {
+		t.Error("expected error result when thread reply fails")
+	}
+}
+
 // ---------- handleReplyToThread ----------
 
 func TestHandleReplyToThread_Success(t *testing.T) {

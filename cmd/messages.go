@@ -36,13 +36,21 @@ var messagesPostCmd = &cobra.Command{
 			return fmt.Errorf("--text is required")
 		}
 
-		opts := []slack.MsgOption{
-			slack.MsgOptionText(text, false),
-		}
+		chunks := slackutil.SplitMessage(text, slackutil.MaxMessageLength)
 
-		_, ts, err := client.User.PostMessage(channelID, opts...)
+		_, ts, err := client.User.PostMessage(channelID, slack.MsgOptionText(chunks[0], false))
 		if err != nil {
 			return fmt.Errorf("failed to post message: %w", err)
+		}
+
+		for _, chunk := range chunks[1:] {
+			_, _, err := client.User.PostMessage(channelID,
+				slack.MsgOptionText(chunk, false),
+				slack.MsgOptionTS(ts),
+			)
+			if err != nil {
+				return fmt.Errorf("failed to post thread reply: %w", err)
+			}
 		}
 
 		if outputJSON {

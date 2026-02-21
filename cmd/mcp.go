@@ -315,11 +315,23 @@ func handlePostMessage(ctx context.Context, request mcp.CallToolRequest) (*mcp.C
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
+	chunks := slackutil.SplitMessage(text, slackutil.MaxMessageLength)
+
 	_, ts, err := client.User.PostMessage(channelID,
-		slackapi.MsgOptionText(text, false),
+		slackapi.MsgOptionText(chunks[0], false),
 	)
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("failed to post message: %v", err)), nil
+	}
+
+	for _, chunk := range chunks[1:] {
+		_, _, err := client.User.PostMessage(channelID,
+			slackapi.MsgOptionText(chunk, false),
+			slackapi.MsgOptionTS(ts),
+		)
+		if err != nil {
+			return mcp.NewToolResultError(fmt.Sprintf("failed to post thread reply: %v", err)), nil
+		}
 	}
 
 	return jsonResult(map[string]string{"channel": channelID, "ts": ts})
