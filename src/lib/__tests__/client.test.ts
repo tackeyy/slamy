@@ -35,6 +35,73 @@ describe("SlamyClient constructor", () => {
   });
 });
 
+describe("トークン分離", () => {
+  it("両トークン指定時、書き込み操作はbotToken、読み取り操作はuserTokenを使う", async () => {
+    const botMock = createMockWebClient();
+    const userMock = createMockWebClient();
+
+    const { WebClient } = await import("@slack/web-api");
+    (WebClient as any).mockImplementation((token: string) => {
+      if (token === "xoxb-bot") return botMock;
+      if (token === "xoxp-user") return userMock;
+      return createMockWebClient();
+    });
+
+    const client = new SlamyClient({ botToken: "xoxb-bot", userToken: "xoxp-user" });
+
+    // 書き込み操作 → botToken
+    await client.postMessage("C1", "hello");
+    expect(botMock.chat.postMessage).toHaveBeenCalled();
+    expect(userMock.chat.postMessage).not.toHaveBeenCalled();
+
+    await client.addReaction("C1", "ts1", "thumbsup");
+    expect(botMock.reactions.add).toHaveBeenCalled();
+    expect(userMock.reactions.add).not.toHaveBeenCalled();
+
+    await client.uploadFile("C1", Buffer.from("data"), { filename: "f.txt" });
+    expect(botMock.files.uploadV2).toHaveBeenCalled();
+    expect(userMock.files.uploadV2).not.toHaveBeenCalled();
+
+    // 読み取り操作 → userToken
+    await client.searchMessages("test");
+    expect(userMock.search.messages).toHaveBeenCalled();
+    expect(botMock.search.messages).not.toHaveBeenCalled();
+
+    await client.authTest();
+    expect(userMock.auth.test).toHaveBeenCalled();
+  });
+
+  it("botTokenのみの場合、全操作がbotTokenで動作する", async () => {
+    const botMock = createMockWebClient();
+
+    const { WebClient } = await import("@slack/web-api");
+    (WebClient as any).mockImplementation(() => botMock);
+
+    const client = new SlamyClient({ botToken: "xoxb-bot" });
+
+    await client.postMessage("C1", "hello");
+    expect(botMock.chat.postMessage).toHaveBeenCalled();
+
+    await client.authTest();
+    expect(botMock.auth.test).toHaveBeenCalled();
+  });
+
+  it("userTokenのみの場合、全操作がuserTokenで動作する", async () => {
+    const userMock = createMockWebClient();
+
+    const { WebClient } = await import("@slack/web-api");
+    (WebClient as any).mockImplementation(() => userMock);
+
+    const client = new SlamyClient({ userToken: "xoxp-user" });
+
+    await client.postMessage("C1", "hello");
+    expect(userMock.chat.postMessage).toHaveBeenCalled();
+
+    await client.searchMessages("test");
+    expect(userMock.search.messages).toHaveBeenCalled();
+  });
+});
+
 describe("postMessage", () => {
   it("短文メッセージを投稿する", async () => {
     const client = new SlamyClient({ userToken: "xoxp-test" });
