@@ -315,6 +315,7 @@ func handlePostMessage(ctx context.Context, request mcp.CallToolRequest) (*mcp.C
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
+	text = slackutil.FixSlackMrkdwn(text)
 	chunks := slackutil.SplitMessage(text, slackutil.MaxMessageLength)
 
 	_, ts, err := client.User.PostMessage(channelID,
@@ -356,6 +357,7 @@ func handleReplyToThread(ctx context.Context, request mcp.CallToolRequest) (*mcp
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
+	text = slackutil.FixSlackMrkdwn(text)
 	_, ts, err := client.User.PostMessage(channelID,
 		slackapi.MsgOptionText(text, false),
 		slackapi.MsgOptionTS(threadTs),

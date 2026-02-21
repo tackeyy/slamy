@@ -36,6 +36,7 @@ var messagesPostCmd = &cobra.Command{
 			return fmt.Errorf("--text is required")
 		}
 
+		text = slackutil.FixSlackMrkdwn(text)
 		chunks := slackutil.SplitMessage(text, slackutil.MaxMessageLength)
 
 		_, ts, err := client.User.PostMessage(channelID, slack.MsgOptionText(chunks[0], false))
@@ -94,6 +95,7 @@ var messagesReplyCmd = &cobra.Command{
 			return fmt.Errorf("--text is required")
 		}
 
+		text = slackutil.FixSlackMrkdwn(text)
 		opts := []slack.MsgOption{
 			slack.MsgOptionText(text, false),
 			slack.MsgOptionTS(threadTs),
