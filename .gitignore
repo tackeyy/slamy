@@ -1,5 +1,5 @@
-slamy
+node_modules/
+dist/
 *.exe
 .env
-dist/
 .claude/
