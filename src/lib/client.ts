@@ -18,14 +18,17 @@ export interface SlamyClientOptions {
 }
 
 export class SlamyClient {
-  private webClient: WebClient;
+  private botClient: WebClient;
+  private userClient: WebClient;
 
   constructor(opts: SlamyClientOptions) {
-    const token = opts.userToken || opts.botToken;
-    if (!token) {
+    if (!opts.botToken && !opts.userToken) {
       throw new Error("Either userToken or botToken must be provided");
     }
-    this.webClient = new WebClient(token);
+    // Bot token for write operations (postMessage, reactions, file upload)
+    // User token for read/search operations that require user-level access
+    this.botClient = new WebClient(opts.botToken || opts.userToken);
+    this.userClient = new WebClient(opts.userToken || opts.botToken);
   }
 
   // --- Send operations ---
@@ -34,7 +37,7 @@ export class SlamyClient {
     const fixed = fixSlackMrkdwn(text);
     const chunks = splitMessage(fixed);
 
-    const res = await this.webClient.chat.postMessage({
+    const res = await this.botClient.chat.postMessage({
       channel,
       text: chunks[0],
     });
@@ -42,7 +45,7 @@ export class SlamyClient {
 
     // Remaining chunks as thread replies
     for (const chunk of chunks.slice(1)) {
-      await this.webClient.chat.postMessage({
+      await this.botClient.chat.postMessage({
         channel,
         text: chunk,
         thread_ts: ts,
@@ -62,7 +65,7 @@ export class SlamyClient {
 
     let firstTs = "";
     for (const chunk of chunks) {
-      const res = await this.webClient.chat.postMessage({
+      const res = await this.botClient.chat.postMessage({
         channel,
         text: chunk,
         thread_ts: threadTs,
@@ -84,7 +87,7 @@ export class SlamyClient {
       );
     }
 
-    await this.webClient.chat.update({
+    await this.botClient.chat.update({
       channel,
       ts,
       text,
@@ -94,11 +97,11 @@ export class SlamyClient {
   }
 
   async deleteMessage(channel: string, ts: string): Promise<void> {
-    await this.webClient.chat.delete({ channel, ts });
+    await this.botClient.chat.delete({ channel, ts });
   }
 
   async addReaction(channel: string, ts: string, name: string): Promise<void> {
-    await this.webClient.reactions.add({
+    await this.botClient.reactions.add({
       channel,
       timestamp: ts,
       name,
@@ -106,7 +109,7 @@ export class SlamyClient {
   }
 
   async removeReaction(channel: string, ts: string, name: string): Promise<void> {
-    await this.webClient.reactions.remove({
+    await this.botClient.reactions.remove({
       channel,
       timestamp: ts,
       name,
@@ -138,7 +141,7 @@ export class SlamyClient {
     if (opts?.threadTs) {
       uploadArgs.thread_ts = opts.threadTs;
     }
-    await this.webClient.files.uploadV2(uploadArgs as any);
+    await this.botClient.files.uploadV2(uploadArgs as any);
   }
 
   // --- Read operations ---
@@ -150,14 +153,14 @@ export class SlamyClient {
     const limit = opts?.limit ?? 100;
 
     // First get auth info for user ID
-    const authResp = await this.webClient.auth.test();
+    const authResp = await this.userClient.auth.test();
     const userId = authResp.user_id!;
 
     const allChannels: any[] = [];
     let cursor: string | undefined;
 
     do {
-      const res = await this.webClient.users.conversations({
+      const res = await this.userClient.users.conversations({
         user: userId,
         types: "public_channel,private_channel",
         limit: Math.min(limit, 200),
@@ -189,12 +192,12 @@ export class SlamyClient {
 
     const results = await Promise.allSettled(
       channels.map(async (ch) => {
-        const info = await this.webClient.conversations.info({ channel: ch.id });
+        const info = await this.userClient.conversations.info({ channel: ch.id });
         if (!info.channel?.is_member) return null;
 
         const lastRead = (info.channel as any).last_read || "0";
 
-        const hist = await this.webClient.conversations.history({
+        const hist = await this.userClient.conversations.history({
           channel: ch.id,
           limit: 1,
         });
@@ -205,7 +208,7 @@ export class SlamyClient {
         if (latestTs <= lastRead) return null;
 
         // Count unread
-        const countResp = await this.webClient.conversations.history({
+        const countResp = await this.userClient.conversations.history({
           channel: ch.id,
           oldest: lastRead,
           limit: 100,
@@ -227,7 +230,7 @@ export class SlamyClient {
   }
 
   async getChannelHistory(channel: string, opts?: { limit?: number }): Promise<Message[]> {
-    const res = await this.webClient.conversations.history({
+    const res = await this.userClient.conversations.history({
       channel,
       limit: opts?.limit ?? 20,
     });
@@ -246,7 +249,7 @@ export class SlamyClient {
     threadTs: string,
     opts?: { limit?: number },
   ): Promise<Message[]> {
-    const res = await this.webClient.conversations.replies({
+    const res = await this.userClient.conversations.replies({
       channel,
       ts: threadTs,
       limit: opts?.limit ?? 50,
@@ -263,7 +266,7 @@ export class SlamyClient {
     includeDeactivated?: boolean;
     includeBots?: boolean;
   }): Promise<User[]> {
-    const res = await this.webClient.users.list({});
+    const res = await this.userClient.users.list({});
 
     return (res.members || [])
       .filter((u) => {
@@ -283,7 +286,7 @@ export class SlamyClient {
   }
 
   async getUserProfile(userId: string): Promise<UserProfile> {
-    const res = await this.webClient.users.info({ user: userId });
+    const res = await this.userClient.users.info({ user: userId });
     const u = res.user!;
 
     return {
@@ -307,7 +310,7 @@ export class SlamyClient {
     query: string,
     opts?: { count?: number; page?: number; sort?: string; sortDir?: string },
   ): Promise<SearchResult> {
-    const res = await this.webClient.search.messages({
+    const res = await this.userClient.search.messages({
       query,
       sort: (opts?.sort || "timestamp") as "timestamp" | "score",
       sort_dir: (opts?.sortDir || "desc") as "desc" | "asc",
@@ -332,7 +335,7 @@ export class SlamyClient {
   }
 
   async authTest(): Promise<AuthInfo> {
-    const res = await this.webClient.auth.test();
+    const res = await this.userClient.auth.test();
     return {
       user_id: res.user_id || "",
       user: res.user || "",
