@@ -102,6 +102,69 @@ describe("トークン分離", () => {
   });
 });
 
+describe("scheduleMessage", () => {
+  it("メッセージをスケジュール投稿する", async () => {
+    const client = new SlamyClient({ userToken: "xoxp-test" });
+    const postAt = 1700000000;
+    const result = await client.scheduleMessage("C123", "Hello later", postAt);
+
+    expect(mockWebClient.chat.scheduleMessage).toHaveBeenCalledTimes(1);
+    expect(mockWebClient.chat.scheduleMessage).toHaveBeenCalledWith({
+      channel: "C123",
+      text: "Hello later",
+      post_at: postAt,
+    });
+    expect(result).toEqual({
+      channel: "C123",
+      scheduled_message_id: "Q1234567890",
+      post_at: postAt,
+    });
+  });
+
+  it("4000文字超でエラー", async () => {
+    const client = new SlamyClient({ userToken: "xoxp-test" });
+    const longText = "a".repeat(2500) + "\n\n" + "b".repeat(2500);
+    await expect(client.scheduleMessage("C123", longText, 1700000000)).rejects.toThrow(
+      "does not support auto-splitting",
+    );
+  });
+
+  it("mrkdwn を自動修正する", async () => {
+    const client = new SlamyClient({ userToken: "xoxp-test" });
+    await client.scheduleMessage("C123", "**太字**テスト", 1700000000);
+
+    expect(mockWebClient.chat.scheduleMessage).toHaveBeenCalledWith({
+      channel: "C123",
+      text: "*太字* テスト",
+      post_at: 1700000000,
+    });
+  });
+
+  it("API エラーを伝播する", async () => {
+    mockWebClient.chat.scheduleMessage.mockRejectedValue(new Error("time_in_past"));
+    const client = new SlamyClient({ userToken: "xoxp-test" });
+    await expect(client.scheduleMessage("C123", "test", 1000)).rejects.toThrow("time_in_past");
+  });
+
+  it("書き込み操作なので botClient を使う", async () => {
+    const botMock = createMockWebClient();
+    const userMock = createMockWebClient();
+
+    const { WebClient } = await import("@slack/web-api");
+    (WebClient as any).mockImplementation((token: string) => {
+      if (token === "xoxb-bot") return botMock;
+      if (token === "xoxp-user") return userMock;
+      return createMockWebClient();
+    });
+
+    const client = new SlamyClient({ botToken: "xoxb-bot", userToken: "xoxp-user" });
+    await client.scheduleMessage("C123", "test", 1700000000);
+
+    expect(botMock.chat.scheduleMessage).toHaveBeenCalled();
+    expect(userMock.chat.scheduleMessage).not.toHaveBeenCalled();
+  });
+});
+
 describe("postMessage", () => {
   it("短文メッセージを投稿する", async () => {
     const client = new SlamyClient({ userToken: "xoxp-test" });

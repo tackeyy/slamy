@@ -4,6 +4,7 @@ export function createMockWebClient() {
   return {
     chat: {
       postMessage: vi.fn().mockResolvedValue({ ok: true, ts: "1234567890.123456", channel: "C123" }),
+      scheduleMessage: vi.fn().mockResolvedValue({ ok: true, scheduled_message_id: "Q1234567890", channel: "C123", post_at: 1700000000 }),
       update: vi.fn().mockResolvedValue({ ok: true }),
       delete: vi.fn().mockResolvedValue({ ok: true }),
     },

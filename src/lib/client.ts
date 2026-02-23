@@ -33,6 +33,33 @@ export class SlamyClient {
 
   // --- Send operations ---
 
+  async scheduleMessage(
+    channel: string,
+    text: string,
+    postAt: number,
+  ): Promise<{ channel: string; scheduled_message_id: string; post_at: number }> {
+    const fixed = fixSlackMrkdwn(text);
+    const chunks = splitMessage(fixed);
+
+    if (chunks.length > 1) {
+      throw new Error(
+        `Message exceeds ${MAX_MESSAGE_LENGTH} characters. scheduleMessage does not support auto-splitting.`,
+      );
+    }
+
+    const res = await this.botClient.chat.scheduleMessage({
+      channel,
+      text: chunks[0],
+      post_at: postAt,
+    });
+
+    return {
+      channel,
+      scheduled_message_id: res.scheduled_message_id!,
+      post_at: postAt,
+    };
+  }
+
   async postMessage(channel: string, text: string): Promise<{ channel: string; ts: string }> {
     const fixed = fixSlackMrkdwn(text);
     const chunks = splitMessage(fixed);

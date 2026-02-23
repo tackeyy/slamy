@@ -192,6 +192,45 @@ messages
   });
 
 messages
+  .command("schedule <channel_id>")
+  .description("Schedule a message for later")
+  .requiredOption("--text <text>", "Message text")
+  .requiredOption("--at <datetime>", "Post time (Unix timestamp or ISO 8601 e.g. 2026-02-24T09:00+09:00)")
+  .action(async (channelId, opts) => {
+    try {
+      const client = createClient();
+      const mode = getOutputMode();
+
+      let postAt: number;
+      const parsed = Number(opts.at);
+      if (!isNaN(parsed) && parsed > 1000000000) {
+        postAt = parsed;
+      } else {
+        const d = new Date(opts.at);
+        if (isNaN(d.getTime())) {
+          console.error("Error: Invalid datetime format. Use Unix timestamp or ISO 8601.");
+          process.exit(1);
+        }
+        postAt = Math.floor(d.getTime() / 1000);
+      }
+
+      const result = await client.scheduleMessage(channelId, opts.text, postAt);
+      const scheduled = new Date(postAt * 1000).toISOString().replace("T", " ").slice(0, 16);
+
+      if (mode === "json") {
+        jsonOutput(result);
+      } else if (mode === "plain") {
+        console.log(`${result.channel}\t${result.scheduled_message_id}\t${postAt}`);
+      } else {
+        console.log(`Message scheduled for ${scheduled} UTC (id: ${result.scheduled_message_id})`);
+      }
+    } catch (err: any) {
+      console.error(`Error: ${err.message}`);
+      process.exit(1);
+    }
+  });
+
+messages
   .command("reply <channel_id> <thread_ts>")
   .description("Reply to a thread")
   .requiredOption("--text <text>", "Reply text")
