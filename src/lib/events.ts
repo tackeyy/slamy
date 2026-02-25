@@ -1,6 +1,6 @@
 import { EventEmitter } from "node:events";
 import { App } from "@slack/bolt";
-import type { SlackEvent } from "./types.js";
+import type { SlackEvent, ReactionAddedEvent } from "./types.js";
 
 export interface SlamyEventsOptions {
   botToken: string;
@@ -24,6 +24,10 @@ export class SlamyEvents extends EventEmitter {
 
     this.app.event("message", async ({ event }) => {
       this.emit("message", event as unknown as SlackEvent);
+    });
+
+    this.app.event("reaction_added", async ({ event }) => {
+      this.emit("reaction_added", event as unknown as ReactionAddedEvent);
     });
   }
 

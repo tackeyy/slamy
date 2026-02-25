@@ -77,6 +77,16 @@ export interface AuthInfo {
   url: string;
 }
 
+/** Slack reaction_added event payload. */
+export interface ReactionAddedEvent {
+  type: "reaction_added";
+  user: string;
+  reaction: string;
+  item: { type: string; channel: string; ts: string };
+  item_user: string;
+  event_ts: string;
+}
+
 /** Slack event payload. */
 export interface SlackEvent {
   type: string;

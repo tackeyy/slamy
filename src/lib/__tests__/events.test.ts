@@ -87,6 +87,24 @@ describe("SlamyEvents", () => {
     expect(messageHandler).toHaveBeenCalledTimes(1);
   });
 
+  it("reaction_added イベントが EventEmitter 経由で発火する", async () => {
+    const events = new SlamyEvents({ botToken: "xoxb-test", appToken: "xapp-test" });
+    const handler = vi.fn();
+    events.on("reaction_added", handler);
+
+    const fakeEvent = {
+      type: "reaction_added",
+      user: "U1",
+      reaction: "notebook",
+      item: { type: "message", channel: "C1", ts: "123" },
+      item_user: "U2",
+      event_ts: "456",
+    };
+    await eventHandlers["reaction_added"]({ event: fakeEvent });
+
+    expect(handler).toHaveBeenCalledWith(fakeEvent);
+  });
+
   it("リスナー未登録のイベントはエラーにならない", async () => {
     new SlamyEvents({ botToken: "xoxb-test", appToken: "xapp-test" });
 

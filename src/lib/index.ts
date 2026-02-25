@@ -14,4 +14,5 @@ export type {
   SearchMatch,
   AuthInfo,
   SlackEvent,
+  ReactionAddedEvent,
 } from "./types.js";
