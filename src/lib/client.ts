@@ -146,8 +146,15 @@ export class SlamyClient {
   async uploadFile(
     channel: string,
     fileOrPath: string | Buffer,
-    opts?: { threadTs?: string; title?: string; filename?: string },
+    opts?: { threadTs?: string; title?: string; filename?: string; initialComment?: string },
   ): Promise<void> {
+    // User ID (U...) → DM channel ID via conversations.open
+    let channelId = channel;
+    if (/^U[A-Z0-9]+$/.test(channel)) {
+      const dm = await this.botClient.conversations.open({ users: channel });
+      channelId = dm.channel!.id!;
+    }
+
     let fileContent: Buffer;
     let filename: string;
 
@@ -160,13 +167,16 @@ export class SlamyClient {
     }
 
     const uploadArgs: Record<string, unknown> = {
-      channel_id: channel,
+      channel_id: channelId,
       file: fileContent,
       filename,
       title: opts?.title || filename,
     };
     if (opts?.threadTs) {
       uploadArgs.thread_ts = opts.threadTs;
+    }
+    if (opts?.initialComment) {
+      uploadArgs.initial_comment = opts.initialComment;
     }
     await this.botClient.files.uploadV2(uploadArgs as any);
   }

@@ -507,10 +507,11 @@ const files = program.command("files").description("File operations");
 
 files
   .command("upload <channel_id> <file_path>")
-  .description("Upload a file to a channel")
+  .description("Upload a file to a channel (channel ID or user ID)")
   .option("--thread-ts <ts>", "Thread timestamp")
   .option("--title <title>", "File title")
   .option("--filename <name>", "File name")
+  .option("--initial-comment <text>", "Initial comment with the file")
   .action(async (channelId, filePath, opts) => {
     try {
       const client = createClient();
@@ -519,6 +520,7 @@ files
         threadTs: opts.threadTs,
         title: opts.title,
         filename: opts.filename,
+        initialComment: opts.initialComment,
       });
 
       if (mode === "json") {
