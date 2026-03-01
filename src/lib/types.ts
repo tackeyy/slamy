@@ -14,6 +14,16 @@ export interface UnreadChannel extends Channel {
   unread_count: number;
 }
 
+/** Slack file info. */
+export interface SlackFileInfo {
+  id: string;
+  name: string;
+  mimetype: string;
+  filetype: string;
+  size: number;
+  url_private_download: string;
+}
+
 /** Slack message. */
 export interface Message {
   ts: string;
@@ -21,6 +31,7 @@ export interface Message {
   text: string;
   thread_ts?: string;
   reply_count?: number;
+  files?: SlackFileInfo[];
 }
 
 /** Slack user. */

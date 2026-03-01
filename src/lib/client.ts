@@ -6,6 +6,7 @@ import type {
   Channel,
   UnreadChannel,
   Message,
+  SlackFileInfo,
   User,
   UserProfile,
   SearchResult,
@@ -20,6 +21,7 @@ export interface SlamyClientOptions {
 export class SlamyClient {
   private botClient: WebClient;
   private userClient: WebClient;
+  private botTokenStr: string;
 
   constructor(opts: SlamyClientOptions) {
     if (!opts.botToken && !opts.userToken) {
@@ -29,6 +31,7 @@ export class SlamyClient {
     // User token for read/search operations that require user-level access
     this.botClient = new WebClient(opts.botToken || opts.userToken);
     this.userClient = new WebClient(opts.userToken || opts.botToken);
+    this.botTokenStr = opts.botToken || opts.userToken || "";
   }
 
   // --- Send operations ---
@@ -278,7 +281,37 @@ export class SlamyClient {
       text: msg.text || "",
       thread_ts: msg.thread_ts,
       reply_count: msg.reply_count,
+      files: msg.files as SlackFileInfo[] | undefined,
     }));
+  }
+
+  async getMessageAt(channel: string, ts: string): Promise<Message[]> {
+    const res = await this.botClient.conversations.history({
+      channel,
+      oldest: ts,
+      latest: ts,
+      inclusive: true,
+      limit: 1,
+    });
+    return (res.messages || []).map((msg) => ({
+      ts: msg.ts!,
+      user: msg.user || "",
+      text: msg.text || "",
+      thread_ts: msg.thread_ts,
+      reply_count: msg.reply_count,
+      files: msg.files as SlackFileInfo[] | undefined,
+    }));
+  }
+
+  async downloadFileStream(fileUrl: string): Promise<Response> {
+    const response = await fetch(fileUrl, {
+      headers: { Authorization: `Bearer ${this.botTokenStr}` },
+      redirect: "error",
+    });
+    if (!response.ok) {
+      throw new Error(`File download failed: HTTP ${response.status}`);
+    }
+    return response;
   }
 
   async getThreadReplies(
@@ -296,6 +329,7 @@ export class SlamyClient {
       ts: msg.ts!,
       user: msg.user || "",
       text: msg.text || "",
+      files: msg.files as SlackFileInfo[] | undefined,
     }));
   }
 

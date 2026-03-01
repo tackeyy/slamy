@@ -8,6 +8,7 @@ export type {
   Channel,
   UnreadChannel,
   Message,
+  SlackFileInfo,
   User,
   UserProfile,
   SearchResult,
