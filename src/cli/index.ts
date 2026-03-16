@@ -137,12 +137,16 @@ channels
   .command("history <channel_id>")
   .description("Get channel message history")
   .option("--limit <n>", "Maximum number of messages", "20")
+  .option("--oldest <ts>", "Only messages after this Unix timestamp")
+  .option("--latest <ts>", "Only messages before this Unix timestamp")
   .action(async (channelId, opts) => {
     try {
       const client = createClient();
       const mode = getOutputMode();
       const messages = await client.getChannelHistory(channelId, {
         limit: parseInt(opts.limit, 10),
+        oldest: opts.oldest,
+        latest: opts.latest,
       });
 
       if (mode === "json") {

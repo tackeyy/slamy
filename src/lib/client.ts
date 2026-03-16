@@ -269,11 +269,15 @@ export class SlamyClient {
       .filter((v): v is UnreadChannel => v !== null);
   }
 
-  async getChannelHistory(channel: string, opts?: { limit?: number }): Promise<Message[]> {
-    const res = await this.userClient.conversations.history({
+  async getChannelHistory(channel: string, opts?: { limit?: number; oldest?: string; latest?: string }): Promise<Message[]> {
+    const params: Record<string, unknown> = {
       channel,
       limit: opts?.limit ?? 20,
-    });
+    };
+    if (opts?.oldest) params.oldest = opts.oldest;
+    if (opts?.latest) params.latest = opts.latest;
+
+    const res = await this.userClient.conversations.history(params as any);
 
     return (res.messages || []).map((msg) => ({
       ts: msg.ts!,

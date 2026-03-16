@@ -391,6 +391,65 @@ describe("getChannelHistory", () => {
       { ts: "123.456", user: "U1", text: "Hello", reply_count: 2, thread_ts: undefined },
     ]);
   });
+
+  it("oldest/latest を指定して期間フィルタする", async () => {
+    mockWebClient.conversations.history.mockResolvedValue({
+      ok: true,
+      messages: [
+        { ts: "1710000000.000000", user: "U1", text: "Morning msg" },
+      ],
+    });
+
+    const client = new SlamyClient({ userToken: "xoxp-test" });
+    await client.getChannelHistory("C123", {
+      oldest: "1709913600",
+      latest: "1710000000",
+    });
+
+    expect(mockWebClient.conversations.history).toHaveBeenCalledWith({
+      channel: "C123",
+      limit: 20,
+      oldest: "1709913600",
+      latest: "1710000000",
+    });
+  });
+
+  it("oldest のみ指定", async () => {
+    mockWebClient.conversations.history.mockResolvedValue({
+      ok: true,
+      messages: [],
+    });
+
+    const client = new SlamyClient({ userToken: "xoxp-test" });
+    await client.getChannelHistory("C123", { oldest: "1709913600" });
+
+    expect(mockWebClient.conversations.history).toHaveBeenCalledWith({
+      channel: "C123",
+      limit: 20,
+      oldest: "1709913600",
+    });
+  });
+
+  it("oldest/latest と limit を組み合わせる", async () => {
+    mockWebClient.conversations.history.mockResolvedValue({
+      ok: true,
+      messages: [],
+    });
+
+    const client = new SlamyClient({ userToken: "xoxp-test" });
+    await client.getChannelHistory("C123", {
+      limit: 100,
+      oldest: "1709913600",
+      latest: "1710000000",
+    });
+
+    expect(mockWebClient.conversations.history).toHaveBeenCalledWith({
+      channel: "C123",
+      limit: 100,
+      oldest: "1709913600",
+      latest: "1710000000",
+    });
+  });
 });
 
 describe("getThreadReplies (read)", () => {
