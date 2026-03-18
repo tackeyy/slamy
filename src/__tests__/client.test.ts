@@ -64,7 +64,7 @@ describe("getMessageAt", () => {
 describe("downloadFileStream", () => {
   afterEach(() => vi.unstubAllGlobals());
 
-  it("Slack ファイル URL から Response を返す", async () => {
+  it("リダイレクトなしの場合そのまま Response を返す", async () => {
     // Arrange
     const { client } = await createClient("xoxb-test-token");
     const mockResponse = { ok: true, status: 200 } as Response;
@@ -76,9 +76,43 @@ describe("downloadFileStream", () => {
     // Assert
     expect(global.fetch).toHaveBeenCalledWith("https://files.slack.com/files-pri/T123/doc.pdf", {
       headers: { Authorization: "Bearer xoxb-test-token" },
-      redirect: "error",
+      redirect: "manual",
     });
     expect(result).toBe(mockResponse);
+  });
+
+  it("リダイレクト時に再度 Authorization ヘッダー付きでリクエストする", async () => {
+    // Arrange
+    const { client } = await createClient("xoxb-test-token");
+    const redirectResponse = {
+      ok: false,
+      status: 302,
+      headers: new Map([["location", "https://files.slack.com/redirected/doc.pdf"]]),
+    } as any;
+    redirectResponse.headers.get = (key: string) =>
+      key === "location" ? "https://files.slack.com/redirected/doc.pdf" : null;
+    const finalResponse = { ok: true, status: 200 } as Response;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn()
+        .mockResolvedValueOnce(redirectResponse)
+        .mockResolvedValueOnce(finalResponse),
+    );
+
+    // Act
+    const result = await client.downloadFileStream("https://files.slack.com/doc.pdf");
+
+    // Assert
+    expect(global.fetch).toHaveBeenCalledTimes(2);
+    expect(global.fetch).toHaveBeenNthCalledWith(1, "https://files.slack.com/doc.pdf", {
+      headers: { Authorization: "Bearer xoxb-test-token" },
+      redirect: "manual",
+    });
+    expect(global.fetch).toHaveBeenNthCalledWith(2, "https://files.slack.com/redirected/doc.pdf", {
+      headers: { Authorization: "Bearer xoxb-test-token" },
+      redirect: "follow",
+    });
+    expect(result).toBe(finalResponse);
   });
 
   it("HTTP エラー時にエラーを throw する", async () => {
@@ -107,6 +141,29 @@ describe("getChannelHistory — files フィールド", () => {
 
     // Assert
     expect(result[0].files).toEqual(files);
+  });
+});
+
+describe("getFileInfo", () => {
+  it("file_id からファイルメタデータを取得する", async () => {
+    // Arrange
+    const { client, mock } = await createClient();
+    const fileData = {
+      id: "F0ALURGK5GF",
+      name: "image.png",
+      mimetype: "image/png",
+      filetype: "png",
+      size: 1094571,
+      url_private_download: "https://files.slack.com/files-pri/T123/download/image.png",
+    };
+    mock.files.info.mockResolvedValue({ ok: true, file: fileData } as any);
+
+    // Act
+    const result = await client.getFileInfo("F0ALURGK5GF");
+
+    // Assert
+    expect(mock.files.info).toHaveBeenCalledWith({ file: "F0ALURGK5GF" });
+    expect(result).toEqual(fileData);
   });
 });
 

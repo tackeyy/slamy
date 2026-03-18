@@ -22,6 +22,7 @@ export class SlamyClient {
   private botClient: WebClient;
   private userClient: WebClient;
   private botTokenStr: string;
+  private userTokenStr: string;
 
   constructor(opts: SlamyClientOptions) {
     if (!opts.botToken && !opts.userToken) {
@@ -32,6 +33,7 @@ export class SlamyClient {
     this.botClient = new WebClient(opts.botToken || opts.userToken);
     this.userClient = new WebClient(opts.userToken || opts.botToken);
     this.botTokenStr = opts.botToken || opts.userToken || "";
+    this.userTokenStr = opts.userToken || opts.botToken || "";
   }
 
   // --- Send operations ---
@@ -307,11 +309,35 @@ export class SlamyClient {
     }));
   }
 
+  async getFileInfo(fileId: string): Promise<SlackFileInfo> {
+    const res = await this.userClient.files.info({ file: fileId });
+    const f = res.file as any;
+    return {
+      id: f.id,
+      name: f.name,
+      mimetype: f.mimetype,
+      filetype: f.filetype,
+      size: f.size,
+      url_private_download: f.url_private_download,
+    };
+  }
+
   async downloadFileStream(fileUrl: string): Promise<Response> {
-    const response = await fetch(fileUrl, {
-      headers: { Authorization: `Bearer ${this.botTokenStr}` },
-      redirect: "error",
+    // Slack file URLs may redirect; Authorization header is stripped on redirect.
+    // Use manual redirect handling to re-attach auth header if needed.
+    let response = await fetch(fileUrl, {
+      headers: { Authorization: `Bearer ${this.userTokenStr}` },
+      redirect: "manual",
     });
+    if (response.status >= 300 && response.status < 400) {
+      const location = response.headers.get("location");
+      if (location) {
+        response = await fetch(location, {
+          headers: { Authorization: `Bearer ${this.userTokenStr}` },
+          redirect: "follow",
+        });
+      }
+    }
     if (!response.ok) {
       throw new Error(`File download failed: HTTP ${response.status}`);
     }

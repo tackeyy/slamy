@@ -54,6 +54,7 @@ go build -o slamy .
 | `channels:history` | パブリックチャンネルのメッセージ閲覧 |
 | `channels:read` | チャンネル情報の取得 |
 | `chat:write` | メッセージ送信（自分として投稿） |
+| `files:read` | チャンネル内で共有されたファイルのダウンロード |
 | `groups:history` | プライベートチャンネルのメッセージ閲覧 |
 | `groups:read` | プライベートチャンネル情報の取得 |
 | `reactions:write` | 絵文字リアクションの追加 |

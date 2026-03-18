@@ -20,6 +20,7 @@ export function createMockWebClient() {
     },
     files: {
       uploadV2: vi.fn().mockResolvedValue({ ok: true }),
+      info: vi.fn().mockResolvedValue({ ok: true, file: {} }),
     },
     users: {
       list: vi.fn().mockResolvedValue({ ok: true, members: [] }),

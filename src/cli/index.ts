@@ -1,5 +1,9 @@
 #!/usr/bin/env node
 import { Command } from "commander";
+import { createWriteStream } from "node:fs";
+import { Readable } from "node:stream";
+import { pipeline } from "node:stream/promises";
+import { basename } from "node:path";
 import { SlamyClient } from "../lib/client.js";
 
 const program = new Command();
@@ -533,6 +537,48 @@ files
         console.log(`${channelId}\t${filePath}\tuploaded`);
       } else {
         console.log(`File uploaded to ${channelId}: ${filePath}`);
+      }
+    } catch (err: any) {
+      console.error(`Error: ${err.message}`);
+      process.exit(1);
+    }
+  });
+
+files
+  .command("download <file_id_or_url>")
+  .description("Download a file from Slack")
+  .option("--output <path>", "Save path (default: original filename in current directory)")
+  .action(async (fileIdOrUrl, opts) => {
+    try {
+      const client = createClient();
+      const mode = getOutputMode();
+
+      let downloadUrl: string;
+      let filename: string;
+
+      if (fileIdOrUrl.startsWith("http")) {
+        downloadUrl = fileIdOrUrl;
+        filename = basename(new URL(fileIdOrUrl).pathname);
+      } else {
+        const info = await client.getFileInfo(fileIdOrUrl);
+        downloadUrl = info.url_private_download;
+        filename = info.name;
+      }
+
+      const outputPath = opts.output || filename;
+      const response = await client.downloadFileStream(downloadUrl);
+      const body = response.body;
+      if (!body) throw new Error("Empty response body");
+
+      const readable = Readable.fromWeb(body as any);
+      await pipeline(readable, createWriteStream(outputPath));
+
+      if (mode === "json") {
+        jsonOutput({ file: fileIdOrUrl, output: outputPath, downloaded: true });
+      } else if (mode === "plain") {
+        console.log(`${fileIdOrUrl}\t${outputPath}\tdownloaded`);
+      } else {
+        console.log(`Downloaded: ${outputPath}`);
       }
     } catch (err: any) {
       console.error(`Error: ${err.message}`);

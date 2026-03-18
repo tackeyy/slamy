@@ -54,6 +54,7 @@ In **OAuth & Permissions** > **Scopes** > **User Token Scopes**, add:
 | `channels:history` | View messages in public channels |
 | `channels:read` | View basic channel info |
 | `chat:write` | Send messages (as yourself) |
+| `files:read` | Download files shared in channels |
 | `groups:history` | View messages in private channels |
 | `groups:read` | View basic private channel info |
 | `reactions:write` | Add emoji reactions |
