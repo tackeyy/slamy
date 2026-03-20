@@ -435,6 +435,24 @@ export class SlamyClient {
     };
   }
 
+  async getChannelMembers(channel: string): Promise<string[]> {
+    const allMembers: string[] = [];
+    let cursor: string | undefined;
+
+    do {
+      const res = await this.userClient.conversations.members({
+        channel,
+        limit: 200,
+        ...(cursor && { cursor }),
+      } as any);
+
+      allMembers.push(...((res as any).members || []));
+      cursor = (res as any).response_metadata?.next_cursor || undefined;
+    } while (cursor);
+
+    return allMembers;
+  }
+
   async authTest(): Promise<AuthInfo> {
     const res = await this.userClient.auth.test();
     return {

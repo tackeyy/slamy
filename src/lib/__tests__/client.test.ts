@@ -556,6 +556,50 @@ describe("searchMessages", () => {
   });
 });
 
+describe("getChannelMembers", () => {
+  it("チャンネルメンバー一覧を取得する", async () => {
+    mockWebClient.conversations.members.mockResolvedValue({
+      ok: true,
+      members: ["U1", "U2", "U3"],
+    });
+
+    const client = new SlamyClient({ userToken: "xoxp-test" });
+    const members = await client.getChannelMembers("C123");
+
+    expect(members).toEqual(["U1", "U2", "U3"]);
+    expect(mockWebClient.conversations.members).toHaveBeenCalledWith({
+      channel: "C123",
+      limit: 200,
+    });
+  });
+
+  it("ページネーションで全メンバーを取得する", async () => {
+    mockWebClient.conversations.members
+      .mockResolvedValueOnce({
+        ok: true,
+        members: ["U1", "U2"],
+        response_metadata: { next_cursor: "cursor1" },
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        members: ["U3"],
+        response_metadata: { next_cursor: "" },
+      });
+
+    const client = new SlamyClient({ userToken: "xoxp-test" });
+    const members = await client.getChannelMembers("C123");
+
+    expect(members).toEqual(["U1", "U2", "U3"]);
+    expect(mockWebClient.conversations.members).toHaveBeenCalledTimes(2);
+  });
+
+  it("API エラーを伝播する", async () => {
+    mockWebClient.conversations.members.mockRejectedValue(new Error("channel_not_found"));
+    const client = new SlamyClient({ userToken: "xoxp-test" });
+    await expect(client.getChannelMembers("INVALID")).rejects.toThrow("channel_not_found");
+  });
+});
+
 describe("authTest", () => {
   it("認証情報を返す", async () => {
     const client = new SlamyClient({ userToken: "xoxp-test" });

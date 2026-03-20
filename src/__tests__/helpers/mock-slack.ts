@@ -13,6 +13,7 @@ export function createMockWebClient() {
       history: vi.fn().mockResolvedValue({ ok: true, messages: [] }),
       info: vi.fn().mockResolvedValue({ ok: true, channel: {} }),
       replies: vi.fn().mockResolvedValue({ ok: true, messages: [] }),
+      members: vi.fn().mockResolvedValue({ ok: true, members: [] }),
     },
     reactions: {
       add: vi.fn().mockResolvedValue({ ok: true }),

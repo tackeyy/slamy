@@ -173,6 +173,33 @@ channels
     }
   });
 
+channels
+  .command("members <channel_id>")
+  .description("List channel members")
+  .action(async (channelId) => {
+    try {
+      const client = createClient();
+      const mode = getOutputMode();
+      const members = await client.getChannelMembers(channelId);
+
+      if (mode === "json") {
+        jsonOutput(members);
+      } else if (mode === "plain") {
+        for (const m of members) {
+          console.log(m);
+        }
+      } else {
+        console.log(`${members.length} members:`);
+        for (const m of members) {
+          console.log(`  ${m}`);
+        }
+      }
+    } catch (err: any) {
+      console.error(`Error: ${err.message}`);
+      process.exit(1);
+    }
+  });
+
 // --- messages ---
 const messages = program.command("messages").description("Message operations");
 
