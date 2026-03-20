@@ -660,4 +660,107 @@ files
     }
   });
 
+// --- engagement ---
+const engagement = program.command("engagement").description("Engagement metrics");
+
+engagement
+  .command("user <user_id>")
+  .description("Get engagement metrics for a single user")
+  .requiredOption("--since <date>", "Start date (YYYY-MM-DD)")
+  .option("--until <date>", "End date (YYYY-MM-DD, default: same as since)")
+  .action(async (userId, opts) => {
+    try {
+      const client = createClient();
+      const mode = getOutputMode();
+      const result = await client.getUserEngagement(userId, {
+        since: opts.since,
+        until: opts.until,
+      });
+
+      if (mode === "json") {
+        jsonOutput(result);
+      } else if (mode === "plain") {
+        console.log(
+          `${result.userId}\t${result.since}\t${result.until}\t${result.postCount}\t${result.reactionGivenCount}`,
+        );
+      } else {
+        console.log(`User: ${result.userId}`);
+        console.log(`Period: ${result.since} ~ ${result.until}`);
+        console.log(`Posts: ${result.postCount}`);
+        console.log(`Reactions given: ${result.reactionGivenCount}`);
+      }
+    } catch (err: any) {
+      console.error(`Error: ${err.message}`);
+      process.exit(1);
+    }
+  });
+
+engagement
+  .command("team")
+  .description("Get engagement metrics for all team members")
+  .requiredOption("--since <date>", "Start date (YYYY-MM-DD)")
+  .option("--until <date>", "End date (YYYY-MM-DD, default: same as since)")
+  .option("--delay <ms>", "Delay between API calls in ms (rate limit)", "3000")
+  .action(async (opts) => {
+    try {
+      const client = createClient();
+      const mode = getOutputMode();
+      const delay = parseInt(opts.delay, 10);
+      const users = await client.listUsers();
+
+      const results = [];
+      for (let i = 0; i < users.length; i++) {
+        const user = users[i];
+        if (mode === "human") {
+          process.stderr.write(
+            `\r[${i + 1}/${users.length}] ${user.display_name || user.real_name}...`,
+          );
+        }
+        const metrics = await client.getUserEngagement(user.id, {
+          since: opts.since,
+          until: opts.until,
+        });
+        results.push({
+          ...metrics,
+          displayName: user.display_name || user.real_name,
+        });
+        if (i < users.length - 1 && delay > 0) {
+          await new Promise((r) => setTimeout(r, delay));
+        }
+      }
+
+      if (mode === "human") {
+        process.stderr.write("\r" + " ".repeat(60) + "\r");
+      }
+
+      if (mode === "json") {
+        jsonOutput(results);
+      } else if (mode === "plain") {
+        for (const r of results) {
+          console.log(
+            `${r.userId}\t${r.displayName}\t${r.since}\t${r.until}\t${r.postCount}\t${r.reactionGivenCount}`,
+          );
+        }
+      } else {
+        // テーブル形式
+        console.log(`\nEngagement: ${results[0]?.since || opts.since} ~ ${results[0]?.until || opts.until || opts.since}\n`);
+        const sorted = [...results].sort((a, b) => b.postCount - a.postCount);
+        const nameWidth = Math.max(...sorted.map((r) => r.displayName.length), 4);
+        console.log(
+          `${"Name".padEnd(nameWidth)}  Posts  Reactions`,
+        );
+        console.log("-".repeat(nameWidth + 18));
+        for (const r of sorted) {
+          console.log(
+            `${r.displayName.padEnd(nameWidth)}  ${String(r.postCount).padStart(5)}  ${String(r.reactionGivenCount).padStart(9)}`,
+          );
+        }
+        console.log(`\nTotal: ${results.length} members`);
+      }
+    } catch (err: any) {
+      console.error(`Error: ${err.message}`);
+      process.exit(1);
+    }
+  });
+
 program.parse();

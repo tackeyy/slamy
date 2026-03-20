@@ -485,6 +485,91 @@ export class SlamyClient {
     };
   }
 
+  async getUserEngagement(
+    userId: string,
+    opts: { since: string; until?: string },
+  ): Promise<import("./types.js").EngagementMetrics> {
+    // postCount: search.messages で取得
+    // Slack の after: は「その日より後」なので1日前にずらす（UTC で計算）
+    const sinceDate = new Date(opts.since + "T00:00:00Z");
+    const dayBefore = new Date(sinceDate.getTime() - 86400000);
+    const afterStr = dayBefore.toISOString().slice(0, 10);
+
+    let query = `from:<@${userId}> after:${afterStr}`;
+    const untilStr = opts.until || opts.since;
+
+    if (opts.until) {
+      const untilDate = new Date(opts.until + "T00:00:00Z");
+      const dayAfter = new Date(untilDate.getTime() + 86400000);
+      const beforeStr = dayAfter.toISOString().slice(0, 10);
+      query += ` before:${beforeStr}`;
+    }
+
+    const searchRes = await this.userClient.search.messages({
+      query,
+      sort: "timestamp" as any,
+      sort_dir: "desc" as any,
+      count: 1,
+      page: 1,
+    });
+    const postCount = searchRes.messages?.total || 0;
+
+    // reactionGivenCount: reactions.list で日付フィルタ付きカウント（UTC）
+    const sinceEpoch = new Date(opts.since + "T00:00:00Z").getTime() / 1000;
+    const untilEpoch = new Date(untilStr + "T23:59:59Z").getTime() / 1000;
+
+    let reactionGivenCount = 0;
+    let cursor: string | undefined;
+    let earlyBreak = false;
+
+    do {
+      const res = await (this.userClient.reactions as any).list({
+        user: userId,
+        limit: 200,
+        cursor,
+        full: true,
+      });
+
+      const rawItems: any[] = res.items || [];
+      for (const item of rawItems) {
+        if (item.type !== "message") continue;
+
+        const msg = item.message;
+        const ts = parseFloat(msg?.ts || "0");
+
+        // 逆時系列順: since より前なら早期終了
+        if (ts < sinceEpoch) {
+          earlyBreak = true;
+          break;
+        }
+
+        // until より後はスキップ
+        if (ts > untilEpoch) continue;
+
+        // このメッセージにユーザーがリアクションしているか確認
+        const reactions: any[] = msg?.reactions || [];
+        const hasUserReaction = reactions.some((r: any) =>
+          (r.users || []).includes(userId),
+        );
+        if (hasUserReaction) {
+          reactionGivenCount++;
+        }
+      }
+
+      if (earlyBreak) break;
+      cursor = res.response_metadata?.next_cursor || undefined;
+    } while (cursor);
+
+    return {
+      userId,
+      since: opts.since,
+      until: untilStr,
+      postCount,
+      reactionGivenCount,
+      fetchedAt: new Date().toISOString(),
+    };
+  }
+
   async listReactions(opts?: {
     user?: string;
     limit?: number;

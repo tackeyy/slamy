@@ -450,6 +450,83 @@ describe("getChannelHistory", () => {
       latest: "1710000000",
     });
   });
+
+  it("ページネーションで複数ページを自動取得する", async () => {
+    mockWebClient.conversations.history
+      .mockResolvedValueOnce({
+        ok: true,
+        messages: [
+          { ts: "100.001", user: "U1", text: "msg1" },
+          { ts: "100.002", user: "U2", text: "msg2" },
+        ],
+        has_more: true,
+        response_metadata: { next_cursor: "cursor1" },
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        messages: [
+          { ts: "100.003", user: "U3", text: "msg3" },
+        ],
+        has_more: false,
+        response_metadata: { next_cursor: "" },
+      });
+
+    const client = new SlamyClient({ userToken: "xoxp-test" });
+    const messages = await client.getChannelHistory("C123", { limit: 500 });
+
+    expect(messages).toHaveLength(3);
+    expect(messages[0].text).toBe("msg1");
+    expect(messages[2].text).toBe("msg3");
+    expect(mockWebClient.conversations.history).toHaveBeenCalledTimes(2);
+    // 2回目の呼び出しに cursor が渡されていること
+    expect(mockWebClient.conversations.history).toHaveBeenNthCalledWith(2,
+      expect.objectContaining({ cursor: "cursor1" }),
+    );
+  });
+
+  it("limit に達したらページネーションを中断する", async () => {
+    mockWebClient.conversations.history
+      .mockResolvedValueOnce({
+        ok: true,
+        messages: [
+          { ts: "100.001", user: "U1", text: "msg1" },
+          { ts: "100.002", user: "U2", text: "msg2" },
+          { ts: "100.003", user: "U3", text: "msg3" },
+        ],
+        has_more: true,
+        response_metadata: { next_cursor: "cursor1" },
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        messages: [
+          { ts: "100.004", user: "U4", text: "msg4" },
+        ],
+        has_more: false,
+        response_metadata: { next_cursor: "" },
+      });
+
+    const client = new SlamyClient({ userToken: "xoxp-test" });
+    // limit=3 なので1ページ目の3件取得後に打ち切り
+    const messages = await client.getChannelHistory("C123", { limit: 3 });
+
+    expect(messages).toHaveLength(3);
+    expect(mockWebClient.conversations.history).toHaveBeenCalledTimes(1);
+  });
+
+  it("has_more が false ならページネーションしない", async () => {
+    mockWebClient.conversations.history.mockResolvedValue({
+      ok: true,
+      messages: [
+        { ts: "100.001", user: "U1", text: "msg1" },
+      ],
+      has_more: false,
+    });
+
+    const client = new SlamyClient({ userToken: "xoxp-test" });
+    await client.getChannelHistory("C123", { limit: 500 });
+
+    expect(mockWebClient.conversations.history).toHaveBeenCalledTimes(1);
+  });
 });
 
 describe("getThreadReplies (read)", () => {

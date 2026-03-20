@@ -112,6 +112,16 @@ export interface ReactionAddedEvent {
   event_ts: string;
 }
 
+/** User engagement metrics for a date range. */
+export interface EngagementMetrics {
+  userId: string;
+  since: string; // "YYYY-MM-DD"
+  until: string; // "YYYY-MM-DD"
+  postCount: number;
+  reactionGivenCount: number; // 日付範囲内でリアクションしたメッセージ数
+  fetchedAt: string; // ISO 8601
+}
+
 /** Slack event payload. */
 export interface SlackEvent {
   type: string;
