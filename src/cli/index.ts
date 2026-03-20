@@ -407,6 +407,53 @@ users
 const reactions = program.command("reactions").description("Reaction operations");
 
 reactions
+  .command("list")
+  .description("List reactions made by a user (requires User Token)")
+  .option("--user <user_id>", "User ID (default: authenticated user)")
+  .option("--limit <n>", "Maximum number of reactions to fetch", "100")
+  .option("--count", "Output total count only")
+  .action(async (opts) => {
+    try {
+      const client = createClient();
+      const mode = getOutputMode();
+      const limit = parseInt(opts.limit, 10);
+      const result = await client.listReactions({
+        user: opts.user,
+        limit,
+      });
+
+      if (opts.count) {
+        console.log(result.total);
+        return;
+      }
+
+      if (mode === "json") {
+        jsonOutput(result);
+      } else if (mode === "plain") {
+        for (const item of result.items) {
+          const text = item.message_text.replace(/\n/g, "\\n");
+          console.log(`${item.name}\t${item.channel}\t${item.timestamp}\t${text}`);
+        }
+      } else {
+        if (result.items.length === 0) {
+          console.log("No reactions found");
+          return;
+        }
+        console.log(`${result.total} reaction(s):\n`);
+        for (const item of result.items) {
+          const ts = formatTimestamp(item.timestamp);
+          let text = item.message_text;
+          if (text.length > 60) text = text.slice(0, 60) + "...";
+          console.log(`:${item.name.padEnd(20)} #${item.channel.padEnd(20)} [${ts}] ${text}`);
+        }
+      }
+    } catch (err: any) {
+      console.error(`Error: ${err.message}`);
+      process.exit(1);
+    }
+  });
+
+reactions
   .command("add <channel_id> <timestamp>")
   .description("Add a reaction to a message")
   .requiredOption("--name <emoji>", "Reaction emoji name (without colons)")

@@ -18,6 +18,7 @@ export function createMockWebClient() {
     reactions: {
       add: vi.fn().mockResolvedValue({ ok: true }),
       remove: vi.fn().mockResolvedValue({ ok: true }),
+      list: vi.fn().mockResolvedValue({ ok: true, items: [], response_metadata: { next_cursor: "" } }),
     },
     files: {
       uploadV2: vi.fn().mockResolvedValue({ ok: true }),

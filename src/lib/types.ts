@@ -88,6 +88,20 @@ export interface AuthInfo {
   url: string;
 }
 
+/** A reaction item returned by reactions.list. */
+export interface ReactionItem {
+  name: string;
+  channel: string;
+  timestamp: string;
+  message_text: string;
+}
+
+/** Result of reactions.list. */
+export interface ReactionsListResult {
+  items: ReactionItem[];
+  total: number;
+}
+
 /** Slack reaction_added event payload. */
 export interface ReactionAddedEvent {
   type: "reaction_added";

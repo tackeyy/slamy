@@ -11,6 +11,8 @@ import type {
   UserProfile,
   SearchResult,
   AuthInfo,
+  ReactionItem,
+  ReactionsListResult,
 } from "./types.js";
 
 export interface SlamyClientOptions {
@@ -272,23 +274,42 @@ export class SlamyClient {
   }
 
   async getChannelHistory(channel: string, opts?: { limit?: number; oldest?: string; latest?: string }): Promise<Message[]> {
-    const params: Record<string, unknown> = {
-      channel,
-      limit: opts?.limit ?? 20,
-    };
-    if (opts?.oldest) params.oldest = opts.oldest;
-    if (opts?.latest) params.latest = opts.latest;
+    const maxMessages = opts?.limit ?? 20;
+    const allMessages: Message[] = [];
+    let cursor: string | undefined;
 
-    const res = await this.userClient.conversations.history(params as any);
+    do {
+      const remaining = maxMessages - allMessages.length;
+      const batchSize = Math.min(remaining, 200);
 
-    return (res.messages || []).map((msg) => ({
-      ts: msg.ts!,
-      user: msg.user || "",
-      text: msg.text || "",
-      thread_ts: msg.thread_ts,
-      reply_count: msg.reply_count,
-      files: msg.files as SlackFileInfo[] | undefined,
-    }));
+      const params: Record<string, unknown> = {
+        channel,
+        limit: batchSize,
+      };
+      if (opts?.oldest) params.oldest = opts.oldest;
+      if (opts?.latest) params.latest = opts.latest;
+      if (cursor) params.cursor = cursor;
+
+      const res = await this.userClient.conversations.history(params as any);
+
+      const batch = (res.messages || []).map((msg) => ({
+        ts: msg.ts!,
+        user: msg.user || "",
+        text: msg.text || "",
+        thread_ts: msg.thread_ts,
+        reply_count: msg.reply_count,
+        files: msg.files as SlackFileInfo[] | undefined,
+      }));
+
+      allMessages.push(...batch);
+
+      const hasMore = (res as any).has_more === true;
+      cursor = (res as any).response_metadata?.next_cursor || undefined;
+
+      if (!hasMore || !cursor || allMessages.length >= maxMessages) break;
+    } while (true);
+
+    return allMessages.slice(0, maxMessages);
   }
 
   async getMessageAt(channel: string, ts: string): Promise<Message[]> {
@@ -462,5 +483,65 @@ export class SlamyClient {
       team: res.team || "",
       url: res.url || "",
     };
+  }
+
+  async listReactions(opts?: {
+    user?: string;
+    limit?: number;
+  }): Promise<ReactionsListResult> {
+    const limit = opts?.limit ?? 100;
+
+    // user が省略された場合は認証ユーザー自身のIDを取得
+    let userId = opts?.user;
+    if (!userId) {
+      const auth = await this.userClient.auth.test();
+      userId = auth.user_id!;
+    }
+
+    const allItems: ReactionItem[] = [];
+    let cursor: string | undefined;
+
+    do {
+      const res = await (this.userClient.reactions as any).list({
+        user: userId,
+        limit: Math.min(limit - allItems.length, 200),
+        cursor,
+        full: true,
+      });
+
+      const rawItems: any[] = res.items || [];
+      for (const item of rawItems) {
+        if (item.type !== "message") continue;
+
+        const msg = item.message;
+        const channel: string = item.channel || "";
+        const timestamp: string = msg?.ts || "";
+        const reactions: any[] = msg?.reactions || [];
+
+        // このユーザーが付けたリアクションのみ抽出
+        for (const reaction of reactions) {
+          const users: string[] = reaction.users || [];
+          if (!users.includes(userId!)) continue;
+
+          let text: string = msg?.text || "";
+          if (text.length > 100) text = text.slice(0, 100) + "...";
+
+          allItems.push({
+            name: reaction.name as string,
+            channel,
+            timestamp,
+            message_text: text,
+          });
+        }
+
+        if (allItems.length >= limit) break;
+      }
+
+      cursor = res.response_metadata?.next_cursor || undefined;
+      if (allItems.length >= limit) break;
+    } while (cursor);
+
+    const items = allItems.slice(0, limit);
+    return { items, total: items.length };
   }
 }
