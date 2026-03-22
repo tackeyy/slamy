@@ -1,4 +1,4 @@
-import { WebClient } from "@slack/web-api";
+import { WebClient, LogLevel } from "@slack/web-api";
 import { readFileSync } from "node:fs";
 import { fixSlackMrkdwn } from "./mrkdwn.js";
 import { splitMessage, MAX_MESSAGE_LENGTH } from "./split.js";
@@ -32,8 +32,8 @@ export class SlamyClient {
     }
     // Bot token for write operations (postMessage, reactions, file upload)
     // User token for read/search operations that require user-level access
-    this.botClient = new WebClient(opts.botToken || opts.userToken);
-    this.userClient = new WebClient(opts.userToken || opts.botToken);
+    this.botClient = new WebClient(opts.botToken || opts.userToken, { logLevel: LogLevel.WARN });
+    this.userClient = new WebClient(opts.userToken || opts.botToken, { logLevel: LogLevel.WARN });
     this.botTokenStr = opts.botToken || opts.userToken || "";
     this.userTokenStr = opts.userToken || opts.botToken || "";
   }
@@ -186,6 +186,22 @@ export class SlamyClient {
       uploadArgs.initial_comment = opts.initialComment;
     }
     await this.botClient.files.uploadV2(uploadArgs as any);
+  }
+
+  // --- Channel info ---
+
+  async getChannelInfo(channelId: string): Promise<Channel> {
+    const res = await this.botClient.conversations.info({ channel: channelId });
+    const ch = res.channel as any;
+    return {
+      id: ch.id,
+      name: ch.name || "",
+      topic: ch.topic?.value || "",
+      purpose: ch.purpose?.value || "",
+      num_members: ch.num_members || 0,
+      is_private: ch.is_private || false,
+      is_archived: ch.is_archived || false,
+    };
   }
 
   // --- Read operations ---
