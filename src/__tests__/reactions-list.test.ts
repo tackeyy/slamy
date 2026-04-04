@@ -4,6 +4,7 @@ import { createMockWebClient } from "./helpers/mock-slack.js";
 
 vi.mock("@slack/web-api", () => ({
   WebClient: vi.fn().mockImplementation(() => createMockWebClient()),
+  LogLevel: { DEBUG: "debug", INFO: "info", WARN: "warn", ERROR: "error" },
 }));
 
 async function createClient(token = "xoxb-test") {

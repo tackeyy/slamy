@@ -5,6 +5,7 @@ import { createMockWebClient } from "../../__tests__/helpers/mock-slack.js";
 // Mock @slack/web-api
 vi.mock("@slack/web-api", () => ({
   WebClient: vi.fn(),
+  LogLevel: { DEBUG: "debug", INFO: "info", WARN: "warn", ERROR: "error" },
 }));
 
 vi.mock("node:fs", () => ({
