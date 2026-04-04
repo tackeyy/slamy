@@ -3,3 +3,5 @@ dist/
 *.exe
 .env
 .claude/
+.DS_Store
+.playwright-cli/
