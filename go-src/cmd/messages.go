@@ -101,7 +101,10 @@ var messagesReplyCmd = &cobra.Command{
 			slack.MsgOptionTS(threadTs),
 		}
 
-		broadcast, _ := cmd.Flags().GetBool("broadcast")
+		broadcast, err := cmd.Flags().GetBool("broadcast")
+		if err != nil {
+			return fmt.Errorf("failed to get broadcast flag: %w", err)
+		}
 		if broadcast {
 			opts = append(opts, slack.MsgOptionBroadcast())
 		}
