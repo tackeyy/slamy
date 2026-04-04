@@ -14,6 +14,9 @@ jobs:
   golangci-lint:
     name: Go Lint
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: go-src
     steps:
       - uses: actions/checkout@v4
 
@@ -26,10 +29,14 @@ jobs:
         uses: golangci/golangci-lint-action@v7
         with:
           version: v2.9.0
+          working-directory: go-src
 
-  test:
+  go-test:
     name: Go Test
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: go-src
     steps:
       - uses: actions/checkout@v4
 
@@ -44,4 +51,25 @@ jobs:
       - name: Upload coverage
         uses: codecov/codecov-action@v4
         with:
-          file: ./coverage.out
+          file: ./go-src/coverage.out
+
+  ts-lint:
+    name: TypeScript Lint & Test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci --ignore-scripts
+
+      - name: Type check
+        run: npx tsc --noEmit
+
+      - name: Run tests
+        run: npx vitest run
