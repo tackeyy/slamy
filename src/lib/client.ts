@@ -531,14 +531,18 @@ export class SlamyClient {
     const postCount = searchRes.messages?.total || 0;
 
     // reactionGivenCount: reactions.list で日付フィルタ付きカウント（UTC）
+    // reactions.list のソート順はメッセージ ts と一致しない可能性があるため、
+    // 早期終了せずページ上限まで全件走査する
     const sinceEpoch = new Date(opts.since + "T00:00:00Z").getTime() / 1000;
     const untilEpoch = new Date(untilStr + "T23:59:59Z").getTime() / 1000;
+    const MAX_REACTION_PAGES = 10;
 
     let reactionGivenCount = 0;
     let cursor: string | undefined;
-    let earlyBreak = false;
+    let pages = 0;
 
     do {
+      pages++;
       const res = await (this.userClient.reactions as any).list({
         user: userId,
         limit: 200,
@@ -553,14 +557,8 @@ export class SlamyClient {
         const msg = item.message;
         const ts = parseFloat(msg?.ts || "0");
 
-        // 逆時系列順: since より前なら早期終了
-        if (ts < sinceEpoch) {
-          earlyBreak = true;
-          break;
-        }
-
-        // until より後はスキップ
-        if (ts > untilEpoch) continue;
+        // 範囲外はスキップ（早期終了しない）
+        if (ts < sinceEpoch || ts > untilEpoch) continue;
 
         // このメッセージにユーザーがリアクションしているか確認
         const reactions: any[] = msg?.reactions || [];
@@ -572,9 +570,8 @@ export class SlamyClient {
         }
       }
 
-      if (earlyBreak) break;
       cursor = res.response_metadata?.next_cursor || undefined;
-    } while (cursor);
+    } while (cursor && pages < MAX_REACTION_PAGES);
 
     return {
       userId,

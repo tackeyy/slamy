@@ -4,6 +4,7 @@ import { createMockWebClient } from "./helpers/mock-slack.js";
 
 vi.mock("@slack/web-api", () => ({
   WebClient: vi.fn().mockImplementation(() => createMockWebClient()),
+  LogLevel: { ERROR: "error", WARN: "warn", INFO: "info", DEBUG: "debug" },
 }));
 
 async function createClient(token = "xoxb-test") {
@@ -76,7 +77,7 @@ describe("getUserEngagement", () => {
     expect(result.until).toBe("2026-03-21");
   });
 
-  it("reactions.list の日付フィルタ: since 以前のアイテムで早期終了", async () => {
+  it("reactions.list の日付フィルタ: since 以前のアイテムは除外（早期終了しない）", async () => {
     const { client, mock } = await createClient();
     mock.search.messages.mockResolvedValue({
       ok: true,
@@ -87,37 +88,75 @@ describe("getUserEngagement", () => {
     const oldTs = String(sinceEpoch - 3600); // since の1時間前
     const newTs = String(sinceEpoch + 3600); // since の1時間後
 
+    // ページ1: 古いメッセージが先に来るケース（リアクション付与日時順）
+    mock.reactions.list
+      .mockResolvedValueOnce({
+        ok: true,
+        items: [
+          {
+            type: "message",
+            message: {
+              text: "Old msg reacted recently",
+              ts: oldTs,
+              reactions: [{ name: "ng", count: 1, users: ["U1"] }],
+            },
+            channel: "C2",
+          },
+        ],
+        response_metadata: { next_cursor: "page2" },
+      } as any)
+      // ページ2: 範囲内のメッセージ
+      .mockResolvedValueOnce({
+        ok: true,
+        items: [
+          {
+            type: "message",
+            message: {
+              text: "New msg",
+              ts: newTs,
+              reactions: [{ name: "ok", count: 1, users: ["U1"] }],
+            },
+            channel: "C1",
+          },
+        ],
+        response_metadata: { next_cursor: "" },
+      } as any);
+
+    const result = await client.getUserEngagement("U1", { since: "2026-03-20" });
+
+    // 古いメッセージで早期終了せず、2ページ目も取得する
+    expect(mock.reactions.list).toHaveBeenCalledTimes(2);
+    // 範囲内のメッセージだけカウント
+    expect(result.reactionGivenCount).toBe(1);
+  });
+
+  it("reactions.list のページ上限で打ち切り", async () => {
+    const { client, mock } = await createClient();
+    mock.search.messages.mockResolvedValue({
+      ok: true,
+      messages: { matches: [], total: 0, paging: { page: 1 } },
+    } as any);
+
+    const validTs = String(epoch("2026-03-20T12:00:00Z"));
+
+    // 無限にカーソルが続くケース → MAX_REACTION_PAGES で打ち切り
     mock.reactions.list.mockResolvedValue({
       ok: true,
       items: [
         {
           type: "message",
-          message: {
-            text: "New msg",
-            ts: newTs,
-            reactions: [{ name: "ok", count: 1, users: ["U1"] }],
-          },
+          message: { text: "msg", ts: validTs, reactions: [{ name: "ok", count: 1, users: ["U1"] }] },
           channel: "C1",
         },
-        {
-          type: "message",
-          message: {
-            text: "Old msg",
-            ts: oldTs,
-            reactions: [{ name: "ng", count: 1, users: ["U1"] }],
-          },
-          channel: "C2",
-        },
       ],
-      response_metadata: { next_cursor: "more_cursor" },
+      response_metadata: { next_cursor: "infinite_cursor" },
     } as any);
 
     const result = await client.getUserEngagement("U1", { since: "2026-03-20" });
 
-    // since より前のアイテムで早期終了するので2ページ目は呼ばれない
-    expect(mock.reactions.list).toHaveBeenCalledTimes(1);
-    // 新しいメッセージだけカウント
-    expect(result.reactionGivenCount).toBe(1);
+    // MAX_REACTION_PAGES (10) で打ち切り
+    expect(mock.reactions.list).toHaveBeenCalledTimes(10);
+    expect(result.reactionGivenCount).toBe(10);
   });
 
   it("reactions.list の日付フィルタ: until 以降のアイテムは除外", async () => {
