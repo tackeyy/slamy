@@ -93,17 +93,22 @@ export class SlamyClient {
     channel: string,
     threadTs: string,
     text: string,
+    options?: { broadcast?: boolean },
   ): Promise<{ channel: string; ts: string }> {
     const fixed = fixSlackMrkdwn(text);
     const chunks = splitMessage(fixed);
 
     let firstTs = "";
     for (const chunk of chunks) {
-      const res = await this.botClient.chat.postMessage({
+      const params: Record<string, unknown> = {
         channel,
         text: chunk,
         thread_ts: threadTs,
-      });
+      };
+      if (options?.broadcast) {
+        params.reply_broadcast = true;
+      }
+      const res = await this.botClient.chat.postMessage(params as any);
       if (!firstTs) firstTs = res.ts!;
     }
 

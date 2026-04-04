@@ -146,7 +146,7 @@ slamy messages post <channel_id> --text <message> [--json] [--plain]
 ### `messages reply` — Reply to a thread
 
 ```bash
-slamy messages reply <channel_id> <thread_ts> --text <message> [--json] [--plain]
+slamy messages reply <channel_id> <thread_ts> --text <message> [--broadcast] [--json] [--plain]
 ```
 
 | Flag | Required | Description |
@@ -154,6 +154,7 @@ slamy messages reply <channel_id> <thread_ts> --text <message> [--json] [--plain
 | `<channel_id>` | Yes | Channel ID |
 | `<thread_ts>` | Yes | Thread timestamp |
 | `--text <message>` | Yes | Reply text |
+| `--broadcast` | No | Also post to the channel (reply_broadcast) |
 
 ### `users list` — List workspace users
 

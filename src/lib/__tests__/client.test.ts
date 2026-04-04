@@ -5,6 +5,7 @@ import { createMockWebClient } from "../../__tests__/helpers/mock-slack.js";
 // Mock @slack/web-api
 vi.mock("@slack/web-api", () => ({
   WebClient: vi.fn(),
+  LogLevel: { DEBUG: "debug", INFO: "info", WARN: "warn", ERROR: "error" },
 }));
 
 // Mock node:fs for uploadFile tests
@@ -233,6 +234,30 @@ describe("replyToThread", () => {
     for (const call of mockWebClient.chat.postMessage.mock.calls) {
       expect(call[0].thread_ts).toBe("ts123");
     }
+  });
+
+  it("broadcast オプションで reply_broadcast: true を送信する", async () => {
+    const client = new SlamyClient({ userToken: "xoxp-test" });
+    const result = await client.replyToThread("C123", "ts123", "Broadcast reply", { broadcast: true });
+
+    expect(mockWebClient.chat.postMessage).toHaveBeenCalledWith({
+      channel: "C123",
+      text: "Broadcast reply",
+      thread_ts: "ts123",
+      reply_broadcast: true,
+    });
+    expect(result.ts).toBe("1234567890.123456");
+  });
+
+  it("broadcast なしでは reply_broadcast を含めない", async () => {
+    const client = new SlamyClient({ userToken: "xoxp-test" });
+    await client.replyToThread("C123", "ts123", "Normal reply");
+
+    expect(mockWebClient.chat.postMessage).toHaveBeenCalledWith({
+      channel: "C123",
+      text: "Normal reply",
+      thread_ts: "ts123",
+    });
   });
 });
 

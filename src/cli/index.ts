@@ -269,11 +269,14 @@ messages
   .command("reply <channel_id> <thread_ts>")
   .description("Reply to a thread")
   .requiredOption("--text <text>", "Reply text")
+  .option("--broadcast", "Also post to the channel (reply_broadcast)")
   .action(async (channelId, threadTs, opts) => {
     try {
       const client = createClient();
       const mode = getOutputMode();
-      const result = await client.replyToThread(channelId, threadTs, opts.text);
+      const result = await client.replyToThread(channelId, threadTs, opts.text, {
+        broadcast: opts.broadcast,
+      });
 
       if (mode === "json") {
         jsonOutput({ channel: result.channel, ts: result.ts, thread_ts: threadTs });

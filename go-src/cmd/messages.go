@@ -101,6 +101,11 @@ var messagesReplyCmd = &cobra.Command{
 			slack.MsgOptionTS(threadTs),
 		}
 
+		broadcast, _ := cmd.Flags().GetBool("broadcast")
+		if broadcast {
+			opts = append(opts, slack.MsgOptionBroadcast())
+		}
+
 		_, ts, err := client.User.PostMessage(channelID, opts...)
 		if err != nil {
 			return fmt.Errorf("failed to reply: %w", err)
@@ -130,6 +135,7 @@ var messagesReplyCmd = &cobra.Command{
 func init() {
 	messagesPostCmd.Flags().String("text", "", "Message text")
 	messagesReplyCmd.Flags().String("text", "", "Reply text")
+	messagesReplyCmd.Flags().Bool("broadcast", false, "Also post to the channel (reply_broadcast)")
 
 	messagesCmd.AddCommand(messagesPostCmd)
 	messagesCmd.AddCommand(messagesReplyCmd)

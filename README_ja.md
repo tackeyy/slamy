@@ -146,7 +146,7 @@ slamy messages post <channel_id> --text <message> [--json] [--plain]
 ### `messages reply` — スレッド返信
 
 ```bash
-slamy messages reply <channel_id> <thread_ts> --text <message> [--json] [--plain]
+slamy messages reply <channel_id> <thread_ts> --text <message> [--broadcast] [--json] [--plain]
 ```
 
 | フラグ | 必須 | 説明 |
@@ -154,6 +154,7 @@ slamy messages reply <channel_id> <thread_ts> --text <message> [--json] [--plain
 | `<channel_id>` | Yes | チャンネル ID |
 | `<thread_ts>` | Yes | スレッドのタイムスタンプ |
 | `--text <message>` | Yes | 返信本文 |
+| `--broadcast` | No | チャンネルにも投稿する（reply_broadcast） |
 
 ### `users list` — ユーザー一覧
 
