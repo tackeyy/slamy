@@ -148,6 +148,44 @@ export class SlamyClient {
     });
   }
 
+  /**
+   * AI Assistant スレッドの進捗ステータスを設定する。
+   *
+   * Slack ネイティブの typing indicator（メッセージ入力欄上に表示）として描画され、
+   * クライアント側で自動的にアニメーションされる。`loadingMessages` を渡すと
+   * Slack が配列を rotate（循環表示）する（最大 10 個）。
+   *
+   * 動作前提:
+   * - Slack App ダッシュボードで「Agents & AI Apps」機能が有効化されていること
+   * - `assistant:write` または `chat:write` スコープが付与されていること
+   *
+   * アプリ自身が thread にメッセージを送信すると自動でクリアされる。
+   * 2 分間更新がないと自動的に消える。
+   *
+   * @see https://docs.slack.dev/reference/methods/assistant.threads.setStatus/
+   */
+  async setAssistantStatus(
+    channelId: string,
+    threadTs: string,
+    status: string,
+    opts?: { loadingMessages?: string[] },
+  ): Promise<void> {
+    const params: {
+      channel_id: string;
+      thread_ts: string;
+      status: string;
+      loading_messages?: string[];
+    } = {
+      channel_id: channelId,
+      thread_ts: threadTs,
+      status,
+    };
+    if (opts?.loadingMessages && opts.loadingMessages.length > 0) {
+      params.loading_messages = opts.loadingMessages;
+    }
+    await this.botClient.assistant.threads.setStatus(params);
+  }
+
   async removeReaction(channel: string, ts: string, name: string): Promise<void> {
     await this.botClient.reactions.remove({
       channel,

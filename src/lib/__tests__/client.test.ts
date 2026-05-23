@@ -711,3 +711,73 @@ describe("authTest", () => {
     expect(info.team).toBe("TestTeam");
   });
 });
+
+describe("setAssistantStatus", () => {
+  it("status のみで assistant.threads.setStatus を呼ぶ（書き込み = botToken）", async () => {
+    const botMock = createMockWebClient();
+    const userMock = createMockWebClient();
+
+    const { WebClient } = await import("@slack/web-api");
+    (WebClient as any).mockImplementation((token: string) => {
+      if (token === "xoxb-bot") return botMock;
+      if (token === "xoxp-user") return userMock;
+      return createMockWebClient();
+    });
+
+    const client = new SlamyClient({ botToken: "xoxb-bot", userToken: "xoxp-user" });
+    await client.setAssistantStatus("C123", "1700000000.000100", "考えています");
+
+    expect(botMock.assistant.threads.setStatus).toHaveBeenCalledWith({
+      channel_id: "C123",
+      thread_ts: "1700000000.000100",
+      status: "考えています",
+    });
+    expect(userMock.assistant.threads.setStatus).not.toHaveBeenCalled();
+  });
+
+  it("loading_messages 配列を指定できる（Donna 風 rotate 表示）", async () => {
+    const client = new SlamyClient({ botToken: "xoxb-bot" });
+    await client.setAssistantStatus("C123", "1700000000.000100", "考えています", {
+      loadingMessages: ["考えています", "データを見ています", "整理しています"],
+    });
+
+    expect(mockWebClient.assistant.threads.setStatus).toHaveBeenCalledWith({
+      channel_id: "C123",
+      thread_ts: "1700000000.000100",
+      status: "考えています",
+      loading_messages: ["考えています", "データを見ています", "整理しています"],
+    });
+  });
+
+  it("空文字 status でクリア指示できる", async () => {
+    const client = new SlamyClient({ botToken: "xoxb-bot" });
+    await client.setAssistantStatus("C123", "1700000000.000100", "");
+
+    expect(mockWebClient.assistant.threads.setStatus).toHaveBeenCalledWith({
+      channel_id: "C123",
+      thread_ts: "1700000000.000100",
+      status: "",
+    });
+  });
+
+  it("loading_messages が空配列ならパラメータに含めない", async () => {
+    const client = new SlamyClient({ botToken: "xoxb-bot" });
+    await client.setAssistantStatus("C123", "1700000000.000100", "...", {
+      loadingMessages: [],
+    });
+
+    const call = mockWebClient.assistant.threads.setStatus.mock.calls[0][0];
+    expect(call).not.toHaveProperty("loading_messages");
+  });
+
+  it("API エラーを呼び出し元に伝搬する（フォールバックは呼び出し側責任）", async () => {
+    const client = new SlamyClient({ botToken: "xoxb-bot" });
+    mockWebClient.assistant.threads.setStatus.mockRejectedValueOnce(
+      new Error("missing_scope"),
+    );
+
+    await expect(
+      client.setAssistantStatus("C123", "1700000000.000100", "..."),
+    ).rejects.toThrow("missing_scope");
+  });
+});

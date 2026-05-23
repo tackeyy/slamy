@@ -35,5 +35,12 @@ export function createMockWebClient() {
     auth: {
       test: vi.fn().mockResolvedValue({ ok: true, user_id: "U123", user: "testuser", team_id: "T123", team: "TestTeam", url: "https://test.slack.com" }),
     },
+    assistant: {
+      threads: {
+        setStatus: vi.fn().mockResolvedValue({ ok: true }),
+        setSuggestedPrompts: vi.fn().mockResolvedValue({ ok: true }),
+        setTitle: vi.fn().mockResolvedValue({ ok: true }),
+      },
+    },
   };
 }
