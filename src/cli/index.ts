@@ -766,4 +766,33 @@ engagement
     }
   });
 
+// --- assistant ---
+const assistant = program.command("assistant").description("AI Assistant App operations");
+
+assistant
+  .command("set-status")
+  .description("Set status text on an AI Assistant thread (typing indicator)")
+  .requiredOption("--channel <id>", "Channel ID (e.g. D123 or C123)")
+  .requiredOption("--thread <ts>", "Thread timestamp (e.g. 1700000000.000100)")
+  .requiredOption("--status <text>", "Status text (empty string to clear)")
+  .option("--loading-message <text...>", "Rotating loading messages")
+  .action(async (opts: { channel: string; thread: string; status: string; loadingMessage?: string[] }) => {
+    try {
+      const client = createClient();
+      const apiOpts = opts.loadingMessage && opts.loadingMessage.length > 0
+        ? { loadingMessages: opts.loadingMessage }
+        : undefined;
+      await client.setAssistantStatus(opts.channel, opts.thread, opts.status, apiOpts);
+      const mode = getOutputMode();
+      if (mode === "json") {
+        jsonOutput({ ok: true, channel: opts.channel, thread: opts.thread, status: opts.status });
+      } else {
+        console.log(`✅ status set on ${opts.channel}/${opts.thread}: "${opts.status}"`);
+      }
+    } catch (err: any) {
+      console.error(`Error: ${err.message}`);
+      process.exit(1);
+    }
+  });
+
 program.parse();
