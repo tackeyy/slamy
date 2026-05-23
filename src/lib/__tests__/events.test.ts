@@ -113,4 +113,41 @@ describe("SlamyEvents", () => {
       eventHandlers["app_mention"]({ event: { type: "app_mention" } }),
     ).resolves.not.toThrow();
   });
+
+  it("assistant_thread_started イベントが EventEmitter 経由で発火する", async () => {
+    const events = new SlamyEvents({ botToken: "xoxb-test", appToken: "xapp-test" });
+    const handler = vi.fn();
+    events.on("assistant_thread_started", handler);
+
+    const fakeEvent = {
+      type: "assistant_thread_started",
+      assistant_thread: {
+        user_id: "U_USER",
+        channel_id: "D_DM",
+        thread_ts: "1700000000.000100",
+      },
+    };
+    await eventHandlers["assistant_thread_started"]({ event: fakeEvent });
+
+    expect(handler).toHaveBeenCalledWith(fakeEvent);
+  });
+
+  it("assistant_thread_context_changed イベントが EventEmitter 経由で発火する", async () => {
+    const events = new SlamyEvents({ botToken: "xoxb-test", appToken: "xapp-test" });
+    const handler = vi.fn();
+    events.on("assistant_thread_context_changed", handler);
+
+    const fakeEvent = {
+      type: "assistant_thread_context_changed",
+      assistant_thread: {
+        user_id: "U_USER",
+        channel_id: "D_DM",
+        thread_ts: "1700000000.000100",
+        context: { channel_id: "C_PARENT", team_id: "T_TEAM" },
+      },
+    };
+    await eventHandlers["assistant_thread_context_changed"]({ event: fakeEvent });
+
+    expect(handler).toHaveBeenCalledWith(fakeEvent);
+  });
 });
