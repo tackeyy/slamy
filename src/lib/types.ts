@@ -138,3 +138,33 @@ export interface SlackEvent {
   subtype?: string;
   bot_id?: string;
 }
+
+/** Slack assistant_thread_started event payload. */
+export interface AssistantThreadStartedEvent {
+  type: "assistant_thread_started";
+  assistant_thread: {
+    user_id: string;
+    channel_id: string;
+    thread_ts: string;
+    context?: {
+      channel_id?: string;
+      team_id?: string;
+      enterprise_id?: string;
+    };
+  };
+}
+
+/** Slack assistant_thread_context_changed event payload. */
+export interface AssistantThreadContextChangedEvent {
+  type: "assistant_thread_context_changed";
+  assistant_thread: {
+    user_id: string;
+    channel_id: string;
+    thread_ts: string;
+    context?: {
+      channel_id?: string;
+      team_id?: string;
+      enterprise_id?: string;
+    };
+  };
+}
