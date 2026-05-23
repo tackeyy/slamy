@@ -47,12 +47,13 @@ describe("splitMessage", () => {
   });
 
   it("ForceSplitLongLine", () => {
-    const text = "z".repeat(10000);
+    const tail = 2000;
+    const text = "z".repeat(MAX_MESSAGE_LENGTH * 2 + tail);
     const chunks = splitMessage(text);
     expect(chunks).toHaveLength(3);
     expect(runeCount(chunks[0])).toBe(MAX_MESSAGE_LENGTH);
     expect(runeCount(chunks[1])).toBe(MAX_MESSAGE_LENGTH);
-    expect(runeCount(chunks[2])).toBe(2000);
+    expect(runeCount(chunks[2])).toBe(tail);
   });
 
   it("MultipleParagraphsFitInOneChunk", () => {
@@ -107,7 +108,7 @@ describe("splitMessage", () => {
   // --- Japanese / multi-byte character tests ---
 
   it("JapaneseText", () => {
-    const jp = "あ".repeat(4000);
+    const jp = "あ".repeat(MAX_MESSAGE_LENGTH);
     const chunks = splitMessage(jp);
     expect(chunks).toHaveLength(1);
   });
@@ -123,18 +124,20 @@ describe("splitMessage", () => {
   });
 
   it("JapaneseForceSplit", () => {
-    const text = "漢".repeat(5000);
+    const total = MAX_MESSAGE_LENGTH + 1000;
+    const text = "漢".repeat(total);
     const chunks = splitMessage(text);
     expect(chunks).toHaveLength(2);
-    expect(runeCount(chunks[0])).toBe(4000);
-    expect(runeCount(chunks[1])).toBe(1000);
+    expect(runeCount(chunks[0])).toBe(MAX_MESSAGE_LENGTH);
+    expect(runeCount(chunks[1])).toBe(total - MAX_MESSAGE_LENGTH);
   });
 
   it("EmojiSplit", () => {
-    const text = "🔴".repeat(5000);
+    const total = MAX_MESSAGE_LENGTH + 1000;
+    const text = "🔴".repeat(total);
     const chunks = splitMessage(text);
     expect(chunks).toHaveLength(2);
-    expect(runeCount(chunks[0])).toBe(4000);
+    expect(runeCount(chunks[0])).toBe(MAX_MESSAGE_LENGTH);
     // Verify no surrogate pair corruption
     for (const chunk of chunks) {
       // Each chunk should only contain valid emoji sequences
@@ -172,7 +175,7 @@ describe("splitMessage", () => {
   });
 
   it("TrailingNewlines", () => {
-    const text = "a".repeat(3999) + "\n\n";
+    const text = "a".repeat(MAX_MESSAGE_LENGTH - 1) + "\n\n";
     const chunks = splitMessage(text);
     expect(chunks).toHaveLength(1);
   });
@@ -194,18 +197,18 @@ describe("splitMessage", () => {
   // --- TypeScript 追加テスト: サロゲートペア ---
 
   it("SurrogatePairAtBoundary", () => {
-    // 3999 ASCII chars + 1 emoji = 4000 code points → should not split
-    const text = "a".repeat(3999) + "🔴";
+    // (MAX_MESSAGE_LENGTH - 1) ASCII chars + 1 emoji = MAX_MESSAGE_LENGTH code points → should not split
+    const text = "a".repeat(MAX_MESSAGE_LENGTH - 1) + "🔴";
     const chunks = splitMessage(text);
     expect(chunks).toHaveLength(1);
   });
 
   it("SurrogatePairOverBoundary", () => {
-    // 4000 ASCII chars + 1 emoji = 4001 code points → should split
-    const text = "a".repeat(4000) + "🔴";
+    // MAX_MESSAGE_LENGTH ASCII chars + 1 emoji = MAX_MESSAGE_LENGTH + 1 code points → should split
+    const text = "a".repeat(MAX_MESSAGE_LENGTH) + "🔴";
     const chunks = splitMessage(text);
     expect(chunks).toHaveLength(2);
-    expect(chunks[0]).toBe("a".repeat(4000));
+    expect(chunks[0]).toBe("a".repeat(MAX_MESSAGE_LENGTH));
     expect(chunks[1]).toBe("🔴");
   });
 });

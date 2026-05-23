@@ -1,5 +1,19 @@
-/** Maximum character (rune) count for a single Slack message. */
-export const MAX_MESSAGE_LENGTH = 4000;
+/**
+ * Maximum character (rune) count for a single Slack message.
+ *
+ * Slack's `chat.postMessage` officially allows up to 40,000 characters
+ * (https://docs.slack.dev/changelog/2018-truncating-really-long-messages/),
+ * but `chat.update` is undocumented and empirically fails with
+ * `msg_too_long` at around 4,000 characters. We use a defensive margin
+ * (3,900) to cover ambiguities in Slack's character counting (entity
+ * expansion of `<@U...>` mentions and `<https://...|title>` links may
+ * inflate the on-server length beyond what `[...text].length` reports).
+ *
+ * Empirical evidence: navibot req_20260523165417_5b15b837 (2026-05-24 01:56 JST)
+ * — Slack returned `msg_too_long` for a `chat.update` payload that passed the
+ * 4,000-codepoint check on the client side.
+ */
+export const MAX_MESSAGE_LENGTH = 3900;
 
 /**
  * Split text into chunks of at most maxLen characters (Unicode code points).
