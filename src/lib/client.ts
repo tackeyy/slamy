@@ -2,6 +2,7 @@ import { WebClient, LogLevel } from "@slack/web-api";
 import { readFileSync } from "node:fs";
 import { fixSlackMrkdwn } from "./mrkdwn.js";
 import { splitMessage, MAX_MESSAGE_LENGTH } from "./split.js";
+import { tzDateToEpochSec } from "./tz.js";
 import type {
   Channel,
   UnreadChannel,
@@ -510,8 +511,12 @@ export class SlamyClient {
     userId: string,
     opts: { since: string; until?: string },
   ): Promise<import("./types.js").EngagementMetrics> {
-    // postCount: search.messages で取得
-    // Slack の after: は「その日より後」なので1日前にずらす（UTC で計算）
+    // 集計タイムゾーン (デフォルト Asia/Tokyo)
+    // search.messages の after:/before: は Slack ワークスペース TZ で評価される一方、
+    // reactions.list のフィルタは meta epoch 単位なのでこちらで TZ を合わせる必要がある。
+    const tz = process.env.SLAMY_TZ || "Asia/Tokyo";
+
+    // postCount: search.messages で取得 (after: は exclusive なので 1 日前にずらす)
     const sinceDate = new Date(opts.since + "T00:00:00Z");
     const dayBefore = new Date(sinceDate.getTime() - 86400000);
     const afterStr = dayBefore.toISOString().slice(0, 10);
@@ -535,11 +540,10 @@ export class SlamyClient {
     });
     const postCount = searchRes.messages?.total || 0;
 
-    // reactionGivenCount: reactions.list で日付フィルタ付きカウント（UTC）
-    // reactions.list のソート順はメッセージ ts と一致しない可能性があるため、
-    // 早期終了せずページ上限まで全件走査する
-    const sinceEpoch = new Date(opts.since + "T00:00:00Z").getTime() / 1000;
-    const untilEpoch = new Date(untilStr + "T23:59:59Z").getTime() / 1000;
+    // reactionGivenCount: reactions.list で日付フィルタ付きカウント
+    // since/until は tz の 0:00 〜 23:59:59 を範囲とする (postCount 側と TZ を揃える)
+    const sinceEpoch = tzDateToEpochSec(opts.since, "00:00:00", tz);
+    const untilEpoch = tzDateToEpochSec(untilStr, "23:59:59", tz);
     const MAX_REACTION_PAGES = 10;
 
     let reactionGivenCount = 0;
@@ -562,10 +566,9 @@ export class SlamyClient {
         const msg = item.message;
         const ts = parseFloat(msg?.ts || "0");
 
-        // 範囲外はスキップ（早期終了しない）
+        // 範囲外はスキップ (reactions.list は付与順なので早期終了はしない)
         if (ts < sinceEpoch || ts > untilEpoch) continue;
 
-        // このメッセージにユーザーがリアクションしているか確認
         const reactions: any[] = msg?.reactions || [];
         const hasUserReaction = reactions.some((r: any) =>
           (r.users || []).includes(userId),
@@ -578,6 +581,13 @@ export class SlamyClient {
       cursor = res.response_metadata?.next_cursor || undefined;
     } while (cursor && pages < MAX_REACTION_PAGES);
 
+    const truncated = Boolean(cursor) && pages >= MAX_REACTION_PAGES;
+    if (truncated) {
+      console.warn(
+        `[slamy] reactions.list truncated at ${MAX_REACTION_PAGES} pages for user=${userId} (since=${opts.since}, until=${untilStr}). reactionGivenCount may be under-counted.`,
+      );
+    }
+
     return {
       userId,
       since: opts.since,
@@ -585,6 +595,8 @@ export class SlamyClient {
       postCount,
       reactionGivenCount,
       fetchedAt: new Date().toISOString(),
+      timezone: tz,
+      truncated,
     };
   }
 

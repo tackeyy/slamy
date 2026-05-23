@@ -118,8 +118,12 @@ export interface EngagementMetrics {
   since: string; // "YYYY-MM-DD"
   until: string; // "YYYY-MM-DD"
   postCount: number;
-  reactionGivenCount: number; // 日付範囲内でリアクションしたメッセージ数
+  reactionGivenCount: number; // 日付範囲内でリアクションしたメッセージ数 (同メッセージ複数絵文字は1カウント)
   fetchedAt: string; // ISO 8601
+  /** 集計に使われた timezone (IANA。例: "Asia/Tokyo") */
+  timezone: string;
+  /** MAX_REACTION_PAGES で reactions.list が打ち切られた場合 true (過小カウントの可能性) */
+  truncated: boolean;
 }
 
 /** Slack event payload. */

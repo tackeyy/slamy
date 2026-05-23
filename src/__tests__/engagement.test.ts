@@ -84,9 +84,10 @@ describe("getUserEngagement", () => {
       messages: { matches: [], total: 0, paging: { page: 1 } },
     } as any);
 
-    const sinceEpoch = epoch("2026-03-20T00:00:00Z");
-    const oldTs = String(sinceEpoch - 3600); // since の1時間前
-    const newTs = String(sinceEpoch + 3600); // since の1時間後
+    // JST 基準: since=2026-03-20 → JST 0:00 = UTC 前日 15:00
+    const sinceEpoch = epoch("2026-03-19T15:00:00Z");
+    const oldTs = String(sinceEpoch - 3600); // JST 3/19 23:00 (前日, 範囲外)
+    const newTs = String(sinceEpoch + 3600); // JST 3/20 01:00 (当日, 範囲内)
 
     // ページ1: 古いメッセージが先に来るケース（リアクション付与日時順）
     mock.reactions.list
@@ -306,5 +307,113 @@ describe("getUserEngagement", () => {
 
     // 同メッセージに複数絵文字 = 1カウント
     expect(result.reactionGivenCount).toBe(1);
+  });
+});
+
+describe("getUserEngagement: timezone boundaries (JST)", () => {
+  it("デフォルト TZ (Asia/Tokyo) で since の境界が JST 0:00 になる", async () => {
+    const { client, mock } = await createClient();
+    mock.search.messages.mockResolvedValue({
+      ok: true,
+      messages: { matches: [], total: 0, paging: { page: 1 } },
+    } as any);
+
+    // JST 5/22 03:00:00 = UTC 5/21 18:00:00 (since 当日の早朝)
+    const jstEarlyMorning = epoch("2026-05-21T18:00:00Z");
+    // JST 5/21 21:00:00 = UTC 5/21 12:00:00 (since の前日 = 範囲外)
+    const jstPrevDayEvening = epoch("2026-05-21T12:00:00Z");
+    // JST 5/23 03:00:00 = UTC 5/22 18:00:00 (until の翌日早朝 = 範囲外)
+    const jstNextDayMorning = epoch("2026-05-22T18:00:00Z");
+    // JST 5/22 23:30:00 = UTC 5/22 14:30:00 (範囲内)
+    const jstLateEvening = epoch("2026-05-22T14:30:00Z");
+
+    mock.reactions.list.mockResolvedValue({
+      ok: true,
+      items: [
+        { type: "message", message: { ts: String(jstPrevDayEvening), reactions: [{ name: "x", count: 1, users: ["U1"] }] }, channel: "C1" },
+        { type: "message", message: { ts: String(jstEarlyMorning), reactions: [{ name: "x", count: 1, users: ["U1"] }] }, channel: "C1" },
+        { type: "message", message: { ts: String(jstLateEvening), reactions: [{ name: "x", count: 1, users: ["U1"] }] }, channel: "C1" },
+        { type: "message", message: { ts: String(jstNextDayMorning), reactions: [{ name: "x", count: 1, users: ["U1"] }] }, channel: "C1" },
+      ],
+      response_metadata: { next_cursor: "" },
+    } as any);
+
+    const result = await client.getUserEngagement("U1", { since: "2026-05-22" });
+    // JST 5/22 の範囲内 = 早朝 + 夜遅く の 2 件のみ
+    expect(result.reactionGivenCount).toBe(2);
+  });
+
+  it("SLAMY_TZ=UTC でユーティ TZ を変更できる", async () => {
+    const orig = process.env.SLAMY_TZ;
+    process.env.SLAMY_TZ = "UTC";
+    try {
+      const { client, mock } = await createClient();
+      mock.search.messages.mockResolvedValue({
+        ok: true,
+        messages: { matches: [], total: 0, paging: { page: 1 } },
+      } as any);
+
+      const utcEarly = epoch("2026-05-22T00:30:00Z"); // UTC 5/22 0:30 = 範囲内
+      const utcLate = epoch("2026-05-22T23:30:00Z"); // UTC 5/22 23:30 = 範囲内
+      const jstMorning = epoch("2026-05-22T18:00:00Z"); // UTC 5/22 18:00 = まだ範囲内
+
+      mock.reactions.list.mockResolvedValue({
+        ok: true,
+        items: [
+          { type: "message", message: { ts: String(utcEarly), reactions: [{ name: "x", count: 1, users: ["U1"] }] }, channel: "C1" },
+          { type: "message", message: { ts: String(utcLate), reactions: [{ name: "x", count: 1, users: ["U1"] }] }, channel: "C1" },
+          { type: "message", message: { ts: String(jstMorning), reactions: [{ name: "x", count: 1, users: ["U1"] }] }, channel: "C1" },
+        ],
+        response_metadata: { next_cursor: "" },
+      } as any);
+
+      const result = await client.getUserEngagement("U1", { since: "2026-05-22" });
+      // UTC TZ で 5/22 範囲内のもの全て
+      expect(result.reactionGivenCount).toBe(3);
+    } finally {
+      if (orig === undefined) delete process.env.SLAMY_TZ;
+      else process.env.SLAMY_TZ = orig;
+    }
+  });
+});
+
+describe("getUserEngagement: truncation warning", () => {
+  it("MAX_REACTION_PAGES で打ち切られたら truncated=true を返す", async () => {
+    const { client, mock } = await createClient();
+    mock.search.messages.mockResolvedValue({
+      ok: true,
+      messages: { matches: [], total: 0, paging: { page: 1 } },
+    } as any);
+
+    // JST 5/22 12:00:00 = UTC 5/22 03:00:00
+    const validTs = String(epoch("2026-05-22T03:00:00Z"));
+
+    mock.reactions.list.mockResolvedValue({
+      ok: true,
+      items: [
+        { type: "message", message: { ts: validTs, reactions: [{ name: "ok", count: 1, users: ["U1"] }] }, channel: "C1" },
+      ],
+      response_metadata: { next_cursor: "infinite" },
+    } as any);
+
+    const result = await client.getUserEngagement("U1", { since: "2026-05-22" });
+    expect(result.truncated).toBe(true);
+  });
+
+  it("打ち切られなければ truncated=false", async () => {
+    const { client, mock } = await createClient();
+    mock.search.messages.mockResolvedValue({
+      ok: true,
+      messages: { matches: [], total: 0, paging: { page: 1 } },
+    } as any);
+
+    mock.reactions.list.mockResolvedValue({
+      ok: true,
+      items: [],
+      response_metadata: { next_cursor: "" },
+    } as any);
+
+    const result = await client.getUserEngagement("U1", { since: "2026-05-22" });
+    expect(result.truncated).toBe(false);
   });
 });
