@@ -6,6 +6,7 @@ import { pipeline } from "node:stream/promises";
 import { basename } from "node:path";
 import { SlamyClient } from "../lib/client.js";
 import { formatTimestamp as libFormatTimestamp } from "../lib/tz.js";
+import { parseSlackTarget } from "../lib/parse-target.js";
 
 const program = new Command();
 
@@ -46,6 +47,21 @@ function jsonOutput(data: unknown): void {
 
 function formatTimestamp(ts: string): string {
   return libFormatTimestamp(ts, getTzOptions());
+}
+
+// channel_id or permalink URL + 補助 ts を受けて、最終的な channel / ts / thread_ts を解決する。
+// permalink URL の場合は URL 由来を優先、明示引数が空のときだけ URL の値を使う。
+function resolveTarget(
+  channelOrUrl: string,
+  argTs?: string,
+  argThreadTs?: string,
+): { channel: string; ts?: string; thread_ts?: string } {
+  const parsed = parseSlackTarget(channelOrUrl);
+  return {
+    channel: parsed.channel,
+    ts: argTs || parsed.ts,
+    thread_ts: argThreadTs || parsed.thread_ts || (argTs ? undefined : parsed.ts),
+  };
 }
 
 // "Name (U123)" 形式のラベラーを返す。id が解決できなければ id のみ。
@@ -158,17 +174,18 @@ channels
   });
 
 channels
-  .command("history <channel_id>")
-  .description("Get channel message history")
+  .command("history <channel_or_url>")
+  .description("Get channel message history (channel ID or Slack permalink URL)")
   .option("--limit <n>", "Maximum number of messages", "20")
   .option("--oldest <ts>", "Only messages after this Unix timestamp")
   .option("--latest <ts>", "Only messages before this Unix timestamp")
   .option("--resolve-names", "Resolve user_id / bot_id to display names")
-  .action(async (channelId, opts) => {
+  .action(async (channelOrUrl, opts) => {
     try {
       const client = createClient();
       const mode = getOutputMode();
-      const messages = await client.getChannelHistory(channelId, {
+      const target = resolveTarget(channelOrUrl);
+      const messages = await client.getChannelHistory(target.channel, {
         limit: parseInt(opts.limit, 10),
         oldest: opts.oldest,
         latest: opts.latest,
@@ -293,25 +310,30 @@ messages
   });
 
 messages
-  .command("reply <channel_id> <thread_ts>")
-  .description("Reply to a thread")
+  .command("reply <channel_or_url> [thread_ts]")
+  .description("Reply to a thread (channel + thread_ts, or Slack permalink URL)")
   .requiredOption("--text <text>", "Reply text")
   .option("--broadcast", "Also post to the channel (reply_broadcast)")
-  .action(async (channelId, threadTs, opts) => {
+  .action(async (channelOrUrl, threadTsArg, opts) => {
     try {
       const client = createClient();
       const mode = getOutputMode();
-      const result = await client.replyToThread(channelId, threadTs, opts.text, {
+      const target = resolveTarget(channelOrUrl, undefined, threadTsArg);
+      if (!target.thread_ts) {
+        console.error("Error: thread_ts is required (pass as 2nd arg or via permalink URL)");
+        process.exit(1);
+      }
+      const result = await client.replyToThread(target.channel, target.thread_ts, opts.text, {
         broadcast: opts.broadcast,
       });
 
       if (mode === "json") {
-        jsonOutput({ channel: result.channel, ts: result.ts, thread_ts: threadTs });
+        jsonOutput({ channel: result.channel, ts: result.ts, thread_ts: target.thread_ts });
       } else if (mode === "plain") {
-        console.log(`${result.channel}\t${result.ts}\t${threadTs}`);
+        console.log(`${result.channel}\t${result.ts}\t${target.thread_ts}`);
       } else {
         console.log(
-          `Reply posted to ${result.channel} thread ${threadTs} (ts: ${result.ts})`,
+          `Reply posted to ${result.channel} thread ${target.thread_ts} (ts: ${result.ts})`,
         );
       }
     } catch (err: any) {
@@ -321,14 +343,19 @@ messages
   });
 
 messages
-  .command("update <channel_id> <ts>")
-  .description("Update a message")
+  .command("update <channel_or_url> [ts]")
+  .description("Update a message (channel + ts, or Slack permalink URL)")
   .requiredOption("--text <text>", "New message text")
-  .action(async (channelId, ts, opts) => {
+  .action(async (channelOrUrl, tsArg, opts) => {
     try {
       const client = createClient();
       const mode = getOutputMode();
-      const result = await client.updateMessage(channelId, ts, opts.text);
+      const target = resolveTarget(channelOrUrl, tsArg);
+      if (!target.ts) {
+        console.error("Error: ts is required (pass as 2nd arg or via permalink URL)");
+        process.exit(1);
+      }
+      const result = await client.updateMessage(target.channel, target.ts, opts.text);
 
       if (mode === "json") {
         jsonOutput(result);
@@ -344,20 +371,25 @@ messages
   });
 
 messages
-  .command("delete <channel_id> <ts>")
-  .description("Delete a message")
-  .action(async (channelId, ts) => {
+  .command("delete <channel_or_url> [ts]")
+  .description("Delete a message (channel + ts, or Slack permalink URL)")
+  .action(async (channelOrUrl, tsArg) => {
     try {
       const client = createClient();
       const mode = getOutputMode();
-      await client.deleteMessage(channelId, ts);
+      const target = resolveTarget(channelOrUrl, tsArg);
+      if (!target.ts) {
+        console.error("Error: ts is required (pass as 2nd arg or via permalink URL)");
+        process.exit(1);
+      }
+      await client.deleteMessage(target.channel, target.ts);
 
       if (mode === "json") {
-        jsonOutput({ channel: channelId, ts, deleted: true });
+        jsonOutput({ channel: target.channel, ts: target.ts, deleted: true });
       } else if (mode === "plain") {
-        console.log(`${channelId}\t${ts}\tdeleted`);
+        console.log(`${target.channel}\t${target.ts}\tdeleted`);
       } else {
-        console.log(`Message deleted from ${channelId} (ts: ${ts})`);
+        console.log(`Message deleted from ${target.channel} (ts: ${target.ts})`);
       }
     } catch (err: any) {
       console.error(`Error: ${err.message}`);
@@ -484,22 +516,27 @@ reactions
   });
 
 reactions
-  .command("add <channel_id> <timestamp>")
-  .description("Add a reaction to a message")
+  .command("add <channel_or_url> [timestamp]")
+  .description("Add a reaction to a message (channel + ts, or Slack permalink URL)")
   .requiredOption("--name <emoji>", "Reaction emoji name (without colons)")
-  .action(async (channelId, timestamp, opts) => {
+  .action(async (channelOrUrl, timestampArg, opts) => {
     try {
       const client = createClient();
       const mode = getOutputMode();
-      await client.addReaction(channelId, timestamp, opts.name);
+      const target = resolveTarget(channelOrUrl, timestampArg);
+      if (!target.ts) {
+        console.error("Error: timestamp is required (pass as 2nd arg or via permalink URL)");
+        process.exit(1);
+      }
+      await client.addReaction(target.channel, target.ts, opts.name);
 
       if (mode === "json") {
-        jsonOutput({ channel: channelId, ts: timestamp, reaction: opts.name });
+        jsonOutput({ channel: target.channel, ts: target.ts, reaction: opts.name });
       } else if (mode === "plain") {
-        console.log(`${channelId}\t${timestamp}\t${opts.name}`);
+        console.log(`${target.channel}\t${target.ts}\t${opts.name}`);
       } else {
         console.log(
-          `Reaction :${opts.name}: added to ${channelId} at ${timestamp}`,
+          `Reaction :${opts.name}: added to ${target.channel} at ${target.ts}`,
         );
       }
     } catch (err: any) {
@@ -509,22 +546,27 @@ reactions
   });
 
 reactions
-  .command("remove <channel_id> <timestamp>")
-  .description("Remove a reaction from a message")
+  .command("remove <channel_or_url> [timestamp]")
+  .description("Remove a reaction from a message (channel + ts, or Slack permalink URL)")
   .requiredOption("--name <emoji>", "Reaction emoji name (without colons)")
-  .action(async (channelId, timestamp, opts) => {
+  .action(async (channelOrUrl, timestampArg, opts) => {
     try {
       const client = createClient();
       const mode = getOutputMode();
-      await client.removeReaction(channelId, timestamp, opts.name);
+      const target = resolveTarget(channelOrUrl, timestampArg);
+      if (!target.ts) {
+        console.error("Error: timestamp is required (pass as 2nd arg or via permalink URL)");
+        process.exit(1);
+      }
+      await client.removeReaction(target.channel, target.ts, opts.name);
 
       if (mode === "json") {
-        jsonOutput({ channel: channelId, ts: timestamp, reaction: opts.name, removed: true });
+        jsonOutput({ channel: target.channel, ts: target.ts, reaction: opts.name, removed: true });
       } else if (mode === "plain") {
-        console.log(`${channelId}\t${timestamp}\t${opts.name}\tremoved`);
+        console.log(`${target.channel}\t${target.ts}\t${opts.name}\tremoved`);
       } else {
         console.log(
-          `Reaction :${opts.name}: removed from ${channelId} at ${timestamp}`,
+          `Reaction :${opts.name}: removed from ${target.channel} at ${target.ts}`,
         );
       }
     } catch (err: any) {
@@ -584,15 +626,20 @@ search
 const threads = program.command("threads").description("Thread operations");
 
 threads
-  .command("replies <channel_id> <thread_ts>")
-  .description("Get thread replies")
+  .command("replies <channel_or_url> [thread_ts]")
+  .description("Get thread replies (channel + thread_ts, or Slack permalink URL)")
   .option("--limit <n>", "Maximum number of replies", "50")
   .option("--resolve-names", "Resolve user_id / bot_id to display names")
-  .action(async (channelId, threadTs, opts) => {
+  .action(async (channelOrUrl, threadTsArg, opts) => {
     try {
       const client = createClient();
       const mode = getOutputMode();
-      const msgs = await client.getThreadReplies(channelId, threadTs, {
+      const target = resolveTarget(channelOrUrl, undefined, threadTsArg);
+      if (!target.thread_ts) {
+        console.error("Error: thread_ts is required (pass as 2nd arg or via permalink URL)");
+        process.exit(1);
+      }
+      const msgs = await client.getThreadReplies(target.channel, target.thread_ts, {
         limit: parseInt(opts.limit, 10),
       });
 
