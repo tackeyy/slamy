@@ -4,6 +4,8 @@ export { SlamyEvents } from "./events.js";
 export type { SlamyEventsOptions } from "./events.js";
 export { fixSlackMrkdwn } from "./mrkdwn.js";
 export { splitMessage, MAX_MESSAGE_LENGTH } from "./split.js";
+export { formatTimestamp, tzDateToEpochSec } from "./tz.js";
+export type { FormatTimestampOptions } from "./tz.js";
 export type {
   Channel,
   UnreadChannel,

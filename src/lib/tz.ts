@@ -1,4 +1,46 @@
 /**
+ * Slack 形式の timestamp ("1779626841.429219") を "YYYY-MM-DD HH:MM" にフォーマットする。
+ *
+ * - `tz`: IANA TZ 名 (例: "Asia/Tokyo")。未指定なら Intl のデフォルト (= Node プロセスの解釈する system TZ)。
+ * - `utc`: true なら UTC で表示 (tz より優先)。
+ * - `withSeconds`: true なら "YYYY-MM-DD HH:MM:SS"。
+ *
+ * 不正な値 (NaN / 0) はそのまま返す (後方互換のため)。
+ */
+export interface FormatTimestampOptions {
+  tz?: string;
+  utc?: boolean;
+  withSeconds?: boolean;
+}
+
+export function formatTimestamp(ts: string, options: FormatTimestampOptions = {}): string {
+  const sec = parseInt(ts, 10);
+  if (isNaN(sec) || sec === 0) return ts;
+
+  const timeZone = options.utc ? "UTC" : options.tz;
+  const fmt = new Intl.DateTimeFormat("en-CA", {
+    timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    ...(options.withSeconds ? { second: "2-digit" } : {}),
+    hourCycle: "h23",
+  });
+
+  const parts = fmt.formatToParts(new Date(sec * 1000));
+  const get = (type: string): string =>
+    parts.find((p) => p.type === type)?.value ?? "00";
+
+  const date = `${get("year")}-${get("month")}-${get("day")}`;
+  const time = options.withSeconds
+    ? `${get("hour")}:${get("minute")}:${get("second")}`
+    : `${get("hour")}:${get("minute")}`;
+  return `${date} ${time}`;
+}
+
+/**
  * 指定タイムゾーンで "YYYY-MM-DD HH:MM:SS" を解釈し、UTC epoch (秒) を返す。
  *
  * Node.js 内蔵の Intl.DateTimeFormat を使うため追加依存なし。
