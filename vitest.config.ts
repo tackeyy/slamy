@@ -17,11 +17,9 @@ export default defineConfig({
         "src/lib/types.ts",
       ],
       thresholds: {
-        // branches only at 70% — Slack API error paths in client.ts will be
-        // covered incrementally; lines/functions/statements stay at 80%.
         lines: 80,
         functions: 80,
-        branches: 70,
+        branches: 80,
         statements: 80,
       },
     },

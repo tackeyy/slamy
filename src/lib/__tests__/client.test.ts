@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { SlamyClient } from "../client.js";
 import { createMockWebClient } from "../../__tests__/helpers/mock-slack.js";
 
@@ -805,5 +805,502 @@ describe("setAssistantStatus", () => {
     await expect(
       client.setAssistantStatus("C123", "1700000000.000100", "..."),
     ).rejects.toThrow("missing_scope");
+  });
+});
+
+// === Iter 2-改善: branch coverage 70 → 80 のための error path テスト群 ===
+
+describe("resolveUserName — error paths (branch coverage)", () => {
+  it("空文字列を渡したらそのまま返す", async () => {
+    const client = new SlamyClient({ botToken: "xoxb-1" });
+    expect(await client.resolveUserName("")).toBe("");
+  });
+
+  it("bot_id で bots.info が成功するとその名前を返す", async () => {
+    (mockWebClient as any).bots = {
+      info: vi.fn().mockResolvedValue({ ok: true, bot: { name: "my-bot" } }),
+    };
+    const client = new SlamyClient({ botToken: "xoxb-1" });
+    expect(await client.resolveUserName("B12345")).toBe("my-bot");
+  });
+
+  it("bot_id で bots.info が失敗したら id 自体を返す", async () => {
+    (mockWebClient as any).bots = {
+      info: vi.fn().mockRejectedValue(new Error("bot_not_found")),
+    };
+    const client = new SlamyClient({ botToken: "xoxb-1" });
+    expect(await client.resolveUserName("B99999")).toBe("B99999");
+  });
+
+  it("bot_id で bots.info が name を返さなければ id 自体を返す", async () => {
+    (mockWebClient as any).bots = {
+      info: vi.fn().mockResolvedValue({ ok: true, bot: {} }),
+    };
+    const client = new SlamyClient({ botToken: "xoxb-1" });
+    expect(await client.resolveUserName("B11111")).toBe("B11111");
+  });
+
+  it("users.list が成功し display_name を最優先で使う", async () => {
+    mockWebClient.users.list.mockResolvedValue({
+      ok: true,
+      members: [
+        { id: "U1", profile: { display_name: "Display" }, real_name: "Real", name: "uname" },
+      ],
+    } as any);
+    const client = new SlamyClient({ userToken: "xoxp-1" });
+    expect(await client.resolveUserName("U1")).toBe("Display");
+  });
+
+  it("display_name 空時は real_name を優先する", async () => {
+    mockWebClient.users.list.mockResolvedValue({
+      ok: true,
+      members: [
+        { id: "U1", profile: { display_name: "" }, real_name: "Real Name", name: "uname" },
+      ],
+    } as any);
+    const client = new SlamyClient({ userToken: "xoxp-1" });
+    expect(await client.resolveUserName("U1")).toBe("Real Name");
+  });
+
+  it("users.list がエラーでも users.info にフォールバック", async () => {
+    mockWebClient.users.list.mockRejectedValue(new Error("ratelimited"));
+    mockWebClient.users.info.mockResolvedValue({
+      ok: true,
+      user: { id: "U2", name: "fallback-name" },
+    } as any);
+    const client = new SlamyClient({ userToken: "xoxp-1" });
+    expect(await client.resolveUserName("U2")).toBe("fallback-name");
+  });
+
+  it("users.list 後 users.info も失敗すると id 自体を返す", async () => {
+    mockWebClient.users.list.mockResolvedValue({ ok: true, members: [] } as any);
+    mockWebClient.users.info.mockRejectedValue(new Error("user_not_found"));
+    const client = new SlamyClient({ userToken: "xoxp-1" });
+    expect(await client.resolveUserName("U99")).toBe("U99");
+  });
+
+  it("users.info が name の無いユーザーを返したら id を返す", async () => {
+    mockWebClient.users.list.mockResolvedValue({ ok: true, members: [] } as any);
+    mockWebClient.users.info.mockResolvedValue({ ok: true, user: {} } as any);
+    const client = new SlamyClient({ userToken: "xoxp-1" });
+    expect(await client.resolveUserName("U77")).toBe("U77");
+  });
+
+  it("cache hit: 2 回目の呼び出しは users.list を再実行しない", async () => {
+    mockWebClient.users.list.mockResolvedValue({
+      ok: true,
+      members: [{ id: "U1", name: "cached", profile: {} }],
+    } as any);
+    const client = new SlamyClient({ userToken: "xoxp-1" });
+    await client.resolveUserName("U1");
+    await client.resolveUserName("U1");
+    expect(mockWebClient.users.list).toHaveBeenCalledTimes(1);
+  });
+
+  it("members に id 無しエントリがあってもスキップする", async () => {
+    mockWebClient.users.list.mockResolvedValue({
+      ok: true,
+      members: [{ name: "no-id" }, { id: "U1", name: "ok" }],
+    } as any);
+    const client = new SlamyClient({ userToken: "xoxp-1" });
+    expect(await client.resolveUserName("U1")).toBe("ok");
+  });
+});
+
+describe("getChannelInfo — fallback fields", () => {
+  it("topic / purpose / num_members が未定義でも安全に default 値で返す", async () => {
+    mockWebClient.conversations.info.mockResolvedValue({
+      ok: true,
+      channel: { id: "C1" },
+    } as any);
+    const client = new SlamyClient({ botToken: "xoxb-1" });
+    expect(await client.getChannelInfo("C1")).toEqual({
+      id: "C1",
+      name: "",
+      topic: "",
+      purpose: "",
+      num_members: 0,
+      is_private: false,
+      is_archived: false,
+    });
+  });
+
+  it("API エラーで throw する", async () => {
+    mockWebClient.conversations.info.mockRejectedValue(new Error("channel_not_found"));
+    const client = new SlamyClient({ botToken: "xoxb-1" });
+    await expect(client.getChannelInfo("Cxxx")).rejects.toThrow("channel_not_found");
+  });
+});
+
+describe("listChannels — cursor pagination & limit cap", () => {
+  it("limit を超えたら早期終了し cursor を追わない", async () => {
+    let call = 0;
+    mockWebClient.users.conversations.mockImplementation(async () => {
+      call++;
+      return {
+        ok: true,
+        channels: Array.from({ length: 5 }, (_, i) => ({ id: `C${call}-${i}`, name: `c${i}` })),
+        response_metadata: { next_cursor: call < 3 ? "more" : "" },
+      };
+    });
+    const client = new SlamyClient({ userToken: "xoxp-1" });
+    const channels = await client.listChannels({ limit: 5 });
+    expect(channels).toHaveLength(5);
+    expect(mockWebClient.users.conversations).toHaveBeenCalledTimes(1);
+  });
+
+  it("cursor が消えれば pagination ループを抜ける", async () => {
+    mockWebClient.users.conversations.mockResolvedValue({
+      ok: true,
+      channels: [{ id: "C1", name: "a" }],
+      response_metadata: { next_cursor: "" },
+    } as any);
+    const client = new SlamyClient({ userToken: "xoxp-1" });
+    expect(await client.listChannels({ limit: 100 })).toHaveLength(1);
+  });
+});
+
+describe("listUnreadChannels — Promise.allSettled error tolerance", () => {
+  it("個別 channel で API エラーが出ても他チャンネルを返す", async () => {
+    mockWebClient.users.conversations.mockResolvedValue({
+      ok: true,
+      channels: [{ id: "C1", name: "ok" }, { id: "C2", name: "fail" }],
+      response_metadata: { next_cursor: "" },
+    } as any);
+    mockWebClient.conversations.info.mockImplementation(async (args: any) => {
+      if (args.channel === "C2") throw new Error("not_in_channel");
+      return { ok: true, channel: { id: args.channel, is_member: true, last_read: "100" } };
+    });
+    mockWebClient.conversations.history.mockResolvedValue({
+      ok: true,
+      messages: [{ ts: "200.001" }],
+    } as any);
+    const client = new SlamyClient({ userToken: "xoxp-1" });
+    const unread = await client.listUnreadChannels({ limit: 10 });
+    expect(unread.map((c) => c.id)).toEqual(["C1"]);
+  });
+
+  it("is_member: false のチャンネルは結果から除外", async () => {
+    mockWebClient.users.conversations.mockResolvedValue({
+      ok: true,
+      channels: [{ id: "C1", name: "private" }],
+      response_metadata: { next_cursor: "" },
+    } as any);
+    mockWebClient.conversations.info.mockResolvedValue({
+      ok: true,
+      channel: { id: "C1", is_member: false },
+    } as any);
+    const client = new SlamyClient({ userToken: "xoxp-1" });
+    expect(await client.listUnreadChannels({ limit: 10 })).toEqual([]);
+  });
+
+  it("history が空のチャンネルは未読 0 として除外", async () => {
+    mockWebClient.users.conversations.mockResolvedValue({
+      ok: true,
+      channels: [{ id: "C1", name: "empty" }],
+      response_metadata: { next_cursor: "" },
+    } as any);
+    mockWebClient.conversations.info.mockResolvedValue({
+      ok: true,
+      channel: { id: "C1", is_member: true, last_read: "100" },
+    } as any);
+    mockWebClient.conversations.history.mockResolvedValue({ ok: true, messages: [] } as any);
+    const client = new SlamyClient({ userToken: "xoxp-1" });
+    expect(await client.listUnreadChannels({ limit: 10 })).toEqual([]);
+  });
+
+  it("latestTs <= last_read なら未読なしとして除外", async () => {
+    mockWebClient.users.conversations.mockResolvedValue({
+      ok: true,
+      channels: [{ id: "C1", name: "caught-up" }],
+      response_metadata: { next_cursor: "" },
+    } as any);
+    mockWebClient.conversations.info.mockResolvedValue({
+      ok: true,
+      channel: { id: "C1", is_member: true, last_read: "300" },
+    } as any);
+    mockWebClient.conversations.history.mockResolvedValue({
+      ok: true,
+      messages: [{ ts: "200" }],
+    } as any);
+    const client = new SlamyClient({ userToken: "xoxp-1" });
+    expect(await client.listUnreadChannels({ limit: 10 })).toEqual([]);
+  });
+});
+
+describe("uploadFile — branch coverage", () => {
+  it("User ID を渡すと conversations.open で DM チャンネルを開く", async () => {
+    (mockWebClient.conversations as any).open = vi
+      .fn()
+      .mockResolvedValue({ ok: true, channel: { id: "D1" } });
+    const client = new SlamyClient({ botToken: "xoxb-1" });
+    await client.uploadFile("U12345", Buffer.from("hi"));
+    expect((mockWebClient.conversations as any).open).toHaveBeenCalledWith({ users: "U12345" });
+    expect(mockWebClient.files.uploadV2).toHaveBeenCalledWith(
+      expect.objectContaining({ channel_id: "D1" }),
+    );
+  });
+
+  it("通常 channel ID なら conversations.open を呼ばない", async () => {
+    (mockWebClient.conversations as any).open = vi.fn();
+    const client = new SlamyClient({ botToken: "xoxb-1" });
+    await client.uploadFile("C12345", Buffer.from("hi"));
+    expect((mockWebClient.conversations as any).open).not.toHaveBeenCalled();
+  });
+
+  it("Buffer 引数 + filename 未指定なら default 'file' を使う", async () => {
+    const client = new SlamyClient({ botToken: "xoxb-1" });
+    await client.uploadFile("C1", Buffer.from("hi"));
+    expect(mockWebClient.files.uploadV2).toHaveBeenCalledWith(
+      expect.objectContaining({ filename: "file", title: "file" }),
+    );
+  });
+
+  it("文字列パスは basename を filename に使う", async () => {
+    const client = new SlamyClient({ botToken: "xoxb-1" });
+    await client.uploadFile("C1", "/tmp/path/to/report.pdf");
+    expect(mockWebClient.files.uploadV2).toHaveBeenCalledWith(
+      expect.objectContaining({ filename: "report.pdf" }),
+    );
+  });
+
+  it("threadTs / initialComment / title を渡すと対応キーが含まれる", async () => {
+    const client = new SlamyClient({ botToken: "xoxb-1" });
+    await client.uploadFile("C1", Buffer.from("x"), {
+      threadTs: "1700000000.000100",
+      initialComment: "see attached",
+      title: "Title",
+    });
+    expect(mockWebClient.files.uploadV2).toHaveBeenCalledWith(
+      expect.objectContaining({
+        thread_ts: "1700000000.000100",
+        initial_comment: "see attached",
+        title: "Title",
+      }),
+    );
+  });
+
+  it("opts なしなら thread_ts / initial_comment は付与されない", async () => {
+    const client = new SlamyClient({ botToken: "xoxb-1" });
+    await client.uploadFile("C1", Buffer.from("x"));
+    const arg = mockWebClient.files.uploadV2.mock.calls[0]?.[0] as any;
+    expect(arg.thread_ts).toBeUndefined();
+    expect(arg.initial_comment).toBeUndefined();
+  });
+});
+
+describe("listReactions — user inference & message filtering", () => {
+  it("user 未指定なら auth.test() の user_id を使う", async () => {
+    mockWebClient.auth.test.mockResolvedValue({ ok: true, user_id: "U-ME" } as any);
+    mockWebClient.reactions.list.mockResolvedValue({
+      ok: true,
+      items: [],
+      response_metadata: { next_cursor: "" },
+    } as any);
+    const client = new SlamyClient({ userToken: "xoxp-1" });
+    await client.listReactions();
+    expect(mockWebClient.auth.test).toHaveBeenCalled();
+    expect(mockWebClient.reactions.list).toHaveBeenCalledWith(
+      expect.objectContaining({ user: "U-ME" }),
+    );
+  });
+
+  it("type !== 'message' の item はスキップ", async () => {
+    mockWebClient.reactions.list.mockResolvedValue({
+      ok: true,
+      items: [
+        { type: "file", channel: "C1", message: { ts: "1", reactions: [{ name: "x", users: ["U1"] }] } },
+        { type: "message", channel: "C2", message: { ts: "2", reactions: [{ name: "y", users: ["U1"] }] } },
+      ],
+      response_metadata: { next_cursor: "" },
+    } as any);
+    const client = new SlamyClient({ userToken: "xoxp-1" });
+    const result = await client.listReactions({ user: "U1", limit: 100 });
+    expect(result.items).toHaveLength(1);
+    expect(result.items[0]?.name).toBe("y");
+  });
+
+  it("対象ユーザーが付けていない reaction は除外", async () => {
+    mockWebClient.reactions.list.mockResolvedValue({
+      ok: true,
+      items: [
+        {
+          type: "message",
+          channel: "C1",
+          message: { ts: "1", reactions: [{ name: "x", users: ["U-OTHER"] }] },
+        },
+      ],
+      response_metadata: { next_cursor: "" },
+    } as any);
+    const client = new SlamyClient({ userToken: "xoxp-1" });
+    const result = await client.listReactions({ user: "U1", limit: 100 });
+    expect(result.items).toEqual([]);
+  });
+
+  it("100 文字超のメッセージは切り詰めて ... を付ける", async () => {
+    const long = "a".repeat(150);
+    mockWebClient.reactions.list.mockResolvedValue({
+      ok: true,
+      items: [
+        {
+          type: "message",
+          channel: "C1",
+          message: { ts: "1", text: long, reactions: [{ name: "x", users: ["U1"] }] },
+        },
+      ],
+      response_metadata: { next_cursor: "" },
+    } as any);
+    const client = new SlamyClient({ userToken: "xoxp-1" });
+    const result = await client.listReactions({ user: "U1", limit: 100 });
+    expect(result.items[0]?.message_text).toBe("a".repeat(100) + "...");
+  });
+});
+
+describe("searchMessages — defaults & fallbacks", () => {
+  it("オプション未指定なら default 値が渡る", async () => {
+    mockWebClient.search.messages.mockResolvedValue({
+      ok: true,
+      messages: { matches: [], total: 0, paging: { page: 1 } },
+    } as any);
+    const client = new SlamyClient({ userToken: "xoxp-1" });
+    await client.searchMessages("hello");
+    expect(mockWebClient.search.messages).toHaveBeenCalledWith({
+      query: "hello",
+      sort: "timestamp",
+      sort_dir: "desc",
+      count: 20,
+      page: 1,
+    });
+  });
+
+  it("matches に channel が無くても空文字で埋める", async () => {
+    mockWebClient.search.messages.mockResolvedValue({
+      ok: true,
+      messages: {
+        matches: [{ ts: "1", user: "U1", text: "x" }],
+        total: 1,
+        paging: { page: 1 },
+      },
+    } as any);
+    const client = new SlamyClient({ userToken: "xoxp-1" });
+    const res = await client.searchMessages("x");
+    expect(res.matches[0]?.channel).toBe("");
+    expect(res.matches[0]?.channel_id).toBe("");
+    expect(res.matches[0]?.permalink).toBe("");
+  });
+});
+
+describe("listUsers — filtering", () => {
+  it("default: is_bot と deleted は除外", async () => {
+    mockWebClient.users.list.mockResolvedValue({
+      ok: true,
+      members: [
+        { id: "U1", name: "alice", is_bot: false, deleted: false },
+        { id: "B1", name: "slackbot", is_bot: true },
+        { id: "U2", name: "ex", deleted: true },
+      ],
+    } as any);
+    const client = new SlamyClient({ userToken: "xoxp-1" });
+    const users = await client.listUsers();
+    expect(users.map((u) => u.id)).toEqual(["U1"]);
+  });
+
+  it("includeBots: true で bot を含める", async () => {
+    mockWebClient.users.list.mockResolvedValue({
+      ok: true,
+      members: [{ id: "B1", name: "bot", is_bot: true }],
+    } as any);
+    const client = new SlamyClient({ userToken: "xoxp-1" });
+    const users = await client.listUsers({ includeBots: true });
+    expect(users.map((u) => u.id)).toEqual(["B1"]);
+  });
+
+  it("includeDeactivated: true で deleted を含める", async () => {
+    mockWebClient.users.list.mockResolvedValue({
+      ok: true,
+      members: [{ id: "U-EX", name: "ex", deleted: true }],
+    } as any);
+    const client = new SlamyClient({ userToken: "xoxp-1" });
+    const users = await client.listUsers({ includeDeactivated: true });
+    expect(users.map((u) => u.id)).toEqual(["U-EX"]);
+  });
+});
+
+describe("authTest / getChannelMembers — defaults & pagination", () => {
+  it("authTest: 一部フィールドだけ返っても空文字で埋める", async () => {
+    mockWebClient.auth.test.mockResolvedValue({ ok: true, user_id: "U1" } as any);
+    const client = new SlamyClient({ userToken: "xoxp-1" });
+    expect(await client.authTest()).toEqual({
+      user_id: "U1",
+      user: "",
+      team_id: "",
+      team: "",
+      url: "",
+    });
+  });
+
+  it("getChannelMembers: 複数ページにわたって members を集める", async () => {
+    let call = 0;
+    mockWebClient.conversations.members.mockImplementation(async () => {
+      call++;
+      return {
+        ok: true,
+        members: [`U${call}-A`, `U${call}-B`],
+        response_metadata: { next_cursor: call < 2 ? "next" : "" },
+      };
+    });
+    const client = new SlamyClient({ userToken: "xoxp-1" });
+    expect(await client.getChannelMembers("C1")).toEqual(["U1-A", "U1-B", "U2-A", "U2-B"]);
+    expect(mockWebClient.conversations.members).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe("downloadFileStream — redirect & error", () => {
+  const originalFetch = globalThis.fetch;
+
+  beforeEach(() => {
+    globalThis.fetch = vi.fn();
+  });
+
+  afterEach(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  it("HTTP エラーで throw", async () => {
+    (globalThis.fetch as any).mockResolvedValueOnce({
+      status: 500,
+      ok: false,
+      headers: { get: () => null },
+    });
+    const client = new SlamyClient({ userToken: "xoxp-1" });
+    await expect(client.downloadFileStream("https://x")).rejects.toThrow(
+      "File download failed: HTTP 500",
+    );
+  });
+
+  it("リダイレクト時に location ヘッダーで再リクエスト", async () => {
+    (globalThis.fetch as any)
+      .mockResolvedValueOnce({
+        status: 302,
+        ok: false,
+        headers: { get: (k: string) => (k === "location" ? "https://final" : null) },
+      })
+      .mockResolvedValueOnce({ status: 200, ok: true, headers: { get: () => null } });
+    const client = new SlamyClient({ userToken: "xoxp-1" });
+    const res = await client.downloadFileStream("https://x");
+    expect((res as any).status).toBe(200);
+    expect(globalThis.fetch).toHaveBeenCalledTimes(2);
+  });
+
+  it("リダイレクトでも location 無ければそのまま返してエラーチェックへ", async () => {
+    (globalThis.fetch as any).mockResolvedValueOnce({
+      status: 302,
+      ok: false,
+      headers: { get: () => null },
+    });
+    const client = new SlamyClient({ userToken: "xoxp-1" });
+    await expect(client.downloadFileStream("https://x")).rejects.toThrow(
+      "File download failed: HTTP 302",
+    );
   });
 });

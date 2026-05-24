@@ -155,9 +155,8 @@ npx vitest run --coverage
 
 - **New features**: aim for 100% coverage of new code
 - **Bug fixes**: add a regression test that reproduces the bug before the fix
-- **Project-wide threshold**: 80% lines / functions / statements,
-  70% branches (configured in `vitest.config.ts`; branches will be raised
-  incrementally as `client.ts` error paths gain coverage)
+- **Project-wide threshold**: 80% lines / functions / branches / statements
+  (configured in `vitest.config.ts`)
 
 ## 📝 Submitting Changes
 

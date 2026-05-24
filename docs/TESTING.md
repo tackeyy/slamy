@@ -201,12 +201,12 @@ npx vitest run --coverage
 
 ### Coverage thresholds (enforced by `vitest.config.ts`)
 
-| Metric     | Threshold | Notes                                                                       |
-| ---------- | --------- | --------------------------------------------------------------------------- |
-| Lines      | 80%       |                                                                             |
-| Functions  | 80%       |                                                                             |
-| Branches   | 70%       | Will be raised as Slack API error paths in `client.ts` gain coverage.       |
-| Statements | 80%       |                                                                             |
+| Metric     | Threshold |
+| ---------- | --------- |
+| Lines      | 80%       |
+| Functions  | 80%       |
+| Branches   | 80%       |
+| Statements | 80%       |
 
 ### Coverage exclusions
 
