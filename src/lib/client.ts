@@ -212,7 +212,8 @@ export class SlamyClient {
     ts: string,
     text: string,
   ): Promise<{ channel: string; ts: string }> {
-    if ([...text].length > CHAT_UPDATE_MAX_LENGTH) {
+    const fixed = fixSlackMrkdwn(text);
+    if ([...fixed].length > CHAT_UPDATE_MAX_LENGTH) {
       throw new Error(
         `Message exceeds ${CHAT_UPDATE_MAX_LENGTH} characters. updateMessage does not support auto-splitting.`,
       );
@@ -221,7 +222,7 @@ export class SlamyClient {
     await this.botClient.chat.update({
       channel,
       ts,
-      text,
+      text: fixed,
     });
 
     return { channel, ts };

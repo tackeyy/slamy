@@ -296,6 +296,17 @@ describe("updateMessage", () => {
       "does not support auto-splitting",
     );
   });
+
+  it("mrkdwn を自動修正する (postMessage と一貫した挙動)", async () => {
+    const client = new SlamyClient({ userToken: "xoxp-test" });
+    await client.updateMessage("C123", "ts123", "**太字**テスト");
+
+    expect(mockWebClient.chat.update).toHaveBeenCalledWith({
+      channel: "C123",
+      ts: "ts123",
+      text: "*太字* テスト",
+    });
+  });
 });
 
 describe("deleteMessage", () => {
