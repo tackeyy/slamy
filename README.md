@@ -183,12 +183,28 @@ slamy threads replies <channel_or_url> [thread_ts] [--limit <n>] [--resolve-name
 
 `<channel_or_url>` accepts a channel ID + thread_ts, or a single Slack permalink URL.
 
+### `channels members` — List channel members
+
+```bash
+slamy channels members <channel_or_url> [--resolve-names]
+```
+
+`<channel_or_url>` accepts a channel ID or a Slack permalink URL. `--resolve-names` resolves `user_id` to display names.
+
 ### `users list` / `users profile`
 
 ```bash
 slamy users list [--include-deactivated] [--include-bots]
 slamy users profile <user_id>
 ```
+
+### `assistant set-status` — Set AI Assistant thread status
+
+```bash
+slamy assistant set-status --channel <id> --thread <ts> --status <text> [--loading-message <text...>]
+```
+
+Sets the typing indicator status on an AI Assistant thread. Use `--plain` for machine-readable TSV output (`ok\t<channel>\t<thread>`), suitable for CI / shell scripting.
 
 ### `reactions get` — Get reactions on a specific message
 
@@ -201,8 +217,10 @@ Returns the emoji reactions and the users who added them. Useful before calling 
 ### `reactions list` — List reactions made by a user
 
 ```bash
-slamy reactions list [--user <user_id>] [--limit <n>] [--count]
+slamy reactions list [--user <user_id>] [--limit <n>] [--count] [--resolve-names]
 ```
+
+`--resolve-names` resolves `channel_id` to channel names (`#general` instead of `#C0123ABCDE`).
 
 Note: `reactions list` (lists reactions *by* a user) and `reactions get` (gets reactions *on* a message) are different APIs.
 

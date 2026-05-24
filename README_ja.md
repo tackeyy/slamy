@@ -183,12 +183,28 @@ slamy threads replies <channel_or_url> [thread_ts] [--limit <n>] [--resolve-name
 
 `<channel_or_url>` は「channel ID + thread_ts」または Slack permalink URL の 1 引数のいずれも受け付けます。
 
+### `channels members` — チャンネルメンバー一覧
+
+```bash
+slamy channels members <channel_or_url> [--resolve-names]
+```
+
+`<channel_or_url>` は channel ID または Slack permalink URL を受け付けます。`--resolve-names` で `user_id` を実名表示。
+
 ### `users list` / `users profile`
 
 ```bash
 slamy users list [--include-deactivated] [--include-bots]
 slamy users profile <user_id>
 ```
+
+### `assistant set-status` — AI Assistant スレッドのステータス設定
+
+```bash
+slamy assistant set-status --channel <id> --thread <ts> --status <text> [--loading-message <text...>]
+```
+
+AI Assistant スレッドの typing indicator を設定します。CI/シェルスクリプト用には `--plain` で機械可読 TSV (`ok\t<channel>\t<thread>`) が利用できます。
 
 ### `reactions get` — 特定メッセージの reactions を取得
 
@@ -201,8 +217,10 @@ slamy reactions get <channel_or_url> [timestamp] [--resolve-names]
 ### `reactions list` — ユーザーの reaction 履歴
 
 ```bash
-slamy reactions list [--user <user_id>] [--limit <n>] [--count]
+slamy reactions list [--user <user_id>] [--limit <n>] [--count] [--resolve-names]
 ```
+
+`--resolve-names` は `channel_id` を channel 名に解決します (`#C0123ABCDE` ではなく `#general`)。
 
 注意: `reactions list`（ユーザーの reaction 履歴）と `reactions get`（メッセージへの reactions）は別の API です。
 

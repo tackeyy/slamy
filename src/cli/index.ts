@@ -216,24 +216,30 @@ channels
   });
 
 channels
-  .command("members <channel_id>")
-  .description("List channel members")
-  .action(async (channelId) => {
+  .command("members <channel_or_url>")
+  .description("List channel members (channel ID or Slack permalink URL)")
+  .option("--resolve-names", "Resolve user_id to display names")
+  .action(async (channelOrUrl, opts) => {
     try {
       const client = createClient();
       const mode = getOutputMode();
-      const members = await client.getChannelMembers(channelId);
+      const target = resolveTarget(channelOrUrl);
+      const members = await client.getChannelMembers(target.channel);
+
+      const labelFor = opts.resolveNames
+        ? await buildUserLabeler(client, members)
+        : (id: string) => id;
 
       if (mode === "json") {
         jsonOutput(members);
       } else if (mode === "plain") {
         for (const m of members) {
-          console.log(m);
+          console.log(labelFor(m));
         }
       } else {
         console.log(`${members.length} members:`);
         for (const m of members) {
-          console.log(`  ${m}`);
+          console.log(`  ${labelFor(m)}`);
         }
       }
     } catch (err: any) {
@@ -474,6 +480,7 @@ reactions
   .option("--user <user_id>", "User ID (default: authenticated user)")
   .option("--limit <n>", "Maximum number of reactions to fetch", "100")
   .option("--count", "Output total count only")
+  .option("--resolve-names", "Resolve channel_id to channel names")
   .action(async (opts) => {
     try {
       const client = createClient();
@@ -489,12 +496,27 @@ reactions
         return;
       }
 
+      // JSON モードでは生の channel_id をそのまま返すので解決スキップ (API コール節約)
+      const channelLabelFor =
+        opts.resolveNames && mode !== "json"
+          ? await (async () => {
+              const ids = Array.from(new Set(result.items.map((i) => i.channel).filter((c) => !!c)));
+              const names = await client.resolveChannelNames(ids);
+              return (id: string): string => {
+                const name = names.get(id);
+                return name && name !== id ? name : id;
+              };
+            })()
+          : (id: string) => id;
+
       if (mode === "json") {
         jsonOutput(result);
       } else if (mode === "plain") {
         for (const item of result.items) {
           const text = item.message_text.replace(/\n/g, "\\n");
-          console.log(`${item.name}\t${item.channel}\t${item.timestamp}\t${text}`);
+          console.log(
+            `${item.name}\t${channelLabelFor(item.channel)}\t${item.timestamp}\t${text}`,
+          );
         }
       } else {
         if (result.items.length === 0) {
@@ -506,7 +528,9 @@ reactions
           const ts = formatTimestamp(item.timestamp);
           let text = item.message_text;
           if (text.length > 60) text = text.slice(0, 60) + "...";
-          console.log(`:${item.name.padEnd(20)} #${item.channel.padEnd(20)} [${ts}] ${text}`);
+          console.log(
+            `:${item.name.padEnd(20)} #${channelLabelFor(item.channel).padEnd(20)} [${ts}] ${text}`,
+          );
         }
       }
     } catch (err: any) {
@@ -924,6 +948,8 @@ assistant
       const mode = getOutputMode();
       if (mode === "json") {
         jsonOutput({ ok: true, channel: opts.channel, thread: opts.thread, status: opts.status });
+      } else if (mode === "plain") {
+        console.log(`ok\t${opts.channel}\t${opts.thread}\t${opts.status}`);
       } else {
         console.log(`✅ status set on ${opts.channel}/${opts.thread}: "${opts.status}"`);
       }

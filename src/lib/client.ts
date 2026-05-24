@@ -37,6 +37,10 @@ export class SlamyClient {
   // 「進行中の users.list Promise」を保持する。
   private userListPromise: Promise<void> | null = null;
 
+  // channel_id -> channel name (resolveChannelName 用、resolveUserName と同パターン)
+  private channelNameCache = new Map<string, string>();
+  private channelListPromise: Promise<void> | null = null;
+
   constructor(opts: SlamyClientOptions) {
     if (!opts.botToken && !opts.userToken) {
       throw new Error("Either userToken or botToken must be provided");
@@ -125,6 +129,73 @@ export class SlamyClient {
   async resolveUserNames(ids: string[]): Promise<Map<string, string>> {
     const entries = await Promise.all(
       ids.map(async (id) => [id, await this.resolveUserName(id)] as const),
+    );
+    return new Map(entries);
+  }
+
+  // --- Channel name resolver ---
+
+  /**
+   * channel_id を channel name に解決する。
+   *
+   * 戦略:
+   * 1. 初回呼び出し時に conversations.list を全件取得して in-memory cache に格納
+   * 2. cache miss なら conversations.info で個別取得 (cache に追加)
+   * 3. 失敗時は id をそのまま返す (呼び出し側で format 崩れしないように)
+   *
+   * 並列呼び出し時の race condition は Promise キャッシュで防ぐ。
+   */
+  async resolveChannelName(channelId: string): Promise<string> {
+    if (!channelId) return channelId;
+
+    if (this.channelNameCache.has(channelId)) {
+      return this.channelNameCache.get(channelId)!;
+    }
+
+    if (!this.channelListPromise) {
+      this.channelListPromise = (async () => {
+        try {
+          // IM (DM) は Slack API 仕様で name=null のため types から除外。
+          // DM の表示名を欲しい場合は呼び出し側で resolveUserName(channel.user) を使う。
+          // cursor ページネーション対応で 1000 件超のワークスペースでも全件 cache。
+          let cursor: string | undefined;
+          do {
+            const res: any = await this.userClient.conversations.list({
+              types: "public_channel,private_channel,mpim",
+              limit: 1000,
+              cursor,
+            });
+            for (const ch of res.channels || []) {
+              if (!ch.id) continue;
+              this.channelNameCache.set(ch.id, ch.name || ch.id);
+            }
+            cursor = res.response_metadata?.next_cursor || undefined;
+          } while (cursor);
+        } catch {
+          // conversations.list 失敗時も conversations.info にフォールバック
+        }
+      })();
+    }
+    await this.channelListPromise;
+    if (this.channelNameCache.has(channelId)) {
+      return this.channelNameCache.get(channelId)!;
+    }
+
+    try {
+      const res = await this.userClient.conversations.info({ channel: channelId });
+      const name = res.channel?.name || channelId;
+      this.channelNameCache.set(channelId, name);
+      return name;
+    } catch {
+      this.channelNameCache.set(channelId, channelId);
+      return channelId;
+    }
+  }
+
+  /** 複数 ID をまとめて解決する (conversations.list は 1 回だけ呼ばれる)。 */
+  async resolveChannelNames(ids: string[]): Promise<Map<string, string>> {
+    const entries = await Promise.all(
+      ids.map(async (id) => [id, await this.resolveChannelName(id)] as const),
     );
     return new Map(entries);
   }
