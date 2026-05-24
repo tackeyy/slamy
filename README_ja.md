@@ -121,87 +121,112 @@ slamy channels list [--limit <number>] [--include-archived] [--json] [--plain]
 | `--json` | No | JSON 形式で出力 |
 | `--plain` | No | TSV 形式で出力 |
 
+### グローバルオプション
+
+すべてのコマンドで利用可能:
+
+| フラグ | 説明 |
+|---|---|
+| `--json` | JSON 形式で出力 |
+| `--plain` | TSV 形式で出力 |
+| `--utc` | タイムスタンプを UTC で表示（デフォルトはローカル TZ） |
+| `--tz <iana>` | 指定 IANA タイムゾーンで表示（例: `Asia/Tokyo`） |
+
 ### `channels history` — チャンネルのメッセージ履歴
 
 ```bash
-slamy channels history <channel_id> [--limit <number>] [--json] [--plain]
+slamy channels history <channel_or_url> [--limit <n>] [--oldest <ts>] [--latest <ts>] [--resolve-names]
 ```
 
 | フラグ | 必須 | 説明 |
 |---|---|---|
-| `<channel_id>` | Yes | チャンネル ID |
-| `--limit <number>` | No | メッセージ数（デフォルト: 20） |
+| `<channel_or_url>` | Yes | チャンネル ID または Slack permalink URL |
+| `--limit <n>` | No | メッセージ数（デフォルト: 20） |
+| `--oldest <ts>` | No | この Unix timestamp 以降のメッセージのみ |
+| `--latest <ts>` | No | この Unix timestamp 以前のメッセージのみ |
+| `--resolve-names` | No | `user_id` / `bot_id` を実名表示 |
 
 ### `messages post` — メッセージ投稿
 
 ```bash
-slamy messages post <channel_id> --text <message> [--json] [--plain]
+slamy messages post <channel_id> --text <message>
 ```
-
-| フラグ | 必須 | 説明 |
-|---|---|---|
-| `<channel_id>` | Yes | チャンネル ID |
-| `--text <message>` | Yes | メッセージ本文 |
 
 ### `messages reply` — スレッド返信
 
 ```bash
-slamy messages reply <channel_id> <thread_ts> --text <message> [--broadcast] [--json] [--plain]
+slamy messages reply <channel_or_url> [thread_ts] --text <message> [--broadcast]
 ```
 
-| フラグ | 必須 | 説明 |
-|---|---|---|
-| `<channel_id>` | Yes | チャンネル ID |
-| `<thread_ts>` | Yes | スレッドのタイムスタンプ |
-| `--text <message>` | Yes | 返信本文 |
-| `--broadcast` | No | チャンネルにも投稿する（reply_broadcast） |
+`<channel_or_url>` は「channel ID + thread_ts」または Slack permalink URL の 1 引数のいずれも受け付けます。
 
-### `users list` — ユーザー一覧
+### `messages update` / `messages delete` — メッセージ編集
 
 ```bash
-slamy users list [--include-deactivated] [--include-bots] [--json] [--plain]
+slamy messages update <channel_or_url> [ts] --text <new_text>
+slamy messages delete <channel_or_url> [ts]
 ```
 
-| フラグ | 必須 | 説明 |
-|---|---|---|
-| `--include-deactivated` | No | 無効化されたユーザーを含める |
-| `--include-bots` | No | bot ユーザーを含める |
-
-### `users profile` — ユーザープロフィール
+### `messages schedule` — 予約投稿
 
 ```bash
-slamy users profile <user_id> [--json] [--plain]
+slamy messages schedule <channel_id> --text <message> --at <datetime>
 ```
 
-| フラグ | 必須 | 説明 |
-|---|---|---|
-| `<user_id>` | Yes | ユーザー ID |
+`<datetime>` は Unix timestamp または ISO 8601 形式（例: `2026-02-24T09:00+09:00`）。
 
-### `reactions add` — 絵文字リアクション追加
+### `threads replies` — スレッド返信を取得
 
 ```bash
-slamy reactions add <channel_id> <timestamp> --name <emoji> [--json] [--plain]
+slamy threads replies <channel_or_url> [thread_ts] [--limit <n>] [--resolve-names]
 ```
 
-| フラグ | 必須 | 説明 |
-|---|---|---|
-| `<channel_id>` | Yes | チャンネル ID |
-| `<timestamp>` | Yes | メッセージのタイムスタンプ |
-| `--name <emoji>` | Yes | 絵文字名（コロンなし） |
+`<channel_or_url>` は「channel ID + thread_ts」または Slack permalink URL の 1 引数のいずれも受け付けます。
+
+### `users list` / `users profile`
+
+```bash
+slamy users list [--include-deactivated] [--include-bots]
+slamy users profile <user_id>
+```
+
+### `reactions get` — 特定メッセージの reactions を取得
+
+```bash
+slamy reactions get <channel_or_url> [timestamp] [--resolve-names]
+```
+
+絵文字ごとの reaction 数と reaction したユーザーを返します。`reactions add` 前に既存リアクションを確認するのに便利です。
+
+### `reactions list` — ユーザーの reaction 履歴
+
+```bash
+slamy reactions list [--user <user_id>] [--limit <n>] [--count]
+```
+
+注意: `reactions list`（ユーザーの reaction 履歴）と `reactions get`（メッセージへの reactions）は別の API です。
+
+### `reactions add` / `reactions remove` — リアクション追加/削除
+
+```bash
+slamy reactions add <channel_or_url> [timestamp] --name <emoji>
+slamy reactions remove <channel_or_url> [timestamp] --name <emoji>
+```
 
 ### `search messages` — メッセージ検索
 
 ```bash
-slamy search messages <query> [--count <number>] [--page <number>] [--sort <field>] [--sort-dir <direction>] [--json] [--plain]
+slamy search messages <query> [--count <n>] [--page <n>] [--sort <field>] [--sort-dir <dir>] [--resolve-names]
 ```
 
 | フラグ | 必須 | 説明 |
 |---|---|---|
 | `<query>` | Yes | 検索クエリ（`in:#channel`、`from:@user` 等の Slack 修飾子対応） |
-| `--count <number>` | No | 1 ページあたりの結果数 |
-| `--page <number>` | No | ページ番号 |
-| `--sort <field>` | No | ソートフィールド |
-| `--sort-dir <direction>` | No | ソート方向 |
+| `--count <n>` | No | 1 ページあたりの結果数（デフォルト: 20） |
+| `--page <n>` | No | ページ番号（デフォルト: 1） |
+| `--sort <field>` | No | `timestamp` または `score`（デフォルト: timestamp） |
+| `--sort-dir <dir>` | No | `asc` または `desc`（デフォルト: desc） |
+| `--resolve-names` | No | `user_id` を実名表示 |
 
 ### `auth test` — 認証テスト
 
@@ -223,8 +248,12 @@ stdio 経由の MCP サーバーを起動し、すべての操作を AI エー�
 
 | 変数 | 必須 | 説明 |
 |---|---|---|
-| `SLACK_USER_TOKEN` | Yes | Slack User OAuth Token (`xoxp-...`) |
+| `SLACK_USER_TOKEN` | いずれか | Slack User OAuth Token (`xoxp-...`) — `search messages` や読み取り操作で必要 |
+| `SLACK_BOT_TOKEN` | いずれか | Slack Bot OAuth Token (`xoxb-...`) — 書き込み操作と `reactions get` で使用 |
+| `SLAMY_TZ` | No | `engagement` コマンド用の IANA タイムゾーン（デフォルト: `Asia/Tokyo`） |
 | `SLACK_TEAM_ID` | No | Slack Team ID（ワークスペース固有の操作用） |
+
+`SLACK_USER_TOKEN` / `SLACK_BOT_TOKEN` のいずれかを必ず設定してください。両方設定すると、操作に応じて適切なトークンが自動選択されます。
 
 ## 出力フォーマット
 

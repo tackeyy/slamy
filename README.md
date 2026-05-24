@@ -121,87 +121,112 @@ slamy channels list [--limit <number>] [--include-archived] [--json] [--plain]
 | `--json` | No | Output as JSON |
 | `--plain` | No | Output as TSV |
 
+### Global options
+
+These flags work with any command:
+
+| Flag | Description |
+|---|---|
+| `--json` | Output as JSON |
+| `--plain` | Output as TSV |
+| `--utc` | Display timestamps in UTC (default: local TZ) |
+| `--tz <iana>` | Display timestamps in the specified IANA timezone (e.g. `Asia/Tokyo`) |
+
 ### `channels history` — Get channel message history
 
 ```bash
-slamy channels history <channel_id> [--limit <number>] [--json] [--plain]
+slamy channels history <channel_or_url> [--limit <n>] [--oldest <ts>] [--latest <ts>] [--resolve-names]
 ```
 
 | Flag | Required | Description |
 |---|---|---|
-| `<channel_id>` | Yes | Channel ID |
-| `--limit <number>` | No | Number of messages (default: 20) |
+| `<channel_or_url>` | Yes | Channel ID **or** Slack permalink URL |
+| `--limit <n>` | No | Number of messages (default: 20) |
+| `--oldest <ts>` | No | Only messages after this Unix timestamp |
+| `--latest <ts>` | No | Only messages before this Unix timestamp |
+| `--resolve-names` | No | Resolve `user_id` / `bot_id` to display names |
 
 ### `messages post` — Post a message
 
 ```bash
-slamy messages post <channel_id> --text <message> [--json] [--plain]
+slamy messages post <channel_id> --text <message>
 ```
-
-| Flag | Required | Description |
-|---|---|---|
-| `<channel_id>` | Yes | Channel ID |
-| `--text <message>` | Yes | Message text |
 
 ### `messages reply` — Reply to a thread
 
 ```bash
-slamy messages reply <channel_id> <thread_ts> --text <message> [--broadcast] [--json] [--plain]
+slamy messages reply <channel_or_url> [thread_ts] --text <message> [--broadcast]
 ```
 
-| Flag | Required | Description |
-|---|---|---|
-| `<channel_id>` | Yes | Channel ID |
-| `<thread_ts>` | Yes | Thread timestamp |
-| `--text <message>` | Yes | Reply text |
-| `--broadcast` | No | Also post to the channel (reply_broadcast) |
+`<channel_or_url>` accepts either a channel ID + thread_ts, or a single Slack permalink URL.
 
-### `users list` — List workspace users
+### `messages update` / `messages delete` — Edit messages
 
 ```bash
-slamy users list [--include-deactivated] [--include-bots] [--json] [--plain]
+slamy messages update <channel_or_url> [ts] --text <new_text>
+slamy messages delete <channel_or_url> [ts]
 ```
 
-| Flag | Required | Description |
-|---|---|---|
-| `--include-deactivated` | No | Include deactivated users |
-| `--include-bots` | No | Include bot users |
-
-### `users profile` — Get user profile
+### `messages schedule` — Schedule a message for later
 
 ```bash
-slamy users profile <user_id> [--json] [--plain]
+slamy messages schedule <channel_id> --text <message> --at <datetime>
 ```
 
-| Flag | Required | Description |
-|---|---|---|
-| `<user_id>` | Yes | User ID |
+`<datetime>` is a Unix timestamp or ISO 8601 (e.g. `2026-02-24T09:00+09:00`).
 
-### `reactions add` — Add emoji reaction
+### `threads replies` — Get thread replies
 
 ```bash
-slamy reactions add <channel_id> <timestamp> --name <emoji> [--json] [--plain]
+slamy threads replies <channel_or_url> [thread_ts] [--limit <n>] [--resolve-names]
 ```
 
-| Flag | Required | Description |
-|---|---|---|
-| `<channel_id>` | Yes | Channel ID |
-| `<timestamp>` | Yes | Message timestamp |
-| `--name <emoji>` | Yes | Emoji name (without colons) |
+`<channel_or_url>` accepts a channel ID + thread_ts, or a single Slack permalink URL.
+
+### `users list` / `users profile`
+
+```bash
+slamy users list [--include-deactivated] [--include-bots]
+slamy users profile <user_id>
+```
+
+### `reactions get` — Get reactions on a specific message
+
+```bash
+slamy reactions get <channel_or_url> [timestamp] [--resolve-names]
+```
+
+Returns the emoji reactions and the users who added them. Useful before calling `reactions add` to check existing reactions.
+
+### `reactions list` — List reactions made by a user
+
+```bash
+slamy reactions list [--user <user_id>] [--limit <n>] [--count]
+```
+
+Note: `reactions list` (lists reactions *by* a user) and `reactions get` (gets reactions *on* a message) are different APIs.
+
+### `reactions add` / `reactions remove` — Add/remove emoji reaction
+
+```bash
+slamy reactions add <channel_or_url> [timestamp] --name <emoji>
+slamy reactions remove <channel_or_url> [timestamp] --name <emoji>
+```
 
 ### `search messages` — Search messages
 
 ```bash
-slamy search messages <query> [--count <number>] [--page <number>] [--sort <field>] [--sort-dir <direction>] [--json] [--plain]
+slamy search messages <query> [--count <n>] [--page <n>] [--sort <field>] [--sort-dir <dir>] [--resolve-names]
 ```
 
 | Flag | Required | Description |
 |---|---|---|
 | `<query>` | Yes | Search query (supports Slack modifiers like `in:#channel`, `from:@user`) |
-| `--count <number>` | No | Results per page |
-| `--page <number>` | No | Page number |
-| `--sort <field>` | No | Sort field |
-| `--sort-dir <direction>` | No | Sort direction |
+| `--count <n>` | No | Results per page (default: 20) |
+| `--page <n>` | No | Page number (default: 1) |
+| `--sort <field>` | No | Sort by `timestamp` or `score` (default: timestamp) |
+| `--sort-dir <dir>` | No | `asc` or `desc` (default: desc) |
+| `--resolve-names` | No | Resolve `user_id` to display names |
 
 ### `auth test` — Test authentication
 
@@ -223,8 +248,12 @@ Starts an MCP server over stdio, exposing all operations as tools for AI agents 
 
 | Variable | Required | Description |
 |---|---|---|
-| `SLACK_USER_TOKEN` | Yes | Slack User OAuth Token (`xoxp-...`) |
+| `SLACK_USER_TOKEN` | Yes (either) | Slack User OAuth Token (`xoxp-...`) — required for `search messages` and most read operations |
+| `SLACK_BOT_TOKEN` | Yes (either) | Slack Bot OAuth Token (`xoxb-...`) — used for write operations and `reactions get` |
+| `SLAMY_TZ` | No | IANA timezone used by `engagement` commands (default: `Asia/Tokyo`) |
 | `SLACK_TEAM_ID` | No | Slack Team ID (for workspace-specific operations) |
+
+At least one of `SLACK_USER_TOKEN` / `SLACK_BOT_TOKEN` must be set. When both are set, slamy uses each token for the operations it best fits.
 
 ## Output Formats
 
