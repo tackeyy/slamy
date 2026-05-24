@@ -104,4 +104,30 @@ describe("resolveUserName", () => {
     expect(result.get("U003")).toBe("Carol");
     expect(mock.users.list).toHaveBeenCalledTimes(1);
   });
+
+  it("users.list の cursor pagination を最後まで追跡する (1000 名超の WS 対応)", async () => {
+    const { client, mock } = await makeClient();
+    mock.users.list
+      .mockResolvedValueOnce({
+        ok: true,
+        members: [{ id: "U001", profile: { display_name: "Alice (page1)" } }],
+        response_metadata: { next_cursor: "cursor-page-2" },
+      } as any)
+      .mockResolvedValueOnce({
+        ok: true,
+        members: [{ id: "U002", profile: { display_name: "Bob (page2)" } }],
+        response_metadata: { next_cursor: "" },
+      } as any);
+
+    const r1 = await client.resolveUserName("U001");
+    const r2 = await client.resolveUserName("U002");
+
+    expect(r1).toBe("Alice (page1)");
+    expect(r2).toBe("Bob (page2)");
+    expect(mock.users.list).toHaveBeenCalledTimes(2);
+    expect(mock.users.list).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({ cursor: "cursor-page-2" }),
+    );
+  });
 });
