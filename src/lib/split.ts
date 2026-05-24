@@ -1,19 +1,35 @@
 /**
- * Maximum character (rune) count for a single Slack message.
+ * 公式仕様の chat.postMessage / chat.postEphemeral / webhooks 上限 (40,000 chars)。
  *
- * Slack's `chat.postMessage` officially allows up to 40,000 characters
- * (https://docs.slack.dev/changelog/2018-truncating-really-long-messages/),
- * but `chat.update` is undocumented and empirically fails with
- * `msg_too_long` at around 4,000 characters. We use a defensive margin
- * (3,900) to cover ambiguities in Slack's character counting (entity
- * expansion of `<@U...>` mentions and `<https://...|title>` links may
- * inflate the on-server length beyond what `[...text].length` reports).
+ * Slack 公式 changelog: https://docs.slack.dev/changelog/2018-truncating-really-long-messages/
+ *
+ * `replyToThread` / `postMessage` 経由の自動分割はこの上限で行うことで、
+ * 長文応答が必要以上に多数の chunks に分割されるのを避ける。
+ */
+export const CHAT_POSTMESSAGE_MAX_LENGTH = 40000;
+
+/**
+ * chat.update の defensive 上限 (3,900 chars)。
+ *
+ * `chat.update` は公式 docs に上限の明記がなく、実測では 4,000 chars 付近で
+ * `msg_too_long` を返す。entity 展開 (`<@U...>` mentions / `<https://...|title>` 等) で
+ * サーバ側の length が `[...text].length` の値を超えることがあるため、
+ * defensive margin (100 chars) を含めた 3,900 を採用。
  *
  * Empirical evidence: navibot req_20260523165417_5b15b837 (2026-05-24 01:56 JST)
- * — Slack returned `msg_too_long` for a `chat.update` payload that passed the
- * 4,000-codepoint check on the client side.
+ * — `chat.update` が 4,000-codepoint チェックを通過したペイロードに対して
+ * `msg_too_long` を返した。
  */
-export const MAX_MESSAGE_LENGTH = 3900;
+export const CHAT_UPDATE_MAX_LENGTH = 3900;
+
+/**
+ * Backward-compatible alias. 既存のコードベースが `MAX_MESSAGE_LENGTH` を参照しているため、
+ * 最も厳しい値 (= CHAT_UPDATE_MAX_LENGTH) を維持する。
+ *
+ * 新しい呼び出しでは API method に応じて `CHAT_POSTMESSAGE_MAX_LENGTH` /
+ * `CHAT_UPDATE_MAX_LENGTH` を明示的に使うことを推奨。
+ */
+export const MAX_MESSAGE_LENGTH = CHAT_UPDATE_MAX_LENGTH;
 
 /**
  * Split text into chunks of at most maxLen characters (Unicode code points).

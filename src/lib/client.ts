@@ -1,7 +1,12 @@
 import { WebClient, LogLevel } from "@slack/web-api";
 import { readFileSync } from "node:fs";
 import { fixSlackMrkdwn } from "./mrkdwn.js";
-import { splitMessage, MAX_MESSAGE_LENGTH } from "./split.js";
+import {
+  splitMessage,
+  MAX_MESSAGE_LENGTH,
+  CHAT_POSTMESSAGE_MAX_LENGTH,
+  CHAT_UPDATE_MAX_LENGTH,
+} from "./split.js";
 import { tzDateToEpochSec } from "./tz.js";
 import type {
   Channel,
@@ -153,7 +158,7 @@ export class SlamyClient {
 
   async postMessage(channel: string, text: string): Promise<{ channel: string; ts: string }> {
     const fixed = fixSlackMrkdwn(text);
-    const chunks = splitMessage(fixed);
+    const chunks = splitMessage(fixed, CHAT_POSTMESSAGE_MAX_LENGTH);
 
     const res = await this.botClient.chat.postMessage({
       channel,
@@ -180,7 +185,7 @@ export class SlamyClient {
     options?: { broadcast?: boolean },
   ): Promise<{ channel: string; ts: string }> {
     const fixed = fixSlackMrkdwn(text);
-    const chunks = splitMessage(fixed);
+    const chunks = splitMessage(fixed, CHAT_POSTMESSAGE_MAX_LENGTH);
 
     let firstTs = "";
     for (const chunk of chunks) {
@@ -204,9 +209,9 @@ export class SlamyClient {
     ts: string,
     text: string,
   ): Promise<{ channel: string; ts: string }> {
-    if ([...text].length > MAX_MESSAGE_LENGTH) {
+    if ([...text].length > CHAT_UPDATE_MAX_LENGTH) {
       throw new Error(
-        `Message exceeds ${MAX_MESSAGE_LENGTH} characters. updateMessage does not support auto-splitting.`,
+        `Message exceeds ${CHAT_UPDATE_MAX_LENGTH} characters. updateMessage does not support auto-splitting.`,
       );
     }
 

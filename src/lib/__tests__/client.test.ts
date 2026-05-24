@@ -179,9 +179,10 @@ describe("postMessage", () => {
     expect(result).toEqual({ channel: "C123", ts: "1234567890.123456" });
   });
 
-  it("長文メッセージを自動分割する", async () => {
+  it("長文メッセージを自動分割する (chat.postMessage 上限 40000 を超える場合)", async () => {
     const client = new SlamyClient({ userToken: "xoxp-test" });
-    const longText = "a".repeat(2500) + "\n\n" + "b".repeat(2500);
+    // 25000 + \n\n + 25000 = chat.postMessage 上限 (40000) を超える
+    const longText = "a".repeat(25000) + "\n\n" + "b".repeat(25000);
     await client.postMessage("C123", longText);
 
     // First message + thread reply
@@ -224,9 +225,9 @@ describe("replyToThread", () => {
     expect(result.ts).toBe("1234567890.123456");
   });
 
-  it("長文返信を自動分割する", async () => {
+  it("長文返信を自動分割する (chat.postMessage 上限 40000 を超える場合)", async () => {
     const client = new SlamyClient({ userToken: "xoxp-test" });
-    const longText = "a".repeat(2500) + "\n\n" + "b".repeat(2500);
+    const longText = "a".repeat(25000) + "\n\n" + "b".repeat(25000);
     await client.replyToThread("C123", "ts123", longText);
 
     expect(mockWebClient.chat.postMessage).toHaveBeenCalledTimes(2);
@@ -234,6 +235,14 @@ describe("replyToThread", () => {
     for (const call of mockWebClient.chat.postMessage.mock.calls) {
       expect(call[0].thread_ts).toBe("ts123");
     }
+  });
+
+  it("5000 文字程度なら 1 chunk で送る (chat.postMessage 上限 40000 内)", async () => {
+    const client = new SlamyClient({ userToken: "xoxp-test" });
+    const text = "x".repeat(5000);
+    await client.replyToThread("C123", "ts123", text);
+
+    expect(mockWebClient.chat.postMessage).toHaveBeenCalledTimes(1);
   });
 
   it("broadcast オプションで reply_broadcast: true を送信する", async () => {
