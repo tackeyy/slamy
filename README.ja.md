@@ -1,6 +1,6 @@
 # slamy — Slack MCP サーバー & CLI
 
-[English](README.md)
+[English](README.md) | **日本語**
 
 Slack 用の [MCP (Model Context Protocol)](https://modelcontextprotocol.io/) サーバー兼 CLI ツール。Claude Code や Claude Desktop などの AI エージェントから Slack を操作したり、ターミナルから直接利用できます。
 

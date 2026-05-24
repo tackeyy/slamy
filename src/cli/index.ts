@@ -7,6 +7,8 @@ import { basename } from "node:path";
 import { SlamyClient } from "../lib/client.js";
 import { formatTimestamp as libFormatTimestamp } from "../lib/tz.js";
 import { parseSlackTarget } from "../lib/parse-target.js";
+import { jsonOutput as formatJson } from "../lib/cli-format.js";
+import { requireToken } from "../lib/cli-errors.js";
 
 const program = new Command();
 
@@ -32,17 +34,20 @@ function getTzOptions(): { utc?: boolean; tz?: string } {
 }
 
 function createClient(): SlamyClient {
-  const userToken = process.env.SLACK_USER_TOKEN;
-  const botToken = process.env.SLACK_BOT_TOKEN;
-  if (!userToken && !botToken) {
-    console.error("Error: SLACK_USER_TOKEN or SLACK_BOT_TOKEN is not set");
-    process.exit(1);
+  const tokens = requireToken(
+    process.env,
+    (code) => process.exit(code),
+    (msg) => console.error(msg),
+  );
+  if (!tokens) {
+    // requireToken already called process.exit(1); this branch keeps TS happy.
+    throw new Error("unreachable: requireToken should have exited");
   }
-  return new SlamyClient({ userToken, botToken });
+  return new SlamyClient(tokens);
 }
 
 function jsonOutput(data: unknown): void {
-  console.log(JSON.stringify(data, null, 2));
+  console.log(formatJson(data));
 }
 
 function formatTimestamp(ts: string): string {

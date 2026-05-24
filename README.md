@@ -1,6 +1,6 @@
 # slamy — Slack MCP server & CLI
 
-[日本語](README_ja.md)
+**English** | [日本語](README.ja.md)
 
 A Slack [MCP (Model Context Protocol)](https://modelcontextprotocol.io/) server that also works as a standalone CLI. Connect AI agents like Claude to your Slack workspace, or use it directly from the terminal.
 

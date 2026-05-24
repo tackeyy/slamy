@@ -1,290 +1,292 @@
 # Testing Guide for slamy
 
-This document describes the testing strategy, guidelines, and best practices for slamy.
+This document describes the testing strategy, guidelines, and best practices for the
+**Node.js / TypeScript** side of slamy. For the Go binary under `go-src/`, see
+`go-src/` source and standard `go test ./...` workflows.
 
 ## 🎯 Testing Philosophy
 
-- **Write tests first** when fixing bugs
-- **Test behavior, not implementation**
-- **Keep tests simple and readable**
-- **Use table-driven tests** for multiple scenarios
-- **Mock external dependencies**
+- **Write tests first** when fixing bugs (TDD: red → green → refactor)
+- **Test behavior, not implementation** — assert on observable output
+- **Keep tests simple and readable** — one concept per test
+- **Mock external dependencies** — never hit the real Slack API
+- **Fast execution** — unit tests should run in milliseconds
 
 ## 📚 Testing Framework
 
-slamy uses Go's built-in testing package along with:
-- `testing` - Standard Go testing package
-- `testify/assert` - Assertion helpers (optional)
-- `testify/mock` - Mocking framework (optional)
-- `httptest` - HTTP testing utilities
+slamy uses **[Vitest](https://vitest.dev/)** as its test runner and assertion library, configured
+via `vitest.config.ts`. Vitest is API-compatible with Jest, so most Jest patterns work unchanged.
+
+Key tooling:
+
+- `vitest` — runner + assertions (`expect`, `describe`, `it`)
+- `vi` — mocking (`vi.fn()`, `vi.spyOn()`, `vi.mock()`)
+- `@vitest/coverage-v8` — coverage (V8 provider)
 
 ## 🏗️ Test Structure
 
-### Directory Layout
+### Directory layout
 
+```text
+src/
+├── cli/
+│   └── index.ts                    # CLI entry point
+├── lib/
+│   ├── client.ts                   # Slack client wrappers
+│   ├── split.ts                    # message splitting
+│   ├── ...
+│   └── __tests__/                  # library unit tests (colocated)
+│       ├── client.test.ts
+│       ├── split.test.ts
+│       └── ...
+└── __tests__/                      # CLI / integration-flavored tests
+    ├── client.test.ts
+    ├── engagement.test.ts
+    ├── cli-validation.test.ts      # CLI argument validation
+    ├── cli-output.test.ts          # CLI output formatting (text / JSON / TSV)
+    ├── cli-errors.test.ts          # error classes + exit codes
+    └── helpers/
+        └── mock-slack.ts
 ```
-slamy/
-├── cmd/
-│   └── app/
-│       └── main_test.go
-├── internal/
-│   ├── handler/
-│   │   ├── handler.go
-│   │   └── handler_test.go
-│   └── service/
-│       ├── service.go
-│       └── service_test.go
-└── pkg/
-    └── util/
-        ├── util.go
-        └── util_test.go
-```
 
-### Naming Convention
+### Naming conventions
 
-- Test files: `*_test.go`
-- Test functions: `func TestFunctionName(t *testing.T)`
-- Benchmark functions: `func BenchmarkFunctionName(b *testing.B)`
+- Test files: `*.test.ts`
+- Test suites: `describe("ModuleName - functionality", () => { ... })`
+- Test cases: `it("should do something specific", () => { ... })`
 
 ## ✍️ Writing Tests
 
-### Unit Test Example
+### 1. Unit tests
 
-```go
-package handler
+Test individual exported functions in isolation.
 
-import (
-    "testing"
-)
+```ts
+import { describe, it, expect } from "vitest";
+import { splitForPostMessage } from "../split.js";
 
-func TestUserHandler_GetByID(t *testing.T) {
-    // Arrange
-    handler := NewUserHandler()
-    userID := "123"
+describe("splitForPostMessage", () => {
+  it("returns a single chunk when input fits in one message", () => {
+    const chunks = splitForPostMessage("hello");
+    expect(chunks).toEqual(["hello"]);
+  });
 
-    // Act
-    user, err := handler.GetByID(userID)
-
-    // Assert
-    if err != nil {
-        t.Fatalf("unexpected error: %v", err)
-    }
-    if user.ID != userID {
-        t.Errorf("expected user ID %s, got %s", userID, user.ID)
-    }
-}
+  it("splits a long string into multiple chunks", () => {
+    const chunks = splitForPostMessage("x".repeat(10000));
+    expect(chunks.length).toBeGreaterThan(1);
+  });
+});
 ```
 
-### Table-Driven Test Example
+### 2. Validation tests
 
-```go
-func TestValidateEmail(t *testing.T) {
-    tests := []struct {
-        name    string
-        email   string
-        want    bool
-        wantErr bool
-    }{
-        {
-            name:    "valid email",
-            email:   "user@example.com",
-            want:    true,
-            wantErr: false,
-        },
-        {
-            name:    "invalid email - no @",
-            email:   "userexample.com",
-            want:    false,
-            wantErr: true,
-        },
-        {
-            name:    "empty email",
-            email:   "",
-            want:    false,
-            wantErr: true,
-        },
-    }
+Test CLI argument validation logic (parsers, numeric bounds, enums).
 
-    for _, tt := range tests {
-        t.Run(tt.name, func(t *testing.T) {
-            got, err := ValidateEmail(tt.email)
-            if (err != nil) != tt.wantErr {
-                t.Errorf("ValidateEmail() error = %v, wantErr %v", err, tt.wantErr)
-                return
-            }
-            if got != tt.want {
-                t.Errorf("ValidateEmail() = %v, want %v", got, tt.want)
-            }
-        })
-    }
-}
+```ts
+import { describe, it, expect } from "vitest";
+
+describe("CLI validation - reactions get", () => {
+  it("rejects empty channel id", () => {
+    const channel = "";
+    expect(channel.length > 0).toBe(false);
+  });
+
+  it("rejects ts not matching Slack timestamp format", () => {
+    const ts = "not-a-timestamp";
+    expect(/^\d+\.\d+$/.test(ts)).toBe(false);
+  });
+});
 ```
 
-### HTTP Handler Test Example
+### 3. Output tests
 
-```go
-func TestHealthHandler(t *testing.T) {
-    req := httptest.NewRequest("GET", "/health", nil)
-    w := httptest.NewRecorder()
+Test CLI output formatting by spying on `process.stdout.write`.
 
-    HealthHandler(w, req)
+```ts
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
-    resp := w.Result()
-    if resp.StatusCode != http.StatusOK {
-        t.Errorf("expected status 200, got %d", resp.StatusCode)
-    }
-}
+describe("CLI output - text format", () => {
+  let stdoutSpy: ReturnType<typeof vi.spyOn>;
+
+  beforeEach(() => {
+    stdoutSpy = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
+  });
+
+  afterEach(() => {
+    stdoutSpy.mockRestore();
+  });
+
+  it("prints a single line per row", () => {
+    process.stdout.write("row1\n");
+    expect(stdoutSpy).toHaveBeenCalledWith("row1\n");
+  });
+});
 ```
 
-## 🎭 Mocking
+### 4. Error handling tests
 
-### Interface-based Mocking
+Test error classes and exit codes.
 
-```go
-// Define interface
-type UserRepository interface {
-    GetByID(id string) (*User, error)
+```ts
+import { describe, it, expect } from "vitest";
+
+class ValidationError extends Error {
+  readonly exitCode = 2;
 }
 
-// Mock implementation for testing
-type MockUserRepository struct {
-    GetByIDFunc func(id string) (*User, error)
-}
+describe("ValidationError", () => {
+  it("exposes exit code 2", () => {
+    const err = new ValidationError("--channel required");
+    expect(err.exitCode).toBe(2);
+  });
 
-func (m *MockUserRepository) GetByID(id string) (*User, error) {
-    if m.GetByIDFunc != nil {
-        return m.GetByIDFunc(id)
-    }
-    return nil, nil
-}
+  it("is an instance of Error", () => {
+    const err = new ValidationError("boom");
+    expect(err instanceof Error).toBe(true);
+  });
+});
 ```
+
+### 5. Mocking the Slack client
+
+Mock `@slack/web-api` so tests never hit real Slack.
+
+```ts
+import { vi } from "vitest";
+
+vi.mock("@slack/web-api", () => ({
+  WebClient: vi.fn().mockImplementation(() => ({
+    chat: {
+      postMessage: vi.fn().mockResolvedValue({ ok: true, ts: "1700000000.000100" }),
+    },
+    conversations: {
+      list: vi.fn().mockResolvedValue({ ok: true, channels: [] }),
+    },
+  })),
+}));
+```
+
+See `src/__tests__/helpers/mock-slack.ts` for the shared helper.
 
 ## 🏃 Running Tests
 
-### Basic Commands
+### Basic commands
 
 ```bash
-# Run all tests
-go test ./...
+# Run all tests once (CI-style)
+npm test
 
-# Run tests with coverage
-go test -cover ./...
+# Watch mode for local development
+npm run test:watch
 
-# Generate coverage report
-go test -coverprofile=coverage.out ./...
-go tool cover -html=coverage.out
+# Run a single file
+npx vitest run src/lib/__tests__/split.test.ts
 
-# Run specific package
-go test ./internal/handler/...
+# Filter by test name
+npx vitest run -t "splits a long string"
 
-# Run specific test
-go test -run TestUserHandler_GetByID ./internal/handler
-
-# Run with race detector
-go test -race ./...
-
-# Verbose output
-go test -v ./...
+# Run with coverage
+npx vitest run --coverage
 ```
 
-### Benchmarks
+### Coverage report
 
 ```bash
-# Run all benchmarks
-go test -bench=. ./...
-
-# Run specific benchmark
-go test -bench=BenchmarkValidateEmail ./...
-
-# With memory allocation stats
-go test -bench=. -benchmem ./...
+npx vitest run --coverage
+# HTML report: coverage/index.html
+# lcov: coverage/lcov.info
 ```
 
 ## 📊 Test Coverage
 
-### Coverage Requirements
+### Coverage thresholds (enforced by `vitest.config.ts`)
 
-- **Overall**: 70%+ coverage required
-- **New features**: 80%+ coverage required
-- **Critical paths**: 90%+ coverage required
-- **Bug fixes**: Must include regression test
+| Metric     | Threshold |
+| ---------- | --------- |
+| Lines      | 80%       |
+| Functions  | 80%       |
+| Branches   | 80%       |
+| Statements | 80%       |
 
-### Check Coverage
+### Coverage exclusions
 
-```bash
-# Generate coverage report
-go test -coverprofile=coverage.out ./...
+- `src/cli/index.ts` — large CLI entry point; exercised via focused validation / output / error
+  tests rather than full-file execution coverage
+- `**/*.d.ts` — type declarations
 
-# View coverage by package
-go tool cover -func=coverage.out
+### Per-change expectations
 
-# View HTML coverage report
-go tool cover -html=coverage.out
-```
+- **New features**: aim for 100% coverage of new code
+- **Bug fixes**: add a regression test that fails before the fix and passes after
+- **Refactors**: maintain or improve existing coverage
 
-## ✅ Test Checklist
+## ✅ Pre-PR Test Checklist
 
 Before submitting a PR, ensure:
 
-- [ ] All tests pass: `go test ./...`
-- [ ] Coverage is adequate: `go test -cover ./...`
-- [ ] Race detector passes: `go test -race ./...`
-- [ ] Tests are table-driven where appropriate
-- [ ] External dependencies are mocked
-- [ ] Edge cases are tested
-- [ ] Error cases are tested
+- [ ] `npm test` passes
+- [ ] `npm run typecheck` passes
+- [ ] `npx vitest run --coverage` meets thresholds
+- [ ] New behavior has a unit test
+- [ ] Bug fixes include a regression test
+- [ ] External dependencies (`@slack/web-api`, `fetch`, env vars) are mocked
+- [ ] Both success and failure paths are covered
 
 ## 🎯 Best Practices
 
-1. **Use subtests** for organizing related tests
-2. **Test public APIs** rather than internal implementation
-3. **Keep tests independent** - avoid test interdependencies
-4. **Use meaningful test names** - describe what's being tested
-5. **Test error handling** - don't just test happy paths
-6. **Avoid test helpers that hide logic** - keep tests explicit
-7. **Use test fixtures** for complex test data
-8. **Clean up resources** using `t.Cleanup()` or `defer`
+### DO ✅
 
-## 🔧 Integration Tests
+- Use `vi.resetModules()` between tests when you re-import modules
+- Mock all external I/O (`fetch`, Slack API, filesystem)
+- Test both happy path and error path
+- Use descriptive test names: `it("rejects ts without dot separator", ...)`
+- Follow **Arrange → Act → Assert**
+- Use `vi.useFakeTimers()` for time-dependent code
 
-### Running Integration Tests
+### DON'T ❌
 
-```bash
-# Run with build tag
-go test -tags=integration ./...
+- Don't call the real Slack API
+- Don't share state between tests (each test must be independent)
+- Don't write tests that assert on private implementation details
+- Don't leave commented-out tests
+- Don't use `setTimeout` to wait for async work — use `await`
 
-# Skip integration tests
-go test -short ./...
+## 🔧 Troubleshooting
+
+### "Cannot find module './foo'" with NodeNext
+
+The project uses `module: NodeNext`, so relative imports require the `.js` extension even in
+TypeScript source:
+
+```ts
+// ✅ correct
+import { foo } from "./foo.js";
+
+// ❌ wrong (works in bundler resolution but not NodeNext)
+import { foo } from "./foo";
 ```
 
-### Example Integration Test
+### "Tests pass locally but fail in CI"
 
-```go
-//go:build integration
-// +build integration
+- Check for timezone assumptions — use explicit TZ in `formatDate` calls
+- Make sure every `vi.spyOn` / `vi.mock` is restored in `afterEach`
+- Run `npm ci` (not `npm install`) to match CI's lockfile-only behavior
 
-package integration
+### "Coverage threshold not met"
 
-import (
-    "testing"
-)
-
-func TestDatabaseIntegration(t *testing.T) {
-    if testing.Short() {
-        t.Skip("skipping integration test")
-    }
-
-    // Integration test code
-}
-```
+- Run `npx vitest run --coverage` and open `coverage/index.html`
+- Look for red/yellow files and add tests for the uncovered branches
+- If a file is genuinely impossible to cover (e.g., CLI bootstrap), add it to
+  `coverage.exclude` in `vitest.config.ts` with a code comment explaining why
 
 ## 📚 Resources
 
-- [Go Testing Package](https://pkg.go.dev/testing)
-- [Go Code Review Comments](https://github.com/golang/go/wiki/CodeReviewComments#tests)
-- [Table Driven Tests](https://github.com/golang/go/wiki/TableDrivenTests)
-- [Testify Documentation](https://github.com/stretchr/testify)
+- [Vitest Documentation](https://vitest.dev/)
+- [Vitest API Reference](https://vitest.dev/api/)
+- [Slack Web API](https://api.slack.com/web)
+- [@slack/web-api Node SDK](https://github.com/slackapi/node-slack-sdk)
 
 ---
 
-**Questions?** Open an issue or refer to [CONTRIBUTING.md](../CONTRIBUTING.md)
+**Questions?** Open a [Question issue](../.github/ISSUE_TEMPLATE/question.yml) or refer to
+[CONTRIBUTING.md](../CONTRIBUTING.md).

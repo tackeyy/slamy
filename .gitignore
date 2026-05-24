@@ -1,7 +1,9 @@
 node_modules/
 dist/
+coverage/
 *.exe
 .env
 .claude/
 .DS_Store
 .playwright-cli/
+.goal-state/

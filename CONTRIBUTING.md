@@ -5,12 +5,15 @@ instructions for contributing to the project.
 
 ## 🙏 Welcome!
 
-slamy is a Go application. We welcome contributions from everyone, whether you're fixing
-a bug, adding a feature, or improving documentation.
+slamy is a **Node.js / TypeScript** project that ships both an MCP (Model Context Protocol) server
+and a standalone CLI for Slack. A separate Go implementation lives under `go-src/` and is released
+independently via `goreleaser`. Contributions to either side are welcome — bug fixes, features,
+tests, or documentation.
 
 ## 📖 Table of Contents
 
 - [Ways to Contribute](#ways-to-contribute)
+- [Before You Start](#before-you-start)
 - [Development Setup](#development-setup)
 - [Coding Standards](#coding-standards)
 - [Testing Requirements](#testing-requirements)
@@ -19,174 +22,238 @@ a bug, adding a feature, or improving documentation.
 - [Community Guidelines](#community-guidelines)
 - [Getting Help](#getting-help)
 
-## 🎯 Ways to Contribute
+## 🚀 Ways to Contribute
 
-- **Bug Reports**: Found a bug? Open an issue with reproduction steps
-- **Feature Requests**: Have an idea? Share it in a feature request issue
-- **Code Contributions**: Submit pull requests for bug fixes or features
-- **Documentation**: Improve README, add examples, or fix typos
-- **Testing**: Add test cases or improve test coverage
-- **Code Review**: Review open pull requests
+- 🐛 **Reporting bugs** — open a [Bug Report](.github/ISSUE_TEMPLATE/bug_report.yml)
+- 💡 **Suggesting features** — open a [Feature Request](.github/ISSUE_TEMPLATE/feature_request.yml)
+- 📝 **Improving documentation** — README, CONTRIBUTING, TESTING, code comments
+- 🔧 **Bug fixes** — pick up an issue labeled `bug` or `good first issue`
+- ✨ **New features** — discuss in an issue first to avoid wasted work
+- ✅ **Tests** — increase coverage for `src/cli/` and `src/lib/`
 
-## 🛠️ Development Setup
+## 🎯 Before You Start
+
+1. **Check existing issues / PRs** to avoid duplication
+2. For non-trivial features, **open an issue first** to discuss the design
+3. Read our **[Testing Guide](docs/TESTING.md)** to understand how we test
+4. Make sure you agree with our **[Code of Conduct](CODE_OF_CONDUCT.md)**
+5. For security-sensitive issues, follow **[SECURITY.md](SECURITY.md)** instead of opening a public issue
+
+## 💻 Development Setup
 
 ### Prerequisites
 
-- Go 1.21 or higher
-- Git
+- **Node.js 22+** and **npm 10+** (the project targets Node 22 LTS)
+- **Git**
+- A Slack workspace with a Slack app + bot token if you want to run end-to-end CLI / MCP smoke tests
 
-### Getting Started
-
-1. **Fork and clone the repository**
-   ```bash
-   git clone https://github.com/tackeyy/slamy.git
-   cd slamy
-   ```
-
-2. **Install dependencies**
-   ```bash
-   go mod download
-   ```
-
-3. **Run tests to verify setup**
-   ```bash
-   go test ./...
-   ```
-
-4. **Build the project**
-   ```bash
-   go build
-   ```
-
-## 📝 Coding Standards
-
-### Go Style
-
-- Follow official [Go Code Review Comments](https://github.com/golang/go/wiki/CodeReviewComments)
-- Use `gofmt` for formatting (enforced by CI)
-- Use `golangci-lint` for static analysis
-- Keep functions small and focused
-- Write descriptive variable names (avoid single letters except for loops)
-- Add comments for exported functions and types
-
-### Commit Messages
-
-Follow [Conventional Commits](https://www.conventionalcommits.org/):
-- `feat:` New feature
-- `fix:` Bug fix
-- `docs:` Documentation changes
-- `test:` Adding or updating tests
-- `refactor:` Code refactoring
-- `chore:` Maintenance tasks
-
-Example:
-```
-feat: add user authentication handler
-
-Implements JWT-based authentication for API endpoints.
-Includes middleware for token validation.
-```
-
-## ✅ Testing Requirements
-
-See [docs/TESTING.md](docs/TESTING.md) for detailed testing guidelines.
-
-### Test Types
-
-1. **Unit Tests**: For individual functions and methods
-2. **Integration Tests**: For component interactions
-3. **Table-driven Tests**: For testing multiple scenarios
-
-### Running Tests
+### Setup steps
 
 ```bash
-# Run all tests
-go test ./...
+# 1. Fork and clone
+git clone https://github.com/YOUR_USERNAME/slamy.git
+cd slamy
 
-# Run with coverage
-go test -cover ./...
+# 2. Install dependencies (also runs `npm run build` via the `prepare` script)
+npm install
 
-# Run with race detector
-go test -race ./...
+# 3. Run tests to verify the setup
+npm test
 
-# Run specific package
-go test ./pkg/auth/...
+# 4. Type-check
+npm run typecheck
+
+# 5. Build (emits dist/)
+npm run build
+
+# 6. Try the CLI locally
+node dist/cli/index.js --help
 ```
 
-### Test Coverage Expectations
+### Optional: Go binary
 
-- New features: 80%+ coverage required
-- Bug fixes: Add test that reproduces the bug
-- All tests must pass before merging
+The Go implementation under `go-src/` is independent. To work on it:
 
-## 📤 Submitting Changes
+```bash
+cd go-src
+go mod download
+go test ./...
+golangci-lint run
+```
 
-### Before Submitting
+## 📐 Coding Standards
 
-1. **Create a feature branch**
-   ```bash
-   git checkout -b feat/your-feature-name
-   ```
+### TypeScript style
 
-2. **Make your changes**
-   - Write clean, readable code
-   - Add tests for new functionality
-   - Update documentation as needed
+- Use **strict mode** (already configured in `tsconfig.json`)
+- Prefer `const` over `let`; never use `var`
+- Use descriptive names (`channelId` not `id`)
+- Avoid `any` — use `unknown` and narrow when needed
+- Add explicit return types on exported functions
+- Module system is **NodeNext**, so relative imports must include the `.js` extension
+  (e.g., `import { foo } from "./bar.js";`)
 
-3. **Run tests and linters**
-   ```bash
-   go test ./...
-   golangci-lint run
-   ```
+### Code organization
 
-4. **Commit your changes**
-   ```bash
-   git add .
-   git commit -m "feat: add your feature description"
-   ```
+- Library code lives in `src/lib/`, CLI entry points in `src/cli/`
+- Keep functions small and focused (single responsibility)
+- Match patterns in nearby files; don't introduce one-off abstractions
 
-5. **Push to your fork**
-   ```bash
-   git push origin feat/your-feature-name
-   ```
+### Commit message convention
 
-6. **Open a Pull Request**
-   - Use the PR template
-   - Link related issues
-   - Describe your changes clearly
+Format: `<type>(<scope>): <subject>`
 
-## 🔍 Code Review Process
+**Types:**
 
-### For Contributors
+- `feat:` — new feature
+- `fix:` — bug fix
+- `test:` — test additions / changes
+- `docs:` — documentation only
+- `refactor:` — code change with no functional difference
+- `perf:` — performance improvement
+- `chore:` — dependencies, tooling, build config
 
-- Be responsive to feedback
-- Keep discussions constructive
-- Update your PR based on review comments
-- Be patient - reviews may take a few days
+**Examples:**
 
-### Review Criteria
+```text
+feat(reactions): add reactions get command
+fix(cli): default timestamp output to local TZ
+docs(readme): document MCP server installation
+chore(deps): bump @slack/web-api to 7.10.0
+```
 
-- ✅ Functionality: Does it work as intended?
-- ✅ Tests: Are there adequate tests?
-- ✅ Code Quality: Is it readable and maintainable?
-- ✅ Documentation: Are changes documented?
-- ✅ Style: Does it follow Go conventions?
+## 🧪 Testing Requirements
+
+**All code contributions MUST include tests.** See **[docs/TESTING.md](docs/TESTING.md)** for the
+full testing guide.
+
+### Test types we use
+
+1. **Unit tests** — pure functions (`src/lib/__tests__/`)
+2. **Validation tests** — CLI argument / input validation (`src/__tests__/cli-validation.test.ts`)
+3. **Output tests** — text / JSON / TSV CLI output formatting (`src/__tests__/cli-output.test.ts`)
+4. **Error handling tests** — error classes, exit codes (`src/__tests__/cli-errors.test.ts`)
+5. **Client tests** — Slack API client wrappers (mocked `@slack/web-api`)
+
+### Running tests
+
+```bash
+# Run all tests once
+npm test
+
+# Watch mode (during development)
+npm run test:watch
+
+# Run a single file
+npx vitest run src/lib/__tests__/split.test.ts
+
+# Run with coverage (uses thresholds in vitest.config.ts)
+npx vitest run --coverage
+```
+
+### Coverage expectations
+
+- **New features**: aim for 100% coverage of new code
+- **Bug fixes**: add a regression test that reproduces the bug before the fix
+- **Project-wide threshold**: 80% lines / functions / branches / statements
+  (configured in `vitest.config.ts`)
+
+## 📝 Submitting Changes
+
+### 1. Create a branch
+
+```bash
+git checkout -b feat/your-feature-name
+# or
+git checkout -b fix/short-bug-description
+```
+
+### 2. Make your changes
+
+- Write code + tests
+- Update documentation if behavior changes
+- Add a changeset if your change should ship to npm:
+
+  ```bash
+  npx changeset
+  ```
+
+  **Forgot to add one?** It's fine — open a follow-up PR with a `patch`-level
+  changeset before the next release. The release workflow won't publish until a
+  changeset exists, so nothing breaks silently.
+
+### 3. Verify quality locally
+
+```bash
+npm run typecheck   # must pass
+npm test            # must pass
+npm run lint:md     # markdown lint (if you touched .md)
+npm run build       # must succeed
+```
+
+### 4. Commit and push
+
+```bash
+# Stage specific files (avoid `git add .` to prevent committing .env / secrets)
+git add src/path/to/changed-file.ts docs/...
+git commit -m "feat(scope): short description"
+git push origin <your-branch>
+```
+
+### 5. Open a Pull Request
+
+- Fill out the PR template fully
+- Link related issues with `Closes #123`
+- Include testing evidence (command output, screenshots)
+
+### PR checklist
+
+- ✅ `npm test` passes locally
+- ✅ `npm run typecheck` passes
+- ✅ `npm run build` succeeds
+- ✅ Code follows existing patterns
+- ✅ Commit messages follow the convention
+- ✅ Tests added for new behavior / regression
+- ✅ Changeset added (if user-visible behavior changes)
+- ✅ Docs updated (README / CONTRIBUTING / TESTING) if applicable
+
+## 👀 Code Review Process
+
+### For contributors
+
+- Be responsive to feedback and questions
+- Ask for clarification when feedback is unclear
+- Push updates to the same branch; the PR auto-updates
+- Be patient — initial review may take 2–3 business days
+
+### Review criteria
+
+Reviewers will check:
+
+- ✅ **Functionality** — does it work as intended?
+- ✅ **Tests** — are they meaningful and passing?
+- ✅ **Code quality** — readable and maintainable?
+- ✅ **Documentation** — clear and up to date?
+- ✅ **Performance** — any obvious regressions?
+- ✅ **Security** — any token / permission / injection concerns?
 
 ## 🤝 Community Guidelines
 
-Please read and follow our [Code of Conduct](CODE_OF_CONDUCT.md).
+- Be respectful and welcoming
+- Follow our [Code of Conduct](CODE_OF_CONDUCT.md)
+- Provide constructive feedback
+- Assume good intent
 
-### Recognition
+## 📬 Getting Help
 
-Contributors are recognized in:
-- GitHub Contributors page
-- Release notes for significant contributions
+- 💬 **Questions** — open a [Question issue](.github/ISSUE_TEMPLATE/question.yml)
+- 🐛 **Bug reports** — [Bug Report template](.github/ISSUE_TEMPLATE/bug_report.yml)
+- 💡 **Feature requests** — [Feature Request template](.github/ISSUE_TEMPLATE/feature_request.yml)
+- 🔐 **Security issues** — see [SECURITY.md](SECURITY.md) (do **not** use public issues)
 
-## 💬 Getting Help
+## 🙌 Recognition
 
-- **Questions**: Open a [Question issue](.github/ISSUE_TEMPLATE/question.yml)
-- **Discussion**: Use GitHub Discussions (if enabled)
-- **Bugs**: Open a [Bug Report](.github/ISSUE_TEMPLATE/bug_report.yml)
+All contributors are recognized on the [GitHub Contributors page](https://github.com/tackeyy/slamy/graphs/contributors) and in release notes for significant contributions.
 
 ---
 
