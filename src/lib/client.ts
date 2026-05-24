@@ -277,6 +277,29 @@ export class SlamyClient {
     });
   }
 
+  /**
+   * 指定メッセージに付いているリアクション一覧を返す (reactions.get API)。
+   *
+   * - `full: true` で各リアクションに reaction した全 users を取得
+   * - メッセージが見つからない / reactions が無い場合は空配列
+   */
+  async getMessageReactions(
+    channel: string,
+    ts: string,
+  ): Promise<Array<{ name: string; count: number; users: string[] }>> {
+    const res = await (this.botClient.reactions as any).get({
+      channel,
+      timestamp: ts,
+      full: true,
+    });
+    const reactions = res?.message?.reactions || [];
+    return reactions.map((r: any) => ({
+      name: r.name,
+      count: r.count,
+      users: Array.isArray(r.users) ? r.users : [],
+    }));
+  }
+
   async uploadFile(
     channel: string,
     fileOrPath: string | Buffer,

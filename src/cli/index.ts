@@ -516,6 +516,47 @@ reactions
   });
 
 reactions
+  .command("get <channel_or_url> [timestamp]")
+  .description("Get reactions on a specific message (channel + ts, or Slack permalink URL)")
+  .option("--resolve-names", "Resolve user_id to display names")
+  .action(async (channelOrUrl, timestampArg, opts) => {
+    try {
+      const client = createClient();
+      const mode = getOutputMode();
+      const target = resolveTarget(channelOrUrl, timestampArg);
+      if (!target.ts) {
+        console.error("Error: timestamp is required (pass as 2nd arg or via permalink URL)");
+        process.exit(1);
+      }
+      const reactions = await client.getMessageReactions(target.channel, target.ts);
+
+      const labelFor = opts.resolveNames
+        ? await buildUserLabeler(client, reactions.flatMap((r) => r.users))
+        : (id: string) => id;
+
+      if (mode === "json") {
+        jsonOutput({ channel: target.channel, ts: target.ts, reactions });
+      } else if (mode === "plain") {
+        for (const r of reactions) {
+          console.log(`${r.name}\t${r.count}\t${r.users.map(labelFor).join(",")}`);
+        }
+      } else {
+        if (reactions.length === 0) {
+          console.log("No reactions on this message");
+          return;
+        }
+        for (const r of reactions) {
+          const users = r.users.map(labelFor).join(", ");
+          console.log(`:${r.name}: ${r.count}  ${users}`);
+        }
+      }
+    } catch (err: any) {
+      console.error(`Error: ${err.message}`);
+      process.exit(1);
+    }
+  });
+
+reactions
   .command("add <channel_or_url> [timestamp]")
   .description("Add a reaction to a message (channel + ts, or Slack permalink URL)")
   .requiredOption("--name <emoji>", "Reaction emoji name (without colons)")
