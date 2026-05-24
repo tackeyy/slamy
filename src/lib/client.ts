@@ -89,16 +89,22 @@ export class SlamyClient {
     if (!this.userListPromise) {
       this.userListPromise = (async () => {
         try {
-          const res = await this.userClient.users.list({});
-          for (const u of res.members || []) {
-            if (!u.id) continue;
-            const display =
-              u.profile?.display_name ||
-              u.real_name ||
-              u.name ||
-              u.id;
-            this.userNameCache.set(u.id, display);
-          }
+          // cursor pagination で 1000 名超のワークスペースでも全件 cache。
+          // resolveChannelName と同型実装 (PR #23)。
+          let cursor: string | undefined;
+          do {
+            const res: any = await this.userClient.users.list({ cursor, limit: 1000 });
+            for (const u of res.members || []) {
+              if (!u.id) continue;
+              const display =
+                u.profile?.display_name ||
+                u.real_name ||
+                u.name ||
+                u.id;
+              this.userNameCache.set(u.id, display);
+            }
+            cursor = res.response_metadata?.next_cursor || undefined;
+          } while (cursor);
         } catch {
           // users.list 失敗時も users.info にフォールバック
         }
