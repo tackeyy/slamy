@@ -27,6 +27,10 @@ export class SlamyClient {
   private botTokenStr: string;
   private userTokenStr: string;
 
+  // user_id -> display name (空文字 = 解決失敗、id 自体を返すと区別不能なので未解決のまま)
+  private userNameCache = new Map<string, string>();
+  private userListWarmed = false;
+
   constructor(opts: SlamyClientOptions) {
     if (!opts.botToken && !opts.userToken) {
       throw new Error("Either userToken or botToken must be provided");
@@ -37,6 +41,85 @@ export class SlamyClient {
     this.userClient = new WebClient(opts.userToken || opts.botToken, { logLevel: LogLevel.WARN });
     this.botTokenStr = opts.botToken || opts.userToken || "";
     this.userTokenStr = opts.userToken || opts.botToken || "";
+  }
+
+  // --- User name resolver ---
+
+  /**
+   * user_id (U..) or bot_id (B..) を表示名に解決する。
+   *
+   * 戦略:
+   * 1. 初回呼び出し時に users.list を全件取得して in-memory cache に格納
+   * 2. cache miss なら users.info で個別取得 (cache に追加)
+   * 3. bot_id の場合は bots.info で取得
+   * 4. すべて失敗したら id 自体を返す (呼び出し側で format 崩れしないように)
+   *
+   * 表示名の優先順位: profile.display_name > real_name > name > id
+   */
+  async resolveUserName(userOrBotId: string): Promise<string> {
+    if (!userOrBotId) return userOrBotId;
+
+    if (this.userNameCache.has(userOrBotId)) {
+      return this.userNameCache.get(userOrBotId)!;
+    }
+
+    // Bot ID は users.list/info に出ないので分岐
+    if (userOrBotId.startsWith("B")) {
+      try {
+        const res = await (this.botClient as any).bots.info({ bot: userOrBotId });
+        const name = res.bot?.name || userOrBotId;
+        this.userNameCache.set(userOrBotId, name);
+        return name;
+      } catch {
+        this.userNameCache.set(userOrBotId, userOrBotId);
+        return userOrBotId;
+      }
+    }
+
+    if (!this.userListWarmed) {
+      try {
+        const res = await this.userClient.users.list({});
+        for (const u of res.members || []) {
+          if (!u.id) continue;
+          const display =
+            u.profile?.display_name ||
+            u.real_name ||
+            u.name ||
+            u.id;
+          this.userNameCache.set(u.id, display);
+        }
+      } catch {
+        // users.list 失敗時も users.info にフォールバック
+      }
+      this.userListWarmed = true;
+      if (this.userNameCache.has(userOrBotId)) {
+        return this.userNameCache.get(userOrBotId)!;
+      }
+    }
+
+    try {
+      const res = await this.userClient.users.info({ user: userOrBotId });
+      const u = res.user;
+      const display =
+        u?.profile?.display_name ||
+        u?.real_name ||
+        u?.name ||
+        userOrBotId;
+      this.userNameCache.set(userOrBotId, display);
+      return display;
+    } catch {
+      this.userNameCache.set(userOrBotId, userOrBotId);
+      return userOrBotId;
+    }
+  }
+
+  /** 複数 ID をまとめて解決する (users.list は 1 回だけ呼ばれる)。 */
+  async resolveUserNames(ids: string[]): Promise<Map<string, string>> {
+    const result = new Map<string, string>();
+    for (const id of ids) {
+      result.set(id, await this.resolveUserName(id));
+    }
+    return result;
   }
 
   // --- Send operations ---

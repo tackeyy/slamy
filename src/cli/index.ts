@@ -48,6 +48,21 @@ function formatTimestamp(ts: string): string {
   return libFormatTimestamp(ts, getTzOptions());
 }
 
+// "Name (U123)" 形式のラベラーを返す。id が解決できなければ id のみ。
+async function buildUserLabeler(
+  client: SlamyClient,
+  ids: string[],
+): Promise<(id: string) => string> {
+  const uniq = Array.from(new Set(ids.filter((id) => id)));
+  const names = await client.resolveUserNames(uniq);
+  return (id: string): string => {
+    if (!id) return id;
+    const name = names.get(id);
+    if (!name || name === id) return id;
+    return `${name} (${id})`;
+  };
+}
+
 // --- auth ---
 const auth = program.command("auth").description("Authentication commands");
 
@@ -148,6 +163,7 @@ channels
   .option("--limit <n>", "Maximum number of messages", "20")
   .option("--oldest <ts>", "Only messages after this Unix timestamp")
   .option("--latest <ts>", "Only messages before this Unix timestamp")
+  .option("--resolve-names", "Resolve user_id / bot_id to display names")
   .action(async (channelId, opts) => {
     try {
       const client = createClient();
@@ -158,18 +174,22 @@ channels
         latest: opts.latest,
       });
 
+      const labelFor = opts.resolveNames
+        ? await buildUserLabeler(client, messages.map((m) => m.user).filter((u) => !!u))
+        : (id: string) => id;
+
       if (mode === "json") {
         jsonOutput(messages);
       } else if (mode === "plain") {
         for (const msg of messages) {
           const text = msg.text.replace(/\n/g, "\\n");
-          console.log(`${msg.ts}\t${msg.user}\t${text}`);
+          console.log(`${msg.ts}\t${labelFor(msg.user)}\t${text}`);
         }
       } else {
         for (const msg of messages) {
           const ts = formatTimestamp(msg.ts);
           const thread = msg.reply_count ? ` [${msg.reply_count} replies]` : "";
-          console.log(`[${ts}] ${msg.user}: ${msg.text}${thread}`);
+          console.log(`[${ts}] ${labelFor(msg.user)}: ${msg.text}${thread}`);
         }
       }
     } catch (err: any) {
@@ -567,6 +587,7 @@ threads
   .command("replies <channel_id> <thread_ts>")
   .description("Get thread replies")
   .option("--limit <n>", "Maximum number of replies", "50")
+  .option("--resolve-names", "Resolve user_id / bot_id to display names")
   .action(async (channelId, threadTs, opts) => {
     try {
       const client = createClient();
@@ -575,17 +596,21 @@ threads
         limit: parseInt(opts.limit, 10),
       });
 
+      const labelFor = opts.resolveNames
+        ? await buildUserLabeler(client, msgs.map((m) => m.user).filter((u) => !!u))
+        : (id: string) => id;
+
       if (mode === "json") {
         jsonOutput(msgs);
       } else if (mode === "plain") {
         for (const msg of msgs) {
           const text = msg.text.replace(/\n/g, "\\n");
-          console.log(`${msg.ts}\t${msg.user}\t${text}`);
+          console.log(`${msg.ts}\t${labelFor(msg.user)}\t${text}`);
         }
       } else {
         for (const msg of msgs) {
           const ts = formatTimestamp(msg.ts);
-          console.log(`[${ts}] ${msg.user}: ${msg.text}`);
+          console.log(`[${ts}] ${labelFor(msg.user)}: ${msg.text}`);
         }
       }
     } catch (err: any) {
