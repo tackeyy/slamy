@@ -496,16 +496,18 @@ reactions
         return;
       }
 
-      const channelLabelFor = opts.resolveNames
-        ? await (async () => {
-            const ids = Array.from(new Set(result.items.map((i) => i.channel).filter((c) => !!c)));
-            const names = await client.resolveChannelNames(ids);
-            return (id: string): string => {
-              const name = names.get(id);
-              return name && name !== id ? name : id;
-            };
-          })()
-        : (id: string) => id;
+      // JSON モードでは生の channel_id をそのまま返すので解決スキップ (API コール節約)
+      const channelLabelFor =
+        opts.resolveNames && mode !== "json"
+          ? await (async () => {
+              const ids = Array.from(new Set(result.items.map((i) => i.channel).filter((c) => !!c)));
+              const names = await client.resolveChannelNames(ids);
+              return (id: string): string => {
+                const name = names.get(id);
+                return name && name !== id ? name : id;
+              };
+            })()
+          : (id: string) => id;
 
       if (mode === "json") {
         jsonOutput(result);
@@ -947,7 +949,7 @@ assistant
       if (mode === "json") {
         jsonOutput({ ok: true, channel: opts.channel, thread: opts.thread, status: opts.status });
       } else if (mode === "plain") {
-        console.log(`ok\t${opts.channel}\t${opts.thread}`);
+        console.log(`ok\t${opts.channel}\t${opts.thread}\t${opts.status}`);
       } else {
         console.log(`✅ status set on ${opts.channel}/${opts.thread}: "${opts.status}"`);
       }

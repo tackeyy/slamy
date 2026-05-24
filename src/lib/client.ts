@@ -155,14 +155,22 @@ export class SlamyClient {
     if (!this.channelListPromise) {
       this.channelListPromise = (async () => {
         try {
-          const res = await this.userClient.conversations.list({
-            types: "public_channel,private_channel,mpim,im",
-            limit: 1000,
-          });
-          for (const ch of res.channels || []) {
-            if (!ch.id) continue;
-            this.channelNameCache.set(ch.id, ch.name || ch.id);
-          }
+          // IM (DM) は Slack API 仕様で name=null のため types から除外。
+          // DM の表示名を欲しい場合は呼び出し側で resolveUserName(channel.user) を使う。
+          // cursor ページネーション対応で 1000 件超のワークスペースでも全件 cache。
+          let cursor: string | undefined;
+          do {
+            const res: any = await this.userClient.conversations.list({
+              types: "public_channel,private_channel,mpim",
+              limit: 1000,
+              cursor,
+            });
+            for (const ch of res.channels || []) {
+              if (!ch.id) continue;
+              this.channelNameCache.set(ch.id, ch.name || ch.id);
+            }
+            cursor = res.response_metadata?.next_cursor || undefined;
+          } while (cursor);
         } catch {
           // conversations.list 失敗時も conversations.info にフォールバック
         }

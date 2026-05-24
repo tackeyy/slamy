@@ -118,4 +118,44 @@ describe("resolveChannelName", () => {
     expect(result.get("C003")).toBe("dev");
     expect(mock.conversations.list).toHaveBeenCalledTimes(1);
   });
+
+  it("name=null の channel (mpim 等) は id を透過する", async () => {
+    const { client, mock } = await makeClient();
+    mock.conversations.list.mockResolvedValue({
+      ok: true,
+      channels: [
+        { id: "G_MPIM", name: null },
+        { id: "C_NORMAL", name: "general" },
+      ],
+    } as any);
+
+    expect(await client.resolveChannelName("G_MPIM")).toBe("G_MPIM");
+    expect(await client.resolveChannelName("C_NORMAL")).toBe("general");
+  });
+
+  it("conversations.list の cursor pagination を最後まで追跡する (1000 件超の WS 対応)", async () => {
+    const { client, mock } = await makeClient();
+    mock.conversations.list
+      .mockResolvedValueOnce({
+        ok: true,
+        channels: [{ id: "C001", name: "page1-a" }],
+        response_metadata: { next_cursor: "cursor-page-2" },
+      } as any)
+      .mockResolvedValueOnce({
+        ok: true,
+        channels: [{ id: "C002", name: "page2-a" }],
+        response_metadata: { next_cursor: "" },
+      } as any);
+
+    const r1 = await client.resolveChannelName("C001");
+    const r2 = await client.resolveChannelName("C002");
+
+    expect(r1).toBe("page1-a");
+    expect(r2).toBe("page2-a");
+    expect(mock.conversations.list).toHaveBeenCalledTimes(2);
+    expect(mock.conversations.list).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({ cursor: "cursor-page-2" }),
+    );
+  });
 });
