@@ -5,6 +5,7 @@ import { Readable } from "node:stream";
 import { pipeline } from "node:stream/promises";
 import { basename } from "node:path";
 import { SlamyClient } from "../lib/client.js";
+import { formatTimestamp as libFormatTimestamp } from "../lib/tz.js";
 
 const program = new Command();
 
@@ -13,13 +14,20 @@ program
   .description("Slack CLI tool")
   .version("2.0.0")
   .option("--json", "Output in JSON format")
-  .option("--plain", "Output in TSV format");
+  .option("--plain", "Output in TSV format")
+  .option("--utc", "Display timestamps in UTC (default: local TZ)")
+  .option("--tz <tz>", "Display timestamps in the specified IANA TZ (e.g. Asia/Tokyo)");
 
 function getOutputMode(): "json" | "plain" | "human" {
   const opts = program.opts();
   if (opts.json) return "json";
   if (opts.plain) return "plain";
   return "human";
+}
+
+function getTzOptions(): { utc?: boolean; tz?: string } {
+  const opts = program.opts();
+  return { utc: opts.utc, tz: opts.tz };
 }
 
 function createClient(): SlamyClient {
@@ -37,10 +45,7 @@ function jsonOutput(data: unknown): void {
 }
 
 function formatTimestamp(ts: string): string {
-  const sec = parseInt(ts, 10);
-  if (isNaN(sec) || sec === 0) return ts;
-  const d = new Date(sec * 1000);
-  return d.toISOString().replace("T", " ").slice(0, 16);
+  return libFormatTimestamp(ts, getTzOptions());
 }
 
 // --- auth ---
@@ -250,14 +255,16 @@ messages
       }
 
       const result = await client.scheduleMessage(channelId, opts.text, postAt);
-      const scheduled = new Date(postAt * 1000).toISOString().replace("T", " ").slice(0, 16);
+      const tzOpts = getTzOptions();
+      const scheduled = libFormatTimestamp(String(postAt), tzOpts);
+      const tzLabel = tzOpts.utc ? " UTC" : tzOpts.tz ? ` ${tzOpts.tz}` : "";
 
       if (mode === "json") {
         jsonOutput(result);
       } else if (mode === "plain") {
         console.log(`${result.channel}\t${result.scheduled_message_id}\t${postAt}`);
       } else {
-        console.log(`Message scheduled for ${scheduled} UTC (id: ${result.scheduled_message_id})`);
+        console.log(`Message scheduled for ${scheduled}${tzLabel} (id: ${result.scheduled_message_id})`);
       }
     } catch (err: any) {
       console.error(`Error: ${err.message}`);
