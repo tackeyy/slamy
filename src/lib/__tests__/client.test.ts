@@ -122,12 +122,18 @@ describe("scheduleMessage", () => {
     });
   });
 
-  it("4000文字超でエラー", async () => {
+  it("40000文字超でエラー (chat.scheduleMessage は chat.postMessage と同じ上限)", async () => {
     const client = new SlamyClient({ userToken: "xoxp-test" });
-    const longText = "a".repeat(2500) + "\n\n" + "b".repeat(2500);
+    const longText = "a".repeat(40001);
     await expect(client.scheduleMessage("C123", longText, 1700000000)).rejects.toThrow(
       "does not support auto-splitting",
     );
+  });
+
+  it("40000文字以内なら成功する (旧 3900 制限なら 5000 chars でも失敗していた)", async () => {
+    const client = new SlamyClient({ userToken: "xoxp-test" });
+    await client.scheduleMessage("C123", "a".repeat(5000), 1700000000);
+    expect(mockWebClient.chat.scheduleMessage).toHaveBeenCalledTimes(1);
   });
 
   it("mrkdwn を自動修正する", async () => {

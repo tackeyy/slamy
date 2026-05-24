@@ -528,19 +528,32 @@ reactions
         console.error("Error: timestamp is required (pass as 2nd arg or via permalink URL)");
         process.exit(1);
       }
-      const reactions = await client.getMessageReactions(target.channel, target.ts);
+      const detail = await client.getMessageReactionsDetail(target.channel, target.ts);
+      const reactions = detail.reactions;
 
       const labelFor = opts.resolveNames
         ? await buildUserLabeler(client, reactions.flatMap((r) => r.users))
         : (id: string) => id;
 
       if (mode === "json") {
-        jsonOutput({ channel: target.channel, ts: target.ts, reactions });
+        jsonOutput({
+          channel: target.channel,
+          ts: target.ts,
+          message_text: detail.message_text,
+          reactions,
+        });
       } else if (mode === "plain") {
         for (const r of reactions) {
           console.log(`${r.name}\t${r.count}\t${r.users.map(labelFor).join(",")}`);
         }
       } else {
+        if (detail.message_text) {
+          const preview =
+            detail.message_text.length > 100
+              ? detail.message_text.slice(0, 100) + "..."
+              : detail.message_text;
+          console.log(`Message: ${preview}\n`);
+        }
         if (reactions.length === 0) {
           console.log("No reactions on this message");
           return;
@@ -626,6 +639,7 @@ search
   .option("--page <n>", "Page number", "1")
   .option("--sort <field>", "Sort by (timestamp or score)", "timestamp")
   .option("--sort-dir <dir>", "Sort direction (asc or desc)", "desc")
+  .option("--resolve-names", "Resolve user_id / bot_id to display names")
   .action(async (query, opts) => {
     try {
       const client = createClient();
@@ -637,13 +651,17 @@ search
         sortDir: opts.sortDir,
       });
 
+      const labelFor = opts.resolveNames
+        ? await buildUserLabeler(client, result.matches.map((m) => m.user).filter((u) => !!u))
+        : (id: string) => id;
+
       if (mode === "json") {
         jsonOutput(result);
       } else if (mode === "plain") {
         for (const m of result.matches) {
           const text = m.text.replace(/\n/g, "\\n");
           console.log(
-            `${m.ts}\t${m.channel_id}\t${m.channel}\t${m.user}\t${text}\t${m.permalink}`,
+            `${m.ts}\t${m.channel_id}\t${m.channel}\t${labelFor(m.user)}\t${text}\t${m.permalink}`,
           );
         }
       } else {
@@ -652,7 +670,7 @@ search
           const ts = formatTimestamp(m.ts);
           let text = m.text;
           if (text.length > 200) text = text.slice(0, 200) + "...";
-          console.log(`[${ts}] #${m.channel} ${m.user}:`);
+          console.log(`[${ts}] #${m.channel} ${labelFor(m.user)}:`);
           console.log(`  ${text}`);
           console.log(`  ${m.permalink}\n`);
         }

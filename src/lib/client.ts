@@ -3,7 +3,6 @@ import { readFileSync } from "node:fs";
 import { fixSlackMrkdwn } from "./mrkdwn.js";
 import {
   splitMessage,
-  MAX_MESSAGE_LENGTH,
   CHAT_POSTMESSAGE_MAX_LENGTH,
   CHAT_UPDATE_MAX_LENGTH,
 } from "./split.js";
@@ -34,7 +33,9 @@ export class SlamyClient {
 
   // user_id -> display name (空文字 = 解決失敗、id 自体を返すと区別不能なので未解決のまま)
   private userNameCache = new Map<string, string>();
-  private userListWarmed = false;
+  // 並列呼び出し時に users.list が複数回飛ぶ race condition を避けるため
+  // 「進行中の users.list Promise」を保持する。
+  private userListPromise: Promise<void> | null = null;
 
   constructor(opts: SlamyClientOptions) {
     if (!opts.botToken && !opts.userToken) {
@@ -81,25 +82,27 @@ export class SlamyClient {
       }
     }
 
-    if (!this.userListWarmed) {
-      try {
-        const res = await this.userClient.users.list({});
-        for (const u of res.members || []) {
-          if (!u.id) continue;
-          const display =
-            u.profile?.display_name ||
-            u.real_name ||
-            u.name ||
-            u.id;
-          this.userNameCache.set(u.id, display);
+    if (!this.userListPromise) {
+      this.userListPromise = (async () => {
+        try {
+          const res = await this.userClient.users.list({});
+          for (const u of res.members || []) {
+            if (!u.id) continue;
+            const display =
+              u.profile?.display_name ||
+              u.real_name ||
+              u.name ||
+              u.id;
+            this.userNameCache.set(u.id, display);
+          }
+        } catch {
+          // users.list 失敗時も users.info にフォールバック
         }
-      } catch {
-        // users.list 失敗時も users.info にフォールバック
-      }
-      this.userListWarmed = true;
-      if (this.userNameCache.has(userOrBotId)) {
-        return this.userNameCache.get(userOrBotId)!;
-      }
+      })();
+    }
+    await this.userListPromise;
+    if (this.userNameCache.has(userOrBotId)) {
+      return this.userNameCache.get(userOrBotId)!;
     }
 
     try {
@@ -120,11 +123,10 @@ export class SlamyClient {
 
   /** 複数 ID をまとめて解決する (users.list は 1 回だけ呼ばれる)。 */
   async resolveUserNames(ids: string[]): Promise<Map<string, string>> {
-    const result = new Map<string, string>();
-    for (const id of ids) {
-      result.set(id, await this.resolveUserName(id));
-    }
-    return result;
+    const entries = await Promise.all(
+      ids.map(async (id) => [id, await this.resolveUserName(id)] as const),
+    );
+    return new Map(entries);
   }
 
   // --- Send operations ---
@@ -135,11 +137,12 @@ export class SlamyClient {
     postAt: number,
   ): Promise<{ channel: string; scheduled_message_id: string; post_at: number }> {
     const fixed = fixSlackMrkdwn(text);
-    const chunks = splitMessage(fixed);
+    // chat.scheduleMessage は chat.postMessage と同じ 40,000 chars 上限 (公式仕様)
+    const chunks = splitMessage(fixed, CHAT_POSTMESSAGE_MAX_LENGTH);
 
     if (chunks.length > 1) {
       throw new Error(
-        `Message exceeds ${MAX_MESSAGE_LENGTH} characters. scheduleMessage does not support auto-splitting.`,
+        `Message exceeds ${CHAT_POSTMESSAGE_MAX_LENGTH} characters. scheduleMessage does not support auto-splitting.`,
       );
     }
 
@@ -292,17 +295,35 @@ export class SlamyClient {
     channel: string,
     ts: string,
   ): Promise<Array<{ name: string; count: number; users: string[] }>> {
+    const detail = await this.getMessageReactionsDetail(channel, ts);
+    return detail.reactions;
+  }
+
+  /**
+   * 指定メッセージのリアクション一覧 + 元メッセージのテキストを返す。
+   * `getMessageReactions` よりリッチな情報を必要とする UI 用途向け。
+   */
+  async getMessageReactionsDetail(
+    channel: string,
+    ts: string,
+  ): Promise<{
+    message_text: string;
+    reactions: Array<{ name: string; count: number; users: string[] }>;
+  }> {
     const res = await (this.botClient.reactions as any).get({
       channel,
       timestamp: ts,
       full: true,
     });
-    const reactions = res?.message?.reactions || [];
-    return reactions.map((r: any) => ({
+    const reactions = (res?.message?.reactions || []).map((r: any) => ({
       name: r.name,
       count: r.count,
       users: Array.isArray(r.users) ? r.users : [],
     }));
+    return {
+      message_text: res?.message?.text || "",
+      reactions,
+    };
   }
 
   async uploadFile(
