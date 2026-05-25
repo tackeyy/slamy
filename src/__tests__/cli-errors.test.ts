@@ -1,17 +1,21 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import type { Mock } from "vitest";
 import { handleCliError, requireToken } from "../lib/cli-errors.js";
+import type { ExitFn } from "../lib/cli-errors.js";
+
+type LogFn = (msg: string) => void;
 
 // 実 CLI コードと結びついたテスト。
 // src/cli/index.ts の createClient() は requireToken を呼んでおり、
 // 各コマンドの catch ブロックは将来 handleCliError へ移行可能な形にしてある。
 
 describe("handleCliError", () => {
-  let exit: ReturnType<typeof vi.fn>;
-  let log: ReturnType<typeof vi.fn>;
+  let exit: Mock<ExitFn>;
+  let log: Mock<LogFn>;
 
   beforeEach(() => {
-    exit = vi.fn();
-    log = vi.fn();
+    exit = vi.fn<ExitFn>();
+    log = vi.fn<LogFn>();
   });
 
   it("logs an Error's .message and exits with code 1", () => {
@@ -45,12 +49,12 @@ describe("handleCliError", () => {
 });
 
 describe("requireToken", () => {
-  let exit: ReturnType<typeof vi.fn>;
-  let log: ReturnType<typeof vi.fn>;
+  let exit: Mock<ExitFn>;
+  let log: Mock<LogFn>;
 
   beforeEach(() => {
-    exit = vi.fn();
-    log = vi.fn();
+    exit = vi.fn<ExitFn>();
+    log = vi.fn<LogFn>();
   });
 
   it("returns user token when only SLACK_USER_TOKEN is set", () => {
@@ -107,8 +111,8 @@ describe("requireToken — integration with process.env style typing", () => {
 
   it("accepts process.env directly", () => {
     process.env["SLACK_BOT_TOKEN"] = "xoxb-real-shape";
-    const exit = vi.fn();
-    const log = vi.fn();
+    const exit = vi.fn<ExitFn>();
+    const log = vi.fn<LogFn>();
     const tokens = requireToken(process.env, exit, log);
     expect(tokens?.botToken).toBe("xoxb-real-shape");
     expect(exit).not.toHaveBeenCalled();

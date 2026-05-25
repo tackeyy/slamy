@@ -19,7 +19,7 @@ beforeEach(async () => {
   vi.clearAllMocks();
   mockWebClient = createMockWebClient();
   const { WebClient } = await import("@slack/web-api");
-  (WebClient as any).mockImplementation(() => mockWebClient);
+  (WebClient as any).mockImplementation(function () { return mockWebClient; });
 });
 
 describe("SlamyClient constructor", () => {
@@ -42,7 +42,7 @@ describe("トークン分離", () => {
     const userMock = createMockWebClient();
 
     const { WebClient } = await import("@slack/web-api");
-    (WebClient as any).mockImplementation((token: string) => {
+    (WebClient as any).mockImplementation(function (token: string) {
       if (token === "xoxb-bot") return botMock;
       if (token === "xoxp-user") return userMock;
       return createMockWebClient();
@@ -76,7 +76,7 @@ describe("トークン分離", () => {
     const botMock = createMockWebClient();
 
     const { WebClient } = await import("@slack/web-api");
-    (WebClient as any).mockImplementation(() => botMock);
+    (WebClient as any).mockImplementation(function () { return botMock; });
 
     const client = new SlamyClient({ botToken: "xoxb-bot" });
 
@@ -91,7 +91,7 @@ describe("トークン分離", () => {
     const userMock = createMockWebClient();
 
     const { WebClient } = await import("@slack/web-api");
-    (WebClient as any).mockImplementation(() => userMock);
+    (WebClient as any).mockImplementation(function () { return userMock; });
 
     const client = new SlamyClient({ userToken: "xoxp-user" });
 
@@ -158,7 +158,7 @@ describe("scheduleMessage", () => {
     const userMock = createMockWebClient();
 
     const { WebClient } = await import("@slack/web-api");
-    (WebClient as any).mockImplementation((token: string) => {
+    (WebClient as any).mockImplementation(function (token: string) {
       if (token === "xoxb-bot") return botMock;
       if (token === "xoxp-user") return userMock;
       return createMockWebClient();
@@ -744,7 +744,7 @@ describe("setAssistantStatus", () => {
     const userMock = createMockWebClient();
 
     const { WebClient } = await import("@slack/web-api");
-    (WebClient as any).mockImplementation((token: string) => {
+    (WebClient as any).mockImplementation(function (token: string) {
       if (token === "xoxb-bot") return botMock;
       if (token === "xoxp-user") return userMock;
       return createMockWebClient();

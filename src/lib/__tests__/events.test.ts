@@ -6,13 +6,13 @@ const mockStop = vi.fn().mockResolvedValue(undefined);
 const eventHandlers: Record<string, Function> = {};
 
 vi.mock("@slack/bolt", () => ({
-  App: vi.fn().mockImplementation(() => ({
+  App: vi.fn().mockImplementation(function () { return {
     event: (name: string, handler: Function) => {
       eventHandlers[name] = handler;
     },
     start: mockStart,
     stop: mockStop,
-  })),
+  }; }),
 }));
 
 import { SlamyEvents } from "../events.js";
