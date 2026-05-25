@@ -1,9 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import type { Mock } from "vitest";
 import { handleCliError, requireToken } from "../lib/cli-errors.js";
-import type { ExitFn } from "../lib/cli-errors.js";
-
-type LogFn = (msg: string) => void;
+import type { ExitFn, LogFn } from "../lib/cli-errors.js";
 
 // 実 CLI コードと結びついたテスト。
 // src/cli/index.ts の createClient() は requireToken を呼んでおり、
