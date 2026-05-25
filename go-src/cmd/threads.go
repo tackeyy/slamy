@@ -17,6 +17,12 @@ var threadsCmd = &cobra.Command{
 	Short: "Thread operations",
 }
 
+// threadsClientFunc は threads コマンドが使う Slack クライアントを返す。
+// テストで差し替えるための DI ポイント (Issue #51 PR-1)。
+var threadsClientFunc = func() (*slackutil.Client, error) {
+	return slackutil.NewClient()
+}
+
 var threadsRepliesCmd = &cobra.Command{
 	Use:   "replies <channel_id> <thread_ts>",
 	Short: "Get thread replies",
@@ -25,7 +31,7 @@ var threadsRepliesCmd = &cobra.Command{
 		channelID := args[0]
 		threadTs := args[1]
 
-		client, err := slackutil.NewClient()
+		client, err := threadsClientFunc()
 		if err != nil {
 			return err
 		}
