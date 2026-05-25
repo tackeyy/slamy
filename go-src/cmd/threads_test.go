@@ -33,7 +33,9 @@ func resetThreadsFlags(t *testing.T) func() {
 		t.Fatalf("failed to reset --limit flag: %v", err)
 	}
 	return func() {
-		_ = threadsRepliesCmd.Flags().Set("limit", "50")
+		if err := threadsRepliesCmd.Flags().Set("limit", "50"); err != nil {
+			t.Errorf("failed to reset --limit flag: %v", err)
+		}
 	}
 }
 

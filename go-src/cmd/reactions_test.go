@@ -34,7 +34,9 @@ func resetReactionsFlags(t *testing.T) func() {
 		t.Fatalf("failed to reset --name flag: %v", err)
 	}
 	return func() {
-		_ = reactionsAddCmd.Flags().Set("name", "")
+		if err := reactionsAddCmd.Flags().Set("name", ""); err != nil {
+			t.Errorf("failed to reset --name flag: %v", err)
+		}
 	}
 }
 

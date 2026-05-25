@@ -19,15 +19,22 @@ import (
 // パッケージ変数 outputJSON / outputPlain も触るため、テスト並列化禁止 (t.Parallel() 不可)。
 func captureStdout(t *testing.T, f func() error) (string, error) {
 	t.Helper()
-	r, w, _ := os.Pipe()
+	r, w, pipeErr := os.Pipe()
+	if pipeErr != nil {
+		t.Fatalf("os.Pipe failed: %v", pipeErr)
+	}
 	orig := os.Stdout
 	os.Stdout = w
 	defer func() { os.Stdout = orig }()
 
 	err := f()
-	w.Close()
+	if closeErr := w.Close(); closeErr != nil {
+		t.Fatalf("close write pipe: %v", closeErr)
+	}
 	var buf bytes.Buffer
-	_, _ = io.Copy(&buf, r)
+	if _, copyErr := io.Copy(&buf, r); copyErr != nil {
+		t.Fatalf("io.Copy from pipe: %v", copyErr)
+	}
 	return buf.String(), err
 }
 
