@@ -18,7 +18,7 @@ beforeEach(async () => {
   vi.clearAllMocks();
   mockWebClient = createMockWebClient();
   const { WebClient } = await import("@slack/web-api");
-  (WebClient as any).mockImplementation(() => mockWebClient);
+  (WebClient as any).mockImplementation(function () { return mockWebClient; });
 });
 
 describe("Go版JSON互換性テスト", () => {

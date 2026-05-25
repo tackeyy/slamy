@@ -3,14 +3,14 @@ import { SlamyClient } from "../lib/client.js";
 import { createMockWebClient } from "./helpers/mock-slack.js";
 
 vi.mock("@slack/web-api", () => ({
-  WebClient: vi.fn().mockImplementation(() => createMockWebClient()),
+  WebClient: vi.fn().mockImplementation(function () { return createMockWebClient(); }),
   LogLevel: { ERROR: "error", WARN: "warn", INFO: "info", DEBUG: "debug" },
 }));
 
 async function createClient(token = "xoxb-test") {
   const mock = createMockWebClient();
   const { WebClient } = vi.mocked(await import("@slack/web-api"));
-  (WebClient as any).mockImplementation(() => mock);
+  (WebClient as any).mockImplementation(function () { return mock; });
   const client = new SlamyClient({ botToken: token });
   return { client, mock };
 }

@@ -4,14 +4,14 @@ import { createMockWebClient } from "./helpers/mock-slack.js";
 
 // WebClient コンストラクタをモック
 vi.mock("@slack/web-api", () => ({
-  WebClient: vi.fn().mockImplementation(() => createMockWebClient()),
+  WebClient: vi.fn().mockImplementation(function () { return createMockWebClient(); }),
   LogLevel: { DEBUG: "debug", INFO: "info", WARN: "warn", ERROR: "error" },
 }));
 
 async function createClient(token = "xoxb-test") {
   const mock = createMockWebClient();
   const { WebClient } = vi.mocked(await import("@slack/web-api"));
-  (WebClient as any).mockImplementation(() => mock);
+  (WebClient as any).mockImplementation(function () { return mock; });
   const client = new SlamyClient({ botToken: token });
   return { client, mock };
 }
