@@ -12,3 +12,4 @@ vitest.config.d.ts.map
 .playwright-cli/
 .goal-state/
 go-src/coverage.out
+coverage.out
