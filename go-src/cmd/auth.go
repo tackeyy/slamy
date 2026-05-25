@@ -15,11 +15,17 @@ var authCmd = &cobra.Command{
 	Short: "Authentication commands",
 }
 
+// authClientFunc は auth コマンドが使う Slack クライアントを返す。
+// テストで差し替えるための DI ポイント (Issue #51 PR-1)。
+var authClientFunc = func() (*slackutil.Client, error) {
+	return slackutil.NewClient()
+}
+
 var authTestCmd = &cobra.Command{
 	Use:   "test",
 	Short: "Test authentication with Slack API",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		client, err := slackutil.NewClient()
+		client, err := authClientFunc()
 		if err != nil {
 			return err
 		}

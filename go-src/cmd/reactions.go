@@ -16,6 +16,12 @@ var reactionsCmd = &cobra.Command{
 	Short: "Reaction operations",
 }
 
+// reactionsClientFunc は reactions コマンドが使う Slack クライアントを返す。
+// テストで差し替えるための DI ポイント (Issue #51 PR-1)。
+var reactionsClientFunc = func() (*slackutil.Client, error) {
+	return slackutil.NewClient()
+}
+
 var reactionsAddCmd = &cobra.Command{
 	Use:   "add <channel_id> <timestamp>",
 	Short: "Add a reaction to a message",
@@ -24,7 +30,7 @@ var reactionsAddCmd = &cobra.Command{
 		channelID := args[0]
 		timestamp := args[1]
 
-		client, err := slackutil.NewClient()
+		client, err := reactionsClientFunc()
 		if err != nil {
 			return err
 		}
