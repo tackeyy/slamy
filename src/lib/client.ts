@@ -11,6 +11,7 @@ import type {
   Channel,
   UnreadChannel,
   Message,
+  MessageReaction,
   SlackFileInfo,
   User,
   UserProfile,
@@ -23,6 +24,35 @@ import type {
 export interface SlamyClientOptions {
   userToken?: string;
   botToken?: string;
+}
+
+/**
+ * Slack API の生メッセージを slamy の `Message` 型に正規化する。
+ * Block Kit (blocks) / attachments / reactions / bot 識別子等を透過して、
+ * interactive content を呼び出し側で観測可能にする。
+ */
+function mapMessage(msg: any): Message {
+  const m: Message = {
+    ts: msg.ts!,
+    user: msg.user || "",
+    text: msg.text || "",
+  };
+  if (msg.thread_ts !== undefined) m.thread_ts = msg.thread_ts;
+  if (msg.reply_count !== undefined) m.reply_count = msg.reply_count;
+  if (msg.files !== undefined) m.files = msg.files as SlackFileInfo[];
+  if (msg.bot_id !== undefined) m.bot_id = msg.bot_id;
+  if (msg.subtype !== undefined) m.subtype = msg.subtype;
+  if (msg.team !== undefined) m.team = msg.team;
+  if (Array.isArray(msg.blocks)) m.blocks = msg.blocks as Record<string, unknown>[];
+  if (Array.isArray(msg.attachments)) m.attachments = msg.attachments as Record<string, unknown>[];
+  if (Array.isArray(msg.reactions)) {
+    m.reactions = (msg.reactions as any[]).map((r): MessageReaction => ({
+      name: r.name,
+      count: r.count,
+      users: Array.isArray(r.users) ? r.users : [],
+    }));
+  }
+  return m;
 }
 
 export class SlamyClient {
@@ -562,14 +592,7 @@ export class SlamyClient {
 
       const res = await this.userClient.conversations.history(params as any);
 
-      const batch = (res.messages || []).map((msg) => ({
-        ts: msg.ts!,
-        user: msg.user || "",
-        text: msg.text || "",
-        thread_ts: msg.thread_ts,
-        reply_count: msg.reply_count,
-        files: msg.files as SlackFileInfo[] | undefined,
-      }));
+      const batch = (res.messages || []).map((msg) => mapMessage(msg));
 
       allMessages.push(...batch);
 
@@ -590,14 +613,7 @@ export class SlamyClient {
       inclusive: true,
       limit: 1,
     });
-    return (res.messages || []).map((msg) => ({
-      ts: msg.ts!,
-      user: msg.user || "",
-      text: msg.text || "",
-      thread_ts: msg.thread_ts,
-      reply_count: msg.reply_count,
-      files: msg.files as SlackFileInfo[] | undefined,
-    }));
+    return (res.messages || []).map((msg) => mapMessage(msg));
   }
 
   async getFileInfo(fileId: string): Promise<SlackFileInfo> {
@@ -646,12 +662,7 @@ export class SlamyClient {
       limit: opts?.limit ?? 50,
     });
 
-    return (res.messages || []).map((msg) => ({
-      ts: msg.ts!,
-      user: msg.user || "",
-      text: msg.text || "",
-      files: msg.files as SlackFileInfo[] | undefined,
-    }));
+    return (res.messages || []).map((msg) => mapMessage(msg));
   }
 
   async listUsers(opts?: {

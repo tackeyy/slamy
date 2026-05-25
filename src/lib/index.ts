@@ -17,6 +17,7 @@ export type {
   Channel,
   UnreadChannel,
   Message,
+  MessageReaction,
   SlackFileInfo,
   User,
   UserProfile,
