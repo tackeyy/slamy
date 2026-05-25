@@ -24,7 +24,21 @@ export interface SlackFileInfo {
   url_private_download: string;
 }
 
-/** Slack message. */
+/** A reaction attached to a Slack message. */
+export interface MessageReaction {
+  name: string;
+  count: number;
+  users: string[];
+}
+
+/**
+ * Slack message.
+ *
+ * 基本フィールド (ts/user/text/thread_ts/reply_count/files) に加え、
+ * interactive content (blocks/attachments/reactions) と bot/メタデータ (bot_id/subtype/team)
+ * を Slack API が返した場合はそのまま透過する。
+ * これらは bot 投稿の Block Kit UI 確認や reaction 可視化に必須。
+ */
 export interface Message {
   ts: string;
   user: string;
@@ -32,6 +46,12 @@ export interface Message {
   thread_ts?: string;
   reply_count?: number;
   files?: SlackFileInfo[];
+  bot_id?: string;
+  subtype?: string;
+  team?: string;
+  blocks?: Record<string, unknown>[];
+  attachments?: Record<string, unknown>[];
+  reactions?: MessageReaction[];
 }
 
 /** Slack user. */
