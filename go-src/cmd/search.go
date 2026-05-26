@@ -17,6 +17,12 @@ var searchCmd = &cobra.Command{
 	Short: "Search operations",
 }
 
+// searchClientFunc は search コマンドが使う Slack クライアントを返す。
+// テストで差し替えるための DI ポイント (Issue #51 PR-2)。
+var searchClientFunc = func() (*slackutil.Client, error) {
+	return slackutil.NewClient()
+}
+
 var searchMessagesCmd = &cobra.Command{
 	Use:   "messages <query>",
 	Short: "Search messages (requires User Token)",
@@ -24,7 +30,7 @@ var searchMessagesCmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
 		query := args[0]
 
-		client, err := slackutil.NewClient()
+		client, err := searchClientFunc()
 		if err != nil {
 			return err
 		}
