@@ -15,11 +15,17 @@ var usersCmd = &cobra.Command{
 	Short: "User operations",
 }
 
+// usersClientFunc は users コマンドが使う Slack クライアントを返す。
+// テストで差し替えるための DI ポイント (Issue #51 PR-3)。
+var usersClientFunc = func() (*slackutil.Client, error) {
+	return slackutil.NewClient()
+}
+
 var usersListCmd = &cobra.Command{
 	Use:   "list",
 	Short: "List workspace users",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		client, err := slackutil.NewClient()
+		client, err := usersClientFunc()
 		if err != nil {
 			return err
 		}
@@ -106,7 +112,7 @@ var usersProfileCmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
 		userID := args[0]
 
-		client, err := slackutil.NewClient()
+		client, err := usersClientFunc()
 		if err != nil {
 			return err
 		}

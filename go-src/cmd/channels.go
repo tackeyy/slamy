@@ -19,11 +19,17 @@ var channelsCmd = &cobra.Command{
 	Short: "Channel operations",
 }
 
+// channelsClientFunc は channels コマンドが使う Slack クライアントを返す。
+// テストで差し替えるための DI ポイント (Issue #51 PR-3)。
+var channelsClientFunc = func() (*slackutil.Client, error) {
+	return slackutil.NewClient()
+}
+
 var channelsListCmd = &cobra.Command{
 	Use:   "list",
 	Short: "List channels",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		client, err := slackutil.NewClient()
+		client, err := channelsClientFunc()
 		if err != nil {
 			return err
 		}
@@ -281,7 +287,7 @@ var channelsHistoryCmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
 		channelID := args[0]
 
-		client, err := slackutil.NewClient()
+		client, err := channelsClientFunc()
 		if err != nil {
 			return err
 		}
