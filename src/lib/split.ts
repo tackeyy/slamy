@@ -9,18 +9,24 @@
 export const CHAT_POSTMESSAGE_MAX_LENGTH = 40000;
 
 /**
- * chat.update の defensive 上限 (3,900 chars)。
+ * chat.update の defensive 上限 (3,500 chars)。
  *
  * `chat.update` は公式 docs に上限の明記がなく、実測では 4,000 chars 付近で
  * `msg_too_long` を返す。entity 展開 (`<@U...>` mentions / `<https://...|title>` 等) で
- * サーバ側の length が `[...text].length` の値を超えることがあるため、
- * defensive margin (100 chars) を含めた 3,900 を採用。
+ * サーバ側の length が `[...text].length` の値を超えることがあるため、defensive margin が必要。
  *
- * Empirical evidence: navibot req_20260523165417_5b15b837 (2026-05-24 01:56 JST)
- * — `chat.update` が 4,000-codepoint チェックを通過したペイロードに対して
- * `msg_too_long` を返した。
+ * - v1: margin 100 chars (3,900) → URL / mention 多用の長文で msg_too_long 多発
+ * - v2: margin 500 chars (3,500) → navibot Issue #381 / #382 で拡大
+ *
+ * Empirical evidence:
+ * - navibot req_20260523165417_5b15b837 (2026-05-24 01:56 JST): 4,000-codepoint チェック通過のペイロードに msg_too_long
+ * - navibot Issue #381 / #382 (2026-05-25 〜 26): dm_search / nndb_search / mentor の長文応答で 6 件以上の msg_too_long
+ *
+ * 併せて navibot 側の `process-request.ts` で msg_too_long 時の `replyToThread` フォールバック
+ * (Issue #381 / #382 fix) を実装している。本定数はそのフォールバックを「発生しにくくする」
+ * ための予防策。
  */
-export const CHAT_UPDATE_MAX_LENGTH = 3900;
+export const CHAT_UPDATE_MAX_LENGTH = 3500;
 
 /**
  * Backward-compatible alias. 既存のコードベースが `MAX_MESSAGE_LENGTH` を参照しているため、
