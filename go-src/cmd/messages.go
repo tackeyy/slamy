@@ -16,6 +16,12 @@ var messagesCmd = &cobra.Command{
 	Short: "Message operations",
 }
 
+// messagesClientFunc は messages コマンドが使う Slack クライアントを返す。
+// テストで差し替えるための DI ポイント (Issue #51 PR-2)。
+var messagesClientFunc = func() (*slackutil.Client, error) {
+	return slackutil.NewClient()
+}
+
 var messagesPostCmd = &cobra.Command{
 	Use:   "post <channel_id>",
 	Short: "Post a message to a channel",
@@ -23,7 +29,7 @@ var messagesPostCmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
 		channelID := args[0]
 
-		client, err := slackutil.NewClient()
+		client, err := messagesClientFunc()
 		if err != nil {
 			return err
 		}
@@ -82,7 +88,7 @@ var messagesReplyCmd = &cobra.Command{
 		channelID := args[0]
 		threadTs := args[1]
 
-		client, err := slackutil.NewClient()
+		client, err := messagesClientFunc()
 		if err != nil {
 			return err
 		}
