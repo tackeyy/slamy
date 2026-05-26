@@ -48,8 +48,12 @@ func resetMessagesReplyFlags(t *testing.T) func() {
 		t.Fatalf("reset --broadcast: %v", err)
 	}
 	return func() {
-		_ = messagesReplyCmd.Flags().Set("text", "")
-		_ = messagesReplyCmd.Flags().Set("broadcast", "false")
+		if err := messagesReplyCmd.Flags().Set("text", ""); err != nil {
+			t.Errorf("reset --text: %v", err)
+		}
+		if err := messagesReplyCmd.Flags().Set("broadcast", "false"); err != nil {
+			t.Errorf("reset --broadcast: %v", err)
+		}
 	}
 }
 
