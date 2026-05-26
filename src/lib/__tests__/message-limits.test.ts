@@ -26,8 +26,8 @@ describe("message length constants", () => {
     expect(CHAT_POSTMESSAGE_MAX_LENGTH).toBe(40000);
   });
 
-  it("CHAT_UPDATE_MAX_LENGTH は defensive な 3900", () => {
-    expect(CHAT_UPDATE_MAX_LENGTH).toBe(3900);
+  it("CHAT_UPDATE_MAX_LENGTH は defensive な 3500 (margin 500 chars, navibot Issue #381 / #382 で拡大)", () => {
+    expect(CHAT_UPDATE_MAX_LENGTH).toBe(3500);
   });
 
   it("MAX_MESSAGE_LENGTH は最も厳しい上限 (CHAT_UPDATE_MAX_LENGTH と同値、後方互換)", () => {
@@ -77,19 +77,19 @@ describe("postMessage / replyToThread は 40000 文字まで 1 chunk で送る",
   });
 });
 
-describe("updateMessage は 3900 文字上限を維持", () => {
-  it("3900 文字を超えると例外", async () => {
+describe("updateMessage は CHAT_UPDATE_MAX_LENGTH (3500) 上限を維持", () => {
+  it("CHAT_UPDATE_MAX_LENGTH を超えると例外", async () => {
     const { client } = await makeClient();
-    const longText = "u".repeat(3901);
+    const longText = "u".repeat(CHAT_UPDATE_MAX_LENGTH + 1);
 
     await expect(client.updateMessage("C123", "1700000000.000001", longText)).rejects.toThrow(
-      /3900/,
+      String(CHAT_UPDATE_MAX_LENGTH),
     );
   });
 
-  it("3900 文字以内なら成功", async () => {
+  it("CHAT_UPDATE_MAX_LENGTH 以内なら成功", async () => {
     const { client, mock } = await makeClient();
-    await client.updateMessage("C123", "1700000000.000001", "u".repeat(3900));
+    await client.updateMessage("C123", "1700000000.000001", "u".repeat(CHAT_UPDATE_MAX_LENGTH));
     expect(mock.chat.update).toHaveBeenCalledTimes(1);
   });
 });
