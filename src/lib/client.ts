@@ -266,26 +266,41 @@ export class SlamyClient {
     };
   }
 
-  async postMessage(channel: string, text: string): Promise<{ channel: string; ts: string }> {
+  private async resolveChannelId(channel: string, asUser?: boolean): Promise<string> {
+    if (/^U[A-Z0-9]+$/.test(channel)) {
+      const client = asUser ? this.userClient : this.botClient;
+      const dm = await client.conversations.open({ users: channel });
+      return dm.channel!.id!;
+    }
+    return channel;
+  }
+
+  async postMessage(
+    channel: string,
+    text: string,
+    opts?: { asUser?: boolean },
+  ): Promise<{ channel: string; ts: string }> {
     const fixed = fixSlackMrkdwn(text);
     const chunks = splitMessage(fixed, CHAT_POSTMESSAGE_MAX_LENGTH);
 
-    const res = await this.botClient.chat.postMessage({
-      channel,
+    const resolvedChannel = await this.resolveChannelId(channel, opts?.asUser);
+    const client = opts?.asUser ? this.userClient : this.botClient;
+
+    const res = await client.chat.postMessage({
+      channel: resolvedChannel,
       text: chunks[0],
     });
     const ts = res.ts!;
 
-    // Remaining chunks as thread replies
     for (const chunk of chunks.slice(1)) {
-      await this.botClient.chat.postMessage({
-        channel,
+      await client.chat.postMessage({
+        channel: resolvedChannel,
         text: chunk,
         thread_ts: ts,
       });
     }
 
-    return { channel, ts };
+    return { channel: resolvedChannel, ts };
   }
 
   async replyToThread(
@@ -574,6 +589,7 @@ export class SlamyClient {
   }
 
   async getChannelHistory(channel: string, opts?: { limit?: number; oldest?: string; latest?: string }): Promise<Message[]> {
+    const resolvedChannel = await this.resolveChannelId(channel);
     const maxMessages = opts?.limit ?? 20;
     const allMessages: Message[] = [];
     let cursor: string | undefined;
@@ -583,7 +599,7 @@ export class SlamyClient {
       const batchSize = Math.min(remaining, 200);
 
       const params: Record<string, unknown> = {
-        channel,
+        channel: resolvedChannel,
         limit: batchSize,
       };
       if (opts?.oldest) params.oldest = opts.oldest;
@@ -656,8 +672,9 @@ export class SlamyClient {
     threadTs: string,
     opts?: { limit?: number },
   ): Promise<Message[]> {
+    const resolvedChannel = await this.resolveChannelId(channel);
     const res = await this.userClient.conversations.replies({
-      channel,
+      channel: resolvedChannel,
       ts: threadTs,
       limit: opts?.limit ?? 50,
     });

@@ -260,11 +260,12 @@ messages
   .command("post <channel_id>")
   .description("Post a message to a channel")
   .requiredOption("--text <text>", "Message text")
+  .option("--as-user", "Post as the authenticated user (uses user token instead of bot token)")
   .action(async (channelId, opts) => {
     try {
       const client = createClient();
       const mode = getOutputMode();
-      const result = await client.postMessage(channelId, opts.text);
+      const result = await client.postMessage(channelId, opts.text, { asUser: opts.asUser === true });
 
       if (mode === "json") {
         jsonOutput(result);
