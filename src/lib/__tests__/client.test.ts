@@ -1304,3 +1304,27 @@ describe("downloadFileStream — redirect & error", () => {
     );
   });
 });
+
+
+describe("getTeamInfo", () => {
+  it("team.info の結果を TeamInfo にマップする", async () => {
+    const client = new SlamyClient({ userToken: "xoxp-test" });
+    const info = await client.getTeamInfo();
+    expect(info.id).toBe("T123");
+    expect(info.name).toBe("TestTeam");
+    expect(info.domain).toBe("testteam");
+    expect(info.email_domain).toBe("ma-navi.co.jp");
+    expect(info.icon).toBe("https://test/icon.png");
+  });
+
+  it("欠損フィールドは空文字になる", async () => {
+    mockWebClient.team.info.mockResolvedValueOnce({ ok: true, team: { id: "T1" } });
+    const client = new SlamyClient({ userToken: "xoxp-test" });
+    const info = await client.getTeamInfo();
+    expect(info.id).toBe("T1");
+    expect(info.name).toBe("");
+    expect(info.email_domain).toBe("");
+    expect(info.enterprise_id).toBe("");
+    expect(info.icon).toBe("");
+  });
+});

@@ -62,6 +62,7 @@ In **OAuth & Permissions** > **Scopes** > **User Token Scopes**, add:
 | `users:read` | View users and their basic info |
 | `users:read.email` | View email addresses |
 | `users.profile:read` | View user profiles |
+| `team:read` | View workspace (team) info |
 
 ### 3. Install and Set Environment Variables
 
@@ -251,6 +252,14 @@ slamy search messages <query> [--count <n>] [--page <n>] [--sort <field>] [--sor
 ```bash
 slamy auth test [--json] [--plain]
 ```
+
+### `team info` — Get workspace info
+
+```bash
+slamy team info [--json] [--plain]
+```
+
+Returns the workspace domain, `email_domain`, and Enterprise info. The `email_domain` is useful for diagnosing SSO domain mismatches. Requires the `team:read` scope. Note: SSO enforcement settings are **not** exposed by the Slack API.
 
 ### `mcp` — Start MCP server
 

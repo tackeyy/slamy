@@ -111,6 +111,39 @@ auth
     }
   });
 
+// --- team ---
+const team = program.command("team").description("Workspace (team) operations");
+
+team
+  .command("info")
+  .description(
+    "Get workspace info (domain, email_domain, enterprise). Note: SSO enforcement settings are not exposed by the Slack API.",
+  )
+  .action(async () => {
+    try {
+      const client = createClient();
+      const mode = getOutputMode();
+      const info = await client.getTeamInfo();
+
+      if (mode === "json") {
+        jsonOutput(info);
+      } else if (mode === "plain") {
+        console.log(
+          `${info.id}\t${info.name}\t${info.domain}\t${info.email_domain}\t${info.enterprise_id}\t${info.enterprise_name}`,
+        );
+      } else {
+        console.log(`Team: ${info.name} (${info.id})`);
+        console.log(`Domain: ${info.domain}.slack.com`);
+        if (info.email_domain) console.log(`Email domain: ${info.email_domain}`);
+        if (info.enterprise_name)
+          console.log(`Enterprise: ${info.enterprise_name} (${info.enterprise_id})`);
+      }
+    } catch (err: any) {
+      console.error(`Error: ${err.message}`);
+      process.exit(1);
+    }
+  });
+
 // --- channels ---
 const channels = program.command("channels").description("Channel operations");
 
