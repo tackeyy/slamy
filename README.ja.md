@@ -62,6 +62,7 @@ go build -o slamy .
 | `users:read` | ユーザー情報の取得 |
 | `users:read.email` | メールアドレスの閲覧 |
 | `users.profile:read` | ユーザープロフィールの閲覧 |
+| `team:read` | ワークスペース（team）情報の取得 |
 
 ### 3. インストールと環境変数の設定
 
@@ -251,6 +252,14 @@ slamy search messages <query> [--count <n>] [--page <n>] [--sort <field>] [--sor
 ```bash
 slamy auth test [--json] [--plain]
 ```
+
+### `team info` — ワークスペース情報の取得
+
+```bash
+slamy team info [--json] [--plain]
+```
+
+ワークスペースのドメイン・`email_domain`・Enterprise 情報を返す。`email_domain` は SSO のドメイン不一致の診断に役立つ。`team:read` スコープが必要。なお、SSO の必須化設定は Slack API では取得**できない**。
 
 ### `mcp` — MCP サーバー起動
 
