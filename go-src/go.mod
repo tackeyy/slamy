@@ -4,7 +4,7 @@ go 1.25.5
 
 require (
 	github.com/mark3labs/mcp-go v0.54.0
-	github.com/slack-go/slack v0.24.0
+	github.com/slack-go/slack v0.25.0
 	github.com/spf13/cobra v1.10.2
 )
 
