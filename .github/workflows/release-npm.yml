@@ -16,6 +16,7 @@ jobs:
   release:
     name: Release to npm
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v6
 
