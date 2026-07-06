@@ -1,21 +1,26 @@
 #!/usr/bin/env node
 import { Command } from "commander";
-import { createWriteStream } from "node:fs";
+import { createWriteStream, readFileSync } from "node:fs";
 import { Readable } from "node:stream";
 import { pipeline } from "node:stream/promises";
-import { basename } from "node:path";
+import { basename, dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { SlamyClient } from "../lib/client.js";
 import { formatTimestamp as libFormatTimestamp } from "../lib/tz.js";
 import { parseSlackTarget } from "../lib/parse-target.js";
 import { jsonOutput as formatJson } from "../lib/cli-format.js";
 import { requireToken } from "../lib/cli-errors.js";
 
+const pkg = JSON.parse(
+  readFileSync(join(dirname(fileURLToPath(import.meta.url)), "../../package.json"), "utf-8"),
+) as { version: string };
+
 const program = new Command();
 
 program
   .name("slamy")
   .description("Slack CLI tool")
-  .version("2.0.0")
+  .version(pkg.version)
   .option("--json", "Output in JSON format")
   .option("--plain", "Output in TSV format")
   .option("--utc", "Display timestamps in UTC (default: local TZ)")
