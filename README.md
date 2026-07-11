@@ -375,14 +375,16 @@ Pass tokens through protected environment or secret-management facilities. See t
 ## Development
 
 ```bash
-# Build
-go build -o slamy .
-
-# Run all tests with race detector
+# Build and test the Go CLI
+cd go-src
+go build -o ../slamy .
 go test -race ./...
-
-# Run tests with coverage
 go test -cover ./...
+
+# Build and test the TypeScript API and CLI
+cd ..
+npm run build
+npm test
 ```
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for development setup and coding standards.

@@ -374,14 +374,16 @@ const channels = await client.listChannels();
 ## 開発
 
 ```bash
-# ビルド
-go build -o slamy .
-
-# レースディテクタ付きでテスト実行
+# Go CLI のビルドとテスト
+cd go-src
+go build -o ../slamy .
 go test -race ./...
-
-# カバレッジ付きでテスト実行
 go test -cover ./...
+
+# TypeScript API / CLI のビルドとテスト
+cd ..
+npm run build
+npm test
 ```
 
 開発環境のセットアップやコーディング規約は [CONTRIBUTING.md](CONTRIBUTING.md) を参照してください。
