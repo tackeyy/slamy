@@ -1,13 +1,14 @@
-# slamy — Slack MCP サーバー & CLI
+# slamy — Slack API クライアント & CLI
 
 [English](README.md) | **日本語**
 
-Slack 用の [MCP (Model Context Protocol)](https://modelcontextprotocol.io/) サーバー兼 CLI ツール。Claude Code や Claude Desktop などの AI エージェントから Slack を操作したり、ターミナルから直接利用できます。
+Slack の閲覧・検索・投稿に対応する Slack API クライアント兼 CLI ツールです。
 
 ## 機能
 
-- **MCP サーバー** — Slack 操作を MCP ツールとして AI エージェントに公開
-- **CLI** — 同じ操作をターミナルから直接実行
+- **CLI** — Slack 操作をターミナルから直接実行
+- **TypeScript API クライアント** — Node.js アプリケーションから `SlamyClient` を利用
+- **Socket Mode イベント** — `SlamyEvents` で Slack イベントを購読
 - **チャンネル** — チャンネル一覧、メッセージ履歴取得
 - **メッセージ** — メッセージ投稿、スレッド返信
 - **ユーザー** — ワークスペースメンバー一覧、プロフィール表示
@@ -16,6 +17,12 @@ Slack 用の [MCP (Model Context Protocol)](https://modelcontextprotocol.io/) �
 - **複数出力フォーマット** — テキスト、JSON、TSV
 
 ## インストール
+
+### npm（TypeScript API / CLI）
+
+```bash
+npm install slamy
+```
 
 ### Homebrew
 
@@ -91,7 +98,7 @@ Slack App は 2 種類のトークンを発行できます。用途に応じて�
 
 ### User Token を使うケース: ユーザーの代理として動作する場合
 
-slamy は **AI 秘書 / パーソナルアシスタント**（Claude Code + MCP）の一部として開発されました。特定のユーザーに代わって Slack の閲覧・検索・投稿を行うユースケースでは、User Token が自然な選択です:
+slamy は、特定のユーザーに代わって Slack の閲覧・検索・投稿を行うアプリケーションをサポートします。このユースケースでは、User Token が自然な選択です:
 
 1. **検索に必須** — `search:read` は User Token 専用のスコープ。Bot Token ではメッセージ検索ができない
 2. **トークン 1 つで完結** — 2 つのトークンを管理して操作ごとに使い分ける必要がない
@@ -262,14 +269,6 @@ slamy team info [--json] [--plain]
 
 ワークスペースのドメイン・`email_domain`・Enterprise 情報を返す。`email_domain` は SSO のドメイン不一致の診断に役立つ。`team:read` スコープが必要。なお、SSO の必須化設定は Slack API では取得**できない**。
 
-### `mcp` — MCP サーバー起動
-
-```bash
-slamy mcp
-```
-
-stdio 経由の MCP サーバーを起動し、すべての操作を AI エージェント向けツールとして公開します。
-
 ## 設定
 
 ### 環境変数
@@ -350,54 +349,18 @@ C01234ABCDE	general	42	public
 C01234FGHIJ	random	15	private
 ```
 
-## MCP サーバー
+## TypeScript API
 
-### Claude Code での利用
+npm パッケージは、Slack Web API 操作用の `SlamyClient` と Socket Mode イベント用の `SlamyEvents` を公開しています。Node.js 25 以上が必要です。
 
-```bash
-claude mcp add slamy /path/to/slamy mcp
+```ts
+import { SlamyClient } from "slamy";
+
+const client = new SlamyClient({ userToken: process.env.SLACK_USER_TOKEN });
+const channels = await client.listChannels();
 ```
 
-### Claude Desktop での利用
-
-`claude_desktop_config.json` に追加:
-
-```json
-{
-  "mcpServers": {
-    "slamy-primary": {
-      "command": "/path/to/slamy",
-      "args": ["--workspace", "primary", "mcp"],
-      "env": {
-        "SLAMY_WORKSPACE_PRIMARY_USER_TOKEN": "<user-token>"
-      }
-    },
-    "slamy-operations": {
-      "command": "/path/to/slamy",
-      "args": ["--workspace", "operations", "mcp"],
-      "env": {
-        "SLAMY_WORKSPACE_OPERATIONS_USER_TOKEN": "<user-token>"
-      }
-    }
-  }
-}
-```
-
-エイリアスごとに別の MCP プロセスを起動してください。各プロセスは起動時に接続先を一度だけ解決し、そのクライアントをプロセスの存続中は固定します。起動後に環境変数を変更しても接続先は切り替わりません。MCP tool schema には意図的に `workspace` 引数を設けていないため、tool call ごとの切り替えはできません。可能な場合は、設定ファイルへトークン値を直接書かず、保護された secret store から環境変数を注入してください。
-
-### 利用可能なツール
-
-| ツール | 説明 |
-|---|---|
-| `slack_list_channels` | チャンネル一覧 |
-| `slack_get_channel_history` | チャンネルのメッセージ履歴取得 |
-| `slack_get_thread_replies` | スレッド返信の取得 |
-| `slack_post_message` | チャンネルにメッセージ投稿 |
-| `slack_reply_to_thread` | スレッドに返信 |
-| `slack_add_reaction` | 絵文字リアクション追加 |
-| `slack_get_users` | ユーザー一覧 |
-| `slack_get_user_profile` | ユーザープロフィール取得 |
-| `slack_search_messages` | メッセージ検索 |
+トークンは保護された環境変数またはシークレット管理機能から渡してください。完全な API は公開されている TypeScript の型定義を参照してください。
 
 ## 開発
 
@@ -429,4 +392,3 @@ MIT
 
 - [GitHub リポジトリ](https://github.com/tackeyy/slamy)
 - [Slack API ドキュメント](https://api.slack.com/docs)
-- [Model Context Protocol](https://modelcontextprotocol.io/)

@@ -1,13 +1,14 @@
-# slamy — Slack MCP server & CLI
+# slamy — Slack API client & CLI
 
 **English** | [日本語](README.ja.md)
 
-A Slack [MCP (Model Context Protocol)](https://modelcontextprotocol.io/) server that also works as a standalone CLI. Connect AI agents like Claude to your Slack workspace, or use it directly from the terminal.
+A Slack API client and standalone CLI for reading, searching, and posting to Slack.
 
 ## Features
 
-- **MCP Server** — expose Slack operations as MCP tools for AI agents (Claude Code, Claude Desktop, etc.)
-- **CLI** — use the same operations directly from the terminal
+- **CLI** — run Slack operations directly from the terminal
+- **TypeScript API client** — use `SlamyClient` from Node.js applications
+- **Socket Mode events** — subscribe to Slack events with `SlamyEvents`
 - **Channels** — list channels, retrieve message history
 - **Messages** — post messages, reply to threads
 - **Users** — list workspace members, view profiles
@@ -16,6 +17,12 @@ A Slack [MCP (Model Context Protocol)](https://modelcontextprotocol.io/) server 
 - **Multiple output formats** — human-readable text, JSON, and TSV
 
 ## Installation
+
+### npm (TypeScript API and CLI)
+
+```bash
+npm install slamy
+```
 
 ### Homebrew
 
@@ -91,7 +98,7 @@ Slack Apps can issue two types of tokens. Which one to use depends on your use c
 
 ### Use User Token when: acting on behalf of a user
 
-slamy was built as part of an **AI secretary / personal assistant** (Claude Code + MCP) that reads, searches, and posts to Slack on behalf of a specific user. In this use case, User Token is the natural choice:
+slamy supports applications that read, search, and post to Slack on behalf of a specific user. In this use case, User Token is the natural choice:
 
 1. **Search requires it** — `search:read` is a User Token-only scope. Bot Tokens simply cannot search messages
 2. **Single token** — no need to manage two tokens and worry about which operation uses which
@@ -262,14 +269,6 @@ slamy team info [--json] [--plain]
 
 Returns the workspace domain, `email_domain`, and Enterprise info. The `email_domain` is useful for diagnosing SSO domain mismatches. Requires the `team:read` scope. Note: SSO enforcement settings are **not** exposed by the Slack API.
 
-### `mcp` — Start MCP server
-
-```bash
-slamy mcp
-```
-
-Starts an MCP server over stdio, exposing all operations as tools for AI agents (e.g., Claude Code).
-
 ## Configuration
 
 ### Environment Variables
@@ -350,54 +349,18 @@ C01234ABCDE	general	42	public
 C01234FGHIJ	random	15	private
 ```
 
-## MCP Server
+## TypeScript API
 
-### Usage with Claude Code
+The npm package exports `SlamyClient` for Slack Web API operations and `SlamyEvents` for Socket Mode events. Node.js 25 or later is required.
 
-```bash
-claude mcp add slamy /path/to/slamy mcp
+```ts
+import { SlamyClient } from "slamy";
+
+const client = new SlamyClient({ userToken: process.env.SLACK_USER_TOKEN });
+const channels = await client.listChannels();
 ```
 
-### Usage with Claude Desktop
-
-Add to your `claude_desktop_config.json`:
-
-```json
-{
-  "mcpServers": {
-    "slamy-primary": {
-      "command": "/path/to/slamy",
-      "args": ["--workspace", "primary", "mcp"],
-      "env": {
-        "SLAMY_WORKSPACE_PRIMARY_USER_TOKEN": "<user-token>"
-      }
-    },
-    "slamy-operations": {
-      "command": "/path/to/slamy",
-      "args": ["--workspace", "operations", "mcp"],
-      "env": {
-        "SLAMY_WORKSPACE_OPERATIONS_USER_TOKEN": "<user-token>"
-      }
-    }
-  }
-}
-```
-
-Run a separate MCP process for each alias. Each process resolves its workspace once at startup and keeps that client fixed for its lifetime; changing environment variables after startup does not switch it. MCP tool schemas intentionally have no `workspace` argument, so workspace selection cannot change per tool call. If possible, inject the environment variables through a protected secret store instead of writing token values directly in the configuration file.
-
-### Available Tools
-
-| Tool | Description |
-|---|---|
-| `slack_list_channels` | List all channels |
-| `slack_get_channel_history` | Get channel message history |
-| `slack_get_thread_replies` | Get thread replies |
-| `slack_post_message` | Post a message to a channel |
-| `slack_reply_to_thread` | Reply to a thread |
-| `slack_add_reaction` | Add emoji reaction |
-| `slack_get_users` | List workspace users |
-| `slack_get_user_profile` | Get user profile |
-| `slack_search_messages` | Search messages |
+Pass tokens through protected environment or secret-management facilities. See the exported TypeScript types for the complete API surface.
 
 ## Development
 
@@ -429,4 +392,3 @@ MIT
 
 - [GitHub Repository](https://github.com/tackeyy/slamy)
 - [Slack API Documentation](https://api.slack.com/docs)
-- [Model Context Protocol](https://modelcontextprotocol.io/)
