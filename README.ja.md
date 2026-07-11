@@ -128,6 +128,7 @@ slamy channels list [--limit <number>] [--include-archived] [--json] [--plain]
 
 | フラグ | 説明 |
 |---|---|
+| `--workspace <alias>` | この実行で使用する Slack ワークスペースエイリアスを指定 |
 | `--json` | JSON 形式で出力 |
 | `--plain` | TSV 形式で出力 |
 | `--utc` | タイムスタンプを UTC で表示（デフォルトはローカル TZ） |
@@ -275,12 +276,50 @@ stdio 経由の MCP サーバーを起動し、すべての操作を AI エー�
 
 | 変数 | 必須 | 説明 |
 |---|---|---|
-| `SLACK_USER_TOKEN` | いずれか | Slack User OAuth Token (`xoxp-...`) — `search messages` や読み取り操作で必要 |
+| `SLAMY_WORKSPACE_<ALIAS>_USER_TOKEN` | 対応するエイリアスの選択時 | ワークスペースエイリアス用の User OAuth Token。エイリアスを大文字化し、ハイフンをアンダースコアへ変換 |
+| `SLAMY_DEFAULT_WORKSPACE` | No | `--workspace` を省略した場合に使用するワークスペースエイリアス |
+| `SLACK_USER_TOKEN` | 従来の単一ワークスペース利用時 | 後方互換用 Slack User OAuth Token (`xoxp-...`)。明示・デフォルトのどちらのエイリアスも選択されない場合のみ使用 |
 | `SLACK_BOT_TOKEN` | いずれか | Slack Bot OAuth Token (`xoxb-...`) — 書き込み操作と `reactions get` で使用 |
 | `SLAMY_TZ` | No | `engagement` コマンド用の IANA タイムゾーン（デフォルト: `Asia/Tokyo`） |
 | `SLACK_TEAM_ID` | No | Slack Team ID（ワークスペース固有の操作用） |
 
-`SLACK_USER_TOKEN` / `SLACK_BOT_TOKEN` のいずれかを必ず設定してください。両方設定すると、操作に応じて適切なトークンが自動選択されます。
+従来モードで `SLACK_USER_TOKEN` / `SLACK_BOT_TOKEN` の両方を設定すると、操作に応じて適切なトークンが自動選択されます。
+
+### 複数ワークスペース
+
+ワークスペースエイリアスはローカルの識別子です。Slack 上のワークスペース名、ドメイン、Team ID とは独立しており、slamy がエイリアスを自動検出・照合することはありません。エイリアスは 1〜63 文字で、正規表現 `^[a-z0-9]+(?:-[a-z0-9]+)*$` に一致する必要があります（例: `primary`、`operations`、`project-a`）。
+
+エイリアスごとに User OAuth Token を設定します。環境変数名は、エイリアスを大文字化し、ハイフンをアンダースコアへ変換して作成します。
+
+```bash
+export SLAMY_DEFAULT_WORKSPACE=primary
+export SLAMY_WORKSPACE_PRIMARY_USER_TOKEN='<user-token>'
+export SLAMY_WORKSPACE_OPERATIONS_USER_TOKEN='<user-token>'
+export SLAMY_WORKSPACE_PROJECT_A_USER_TOKEN='<user-token>'
+```
+
+接続先は次の順序で選択されます。
+
+1. ルートの persistent flag `--workspace <alias>`
+2. `SLAMY_DEFAULT_WORKSPACE`
+3. 上記 2 つがどちらも未設定の場合のみ、後方互換用の `SLACK_USER_TOKEN`
+
+選択用の `SLAMY_WORKSPACE` 環境変数はありません。明示指定には `--workspace` を使用してください。
+
+```bash
+# デフォルトエイリアス primary を使用
+slamy channels list
+
+# 明示指定はデフォルトより優先
+slamy --workspace operations channels list
+slamy --workspace project-a auth test
+```
+
+エイリアス選択は fail-closed です。`--workspace` または `SLAMY_DEFAULT_WORKSPACE` で選択したエイリアスに対応する `SLAMY_WORKSPACE_<ALIAS>_USER_TOKEN` が未設定の場合、`SLACK_USER_TOKEN` や別エイリアスへフォールバックせずエラーを返します。
+
+既存の単一ワークスペース設定には後方互換性があります。`SLACK_USER_TOKEN` をそのまま設定し、`--workspace` と `SLAMY_DEFAULT_WORKSPACE` の両方を未設定にしてください。移行するには、既存トークンをエイリアス用環境変数へ移し、`SLAMY_DEFAULT_WORKSPACE` にそのエイリアスを設定します。新しい設定を確認した後で `SLACK_USER_TOKEN` を削除してください。
+
+すべてのトークンを secret として扱ってください。リポジトリへコミットしたり、コマンドライン引数で渡したり、ログ・標準出力・標準エラー出力・JSON へ出力したりしないでください。保護された環境変数または secret 管理機能から渡してください。
 
 ## 出力フォーマット
 
@@ -326,16 +365,25 @@ claude mcp add slamy /path/to/slamy mcp
 ```json
 {
   "mcpServers": {
-    "slamy": {
+    "slamy-primary": {
       "command": "/path/to/slamy",
-      "args": ["mcp"],
+      "args": ["--workspace", "primary", "mcp"],
       "env": {
-        "SLACK_USER_TOKEN": "xoxp-your-user-token"
+        "SLAMY_WORKSPACE_PRIMARY_USER_TOKEN": "<user-token>"
+      }
+    },
+    "slamy-operations": {
+      "command": "/path/to/slamy",
+      "args": ["--workspace", "operations", "mcp"],
+      "env": {
+        "SLAMY_WORKSPACE_OPERATIONS_USER_TOKEN": "<user-token>"
       }
     }
   }
 }
 ```
+
+エイリアスごとに別の MCP プロセスを起動してください。各プロセスは起動時に接続先を一度だけ解決し、そのクライアントをプロセスの存続中は固定します。起動後に環境変数を変更しても接続先は切り替わりません。MCP tool schema には意図的に `workspace` 引数を設けていないため、tool call ごとの切り替えはできません。可能な場合は、設定ファイルへトークン値を直接書かず、保護された secret store から環境変数を注入してください。
 
 ### 利用可能なツール
 

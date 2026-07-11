@@ -5,8 +5,6 @@ import (
 	"fmt"
 	"os"
 
-	slackutil "github.com/tackeyy/slamy/internal/slack"
-
 	"github.com/slack-go/slack"
 	"github.com/spf13/cobra"
 )
@@ -18,9 +16,7 @@ var reactionsCmd = &cobra.Command{
 
 // reactionsClientFunc は reactions コマンドが使う Slack クライアントを返す。
 // テストで差し替えるための DI ポイント (Issue #51 PR-1)。
-var reactionsClientFunc = func() (*slackutil.Client, error) {
-	return slackutil.NewClient()
-}
+var reactionsClientFunc = newCommandClient
 
 var reactionsAddCmd = &cobra.Command{
 	Use:   "add <channel_id> <timestamp>",

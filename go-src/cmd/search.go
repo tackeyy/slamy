@@ -6,8 +6,6 @@ import (
 	"os"
 	"strings"
 
-	slackutil "github.com/tackeyy/slamy/internal/slack"
-
 	"github.com/slack-go/slack"
 	"github.com/spf13/cobra"
 )
@@ -19,9 +17,7 @@ var searchCmd = &cobra.Command{
 
 // searchClientFunc は search コマンドが使う Slack クライアントを返す。
 // テストで差し替えるための DI ポイント (Issue #51 PR-2)。
-var searchClientFunc = func() (*slackutil.Client, error) {
-	return slackutil.NewClient()
-}
+var searchClientFunc = newCommandClient
 
 var searchMessagesCmd = &cobra.Command{
 	Use:   "messages <query>",

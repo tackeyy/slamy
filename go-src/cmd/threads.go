@@ -6,8 +6,6 @@ import (
 	"os"
 	"strings"
 
-	slackutil "github.com/tackeyy/slamy/internal/slack"
-
 	"github.com/slack-go/slack"
 	"github.com/spf13/cobra"
 )
@@ -19,9 +17,7 @@ var threadsCmd = &cobra.Command{
 
 // threadsClientFunc は threads コマンドが使う Slack クライアントを返す。
 // テストで差し替えるための DI ポイント (Issue #51 PR-1)。
-var threadsClientFunc = func() (*slackutil.Client, error) {
-	return slackutil.NewClient()
-}
+var threadsClientFunc = newCommandClient
 
 var threadsRepliesCmd = &cobra.Command{
 	Use:   "replies <channel_id> <thread_ts>",
