@@ -30,8 +30,8 @@ When changesets are merged to `main`:
 ## Semver guidelines
 
 - `patch` — bug fixes, documentation updates, internal refactors
-- `minor` — new CLI commands, new MCP tools, non-breaking option additions
-- `major` — breaking changes (CLI flag rename/removal, output format changes, MCP tool removal)
+- `minor` — new API methods, new CLI commands, non-breaking option additions
+- `major` — breaking changes (public API removal, CLI flag rename/removal, output format changes)
 
 ## Note on the Go binary
 

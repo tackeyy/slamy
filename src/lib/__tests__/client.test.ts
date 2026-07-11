@@ -1313,7 +1313,7 @@ describe("getTeamInfo", () => {
     expect(info.id).toBe("T123");
     expect(info.name).toBe("TestTeam");
     expect(info.domain).toBe("testteam");
-    expect(info.email_domain).toBe("ma-navi.co.jp");
+    expect(info.email_domain).toBe("example.com");
     expect(info.icon).toBe("https://test/icon.png");
   });
 

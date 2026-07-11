@@ -5,10 +5,10 @@ instructions for contributing to the project.
 
 ## 🙏 Welcome!
 
-slamy is a **Node.js / TypeScript** project that ships both an MCP (Model Context Protocol) server
-and a standalone CLI for Slack. A separate Go implementation lives under `go-src/` and is released
-independently via `goreleaser`. Contributions to either side are welcome — bug fixes, features,
-tests, or documentation.
+slamy is a **Node.js / TypeScript** project that ships a Slack API client library and standalone
+CLI. A separate Go CLI implementation lives under `go-src/` and is released independently via
+`goreleaser`. Contributions to either side are welcome — bug fixes, features, tests, or
+documentation.
 
 ## 📖 Table of Contents
 
@@ -45,7 +45,7 @@ tests, or documentation.
 
 - **Node.js 25+** and **npm 10+**
 - **Git**
-- A Slack workspace with a Slack app + bot token if you want to run end-to-end CLI / MCP smoke tests
+- A Slack workspace with a Slack app + token if you want to run end-to-end API / CLI smoke tests
 
 ### Setup steps
 
@@ -118,7 +118,7 @@ Format: `<type>(<scope>): <subject>`
 ```text
 feat(reactions): add reactions get command
 fix(cli): default timestamp output to local TZ
-docs(readme): document MCP server installation
+docs(readme): document API client installation
 chore(deps): bump @slack/web-api to 7.10.0
 ```
 

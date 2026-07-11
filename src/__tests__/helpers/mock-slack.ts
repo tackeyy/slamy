@@ -37,7 +37,7 @@ export function createMockWebClient() {
       test: vi.fn().mockResolvedValue({ ok: true, user_id: "U123", user: "testuser", team_id: "T123", team: "TestTeam", url: "https://test.slack.com" }),
     },
     team: {
-      info: vi.fn().mockResolvedValue({ ok: true, team: { id: "T123", name: "TestTeam", domain: "testteam", email_domain: "ma-navi.co.jp", icon: { image_132: "https://test/icon.png" }, enterprise_id: "", enterprise_name: "" } }),
+      info: vi.fn().mockResolvedValue({ ok: true, team: { id: "T123", name: "TestTeam", domain: "testteam", email_domain: "example.com", icon: { image_132: "https://test/icon.png" }, enterprise_id: "", enterprise_name: "" } }),
     },
     assistant: {
       threads: {
