@@ -26,20 +26,27 @@ var mcpCmd = &cobra.Command{
 }
 
 func runMCPServer() error {
+	client, err := getClientFunc()
+	if err != nil {
+		return err
+	}
+
 	mcpServer := server.NewMCPServer("slamy", version,
 		server.WithToolCapabilities(true),
 		server.WithRecovery(),
 	)
 
-	registerMCPTools(mcpServer)
+	registerMCPTools(mcpServer, client)
+	return listenMCPServerFunc(mcpServer)
+}
 
+var listenMCPServerFunc = func(mcpServer *server.MCPServer) error {
 	stdioServer := server.NewStdioServer(mcpServer)
 	stdioServer.SetErrorLogger(log.New(os.Stderr, "[slamy-mcp] ", log.LstdFlags))
-
 	return stdioServer.Listen(context.Background(), os.Stdin, os.Stdout)
 }
 
-func registerMCPTools(s *server.MCPServer) {
+func registerMCPTools(s *server.MCPServer, client *slackutil.Client) {
 	// slack_list_channels
 	s.AddTool(
 		mcp.NewTool("slack_list_channels",
@@ -49,7 +56,7 @@ func registerMCPTools(s *server.MCPServer) {
 			mcp.WithReadOnlyHintAnnotation(true),
 			mcp.WithDestructiveHintAnnotation(false),
 		),
-		handleListChannels,
+		withMCPClient(client, handleListChannels),
 	)
 
 	// slack_get_channel_history
@@ -61,7 +68,7 @@ func registerMCPTools(s *server.MCPServer) {
 			mcp.WithReadOnlyHintAnnotation(true),
 			mcp.WithDestructiveHintAnnotation(false),
 		),
-		handleGetChannelHistory,
+		withMCPClient(client, handleGetChannelHistory),
 	)
 
 	// slack_get_thread_replies
@@ -74,7 +81,7 @@ func registerMCPTools(s *server.MCPServer) {
 			mcp.WithReadOnlyHintAnnotation(true),
 			mcp.WithDestructiveHintAnnotation(false),
 		),
-		handleGetThreadReplies,
+		withMCPClient(client, handleGetThreadReplies),
 	)
 
 	// slack_post_message
@@ -85,7 +92,7 @@ func registerMCPTools(s *server.MCPServer) {
 			mcp.WithString("text", mcp.Required(), mcp.Description("Message text")),
 			mcp.WithDestructiveHintAnnotation(false),
 		),
-		handlePostMessage,
+		withMCPClient(client, handlePostMessage),
 	)
 
 	// slack_reply_to_thread
@@ -97,7 +104,7 @@ func registerMCPTools(s *server.MCPServer) {
 			mcp.WithString("text", mcp.Required(), mcp.Description("Reply text")),
 			mcp.WithDestructiveHintAnnotation(false),
 		),
-		handleReplyToThread,
+		withMCPClient(client, handleReplyToThread),
 	)
 
 	// slack_add_reaction
@@ -109,7 +116,7 @@ func registerMCPTools(s *server.MCPServer) {
 			mcp.WithString("reaction", mcp.Required(), mcp.Description("Emoji name without colons")),
 			mcp.WithDestructiveHintAnnotation(false),
 		),
-		handleAddReaction,
+		withMCPClient(client, handleAddReaction),
 	)
 
 	// slack_get_users
@@ -120,7 +127,7 @@ func registerMCPTools(s *server.MCPServer) {
 			mcp.WithReadOnlyHintAnnotation(true),
 			mcp.WithDestructiveHintAnnotation(false),
 		),
-		handleGetUsers,
+		withMCPClient(client, handleGetUsers),
 	)
 
 	// slack_get_user_profile
@@ -131,7 +138,7 @@ func registerMCPTools(s *server.MCPServer) {
 			mcp.WithReadOnlyHintAnnotation(true),
 			mcp.WithDestructiveHintAnnotation(false),
 		),
-		handleGetUserProfile,
+		withMCPClient(client, handleGetUserProfile),
 	)
 
 	// slack_search_messages
@@ -144,16 +151,29 @@ func registerMCPTools(s *server.MCPServer) {
 			mcp.WithReadOnlyHintAnnotation(true),
 			mcp.WithDestructiveHintAnnotation(false),
 		),
-		handleSearchMessages,
+		withMCPClient(client, handleSearchMessages),
 	)
 }
 
-var getClientFunc = func() (*slackutil.Client, error) {
-	return slackutil.NewClient()
+var getClientFunc = newCommandClient
+
+type mcpClientContextKey struct{}
+
+func withMCPClient(client *slackutil.Client, handler server.ToolHandlerFunc) server.ToolHandlerFunc {
+	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return handler(context.WithValue(ctx, mcpClientContextKey{}, client), request)
+	}
+}
+
+func getMCPClient(ctx context.Context) (*slackutil.Client, error) {
+	if client, ok := ctx.Value(mcpClientContextKey{}).(*slackutil.Client); ok {
+		return client, nil
+	}
+	return getClientFunc()
 }
 
 func handleListChannels(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	client, err := getClientFunc()
+	client, err := getMCPClient(ctx)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
@@ -210,7 +230,7 @@ func handleListChannels(ctx context.Context, request mcp.CallToolRequest) (*mcp.
 }
 
 func handleGetChannelHistory(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	client, err := getClientFunc()
+	client, err := getMCPClient(ctx)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
@@ -255,7 +275,7 @@ func handleGetChannelHistory(ctx context.Context, request mcp.CallToolRequest) (
 }
 
 func handleGetThreadReplies(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	client, err := getClientFunc()
+	client, err := getMCPClient(ctx)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
@@ -301,7 +321,7 @@ func handleGetThreadReplies(ctx context.Context, request mcp.CallToolRequest) (*
 }
 
 func handlePostMessage(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	client, err := getClientFunc()
+	client, err := getMCPClient(ctx)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
@@ -339,7 +359,7 @@ func handlePostMessage(ctx context.Context, request mcp.CallToolRequest) (*mcp.C
 }
 
 func handleReplyToThread(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	client, err := getClientFunc()
+	client, err := getMCPClient(ctx)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
@@ -370,7 +390,7 @@ func handleReplyToThread(ctx context.Context, request mcp.CallToolRequest) (*mcp
 }
 
 func handleAddReaction(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	client, err := getClientFunc()
+	client, err := getMCPClient(ctx)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
@@ -398,7 +418,7 @@ func handleAddReaction(ctx context.Context, request mcp.CallToolRequest) (*mcp.C
 }
 
 func handleGetUsers(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	client, err := getClientFunc()
+	client, err := getMCPClient(ctx)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
@@ -441,7 +461,7 @@ func handleGetUsers(ctx context.Context, request mcp.CallToolRequest) (*mcp.Call
 }
 
 func handleGetUserProfile(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	client, err := getClientFunc()
+	client, err := getMCPClient(ctx)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
@@ -475,7 +495,7 @@ func handleGetUserProfile(ctx context.Context, request mcp.CallToolRequest) (*mc
 }
 
 func handleSearchMessages(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	client, err := getClientFunc()
+	client, err := getMCPClient(ctx)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
