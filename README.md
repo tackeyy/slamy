@@ -36,12 +36,12 @@ brew install tackeyy/tap/slamy
 go install github.com/tackeyy/slamy@latest
 ```
 
-### Build from source
+### Build the Go CLI from source
 
 ```bash
 git clone https://github.com/tackeyy/slamy.git
-cd slamy
-go build -o slamy .
+cd slamy/go-src
+go build -o ../slamy .
 ```
 
 ## Quick Start
@@ -131,11 +131,21 @@ slamy channels list [--limit <number>] [--include-archived] [--json] [--plain]
 
 ### Global options
 
-These flags work with any command:
+slamy provides separate Go and TypeScript CLI implementations. The available
+root options depend on which CLI you installed.
+
+Go CLI (`go install` or a source build):
 
 | Flag | Description |
 |---|---|
 | `--workspace <alias>` | Use the configured Slack workspace alias for this invocation |
+| `--json` | Output as JSON |
+| `--plain` | Output as TSV |
+
+TypeScript CLI (`npm install`):
+
+| Flag | Description |
+|---|---|
 | `--json` | Output as JSON |
 | `--plain` | Output as TSV |
 | `--utc` | Display timestamps in UTC (default: local TZ) |

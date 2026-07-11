@@ -36,12 +36,12 @@ brew install tackeyy/tap/slamy
 go install github.com/tackeyy/slamy@latest
 ```
 
-### ソースからビルド
+### ソースから Go CLI をビルド
 
 ```bash
 git clone https://github.com/tackeyy/slamy.git
-cd slamy
-go build -o slamy .
+cd slamy/go-src
+go build -o ../slamy .
 ```
 
 ## クイックスタート
@@ -131,11 +131,20 @@ slamy channels list [--limit <number>] [--include-archived] [--json] [--plain]
 
 ### グローバルオプション
 
-すべてのコマンドで利用可能:
+slamy には Go 版と TypeScript 版の CLI があります。利用できるルートオプションは、インストールした CLI によって異なります。
+
+Go CLI（`go install` またはソースからビルド）:
 
 | フラグ | 説明 |
 |---|---|
 | `--workspace <alias>` | この実行で使用する Slack ワークスペースエイリアスを指定 |
+| `--json` | JSON 形式で出力 |
+| `--plain` | TSV 形式で出力 |
+
+TypeScript CLI（`npm install`）:
+
+| フラグ | 説明 |
+|---|---|
 | `--json` | JSON 形式で出力 |
 | `--plain` | TSV 形式で出力 |
 | `--utc` | タイムスタンプを UTC で表示（デフォルトはローカル TZ） |
