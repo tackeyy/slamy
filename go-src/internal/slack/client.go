@@ -1,7 +1,6 @@
 package slack
 
 import (
-	"fmt"
 	"os"
 
 	slackapi "github.com/slack-go/slack"
@@ -14,14 +13,25 @@ type Client struct {
 
 // NewClient creates a new Slack client from environment variables.
 func NewClient() (*Client, error) {
-	userToken := os.Getenv("SLACK_USER_TOKEN")
-	if userToken == "" {
-		return nil, fmt.Errorf("SLACK_USER_TOKEN is not set")
+	return newClientWithLookup(nil, os.LookupEnv, func(token string) SlackAPI {
+		return slackapi.New(token)
+	})
+}
+
+// NewClientForWorkspace creates a client for an explicitly selected alias.
+func NewClientForWorkspace(alias string) (*Client, error) {
+	return newClientWithLookup(&alias, os.LookupEnv, func(token string) SlackAPI {
+		return slackapi.New(token)
+	})
+}
+
+func newClientWithLookup(explicitAlias *string, lookupEnv LookupEnv, constructor func(string) SlackAPI) (*Client, error) {
+	credentials, err := ResolveWorkspace(explicitAlias, lookupEnv)
+	if err != nil {
+		return nil, err
 	}
 
-	return &Client{
-		User: slackapi.New(userToken),
-	}, nil
+	return &Client{User: constructor(credentials.token)}, nil
 }
 
 // TeamID returns the configured team ID.
