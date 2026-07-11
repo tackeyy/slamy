@@ -5,8 +5,6 @@ import (
 	"fmt"
 	"os"
 
-	slackutil "github.com/tackeyy/slamy/internal/slack"
-
 	"github.com/spf13/cobra"
 )
 
@@ -17,9 +15,7 @@ var usersCmd = &cobra.Command{
 
 // usersClientFunc は users コマンドが使う Slack クライアントを返す。
 // テストで差し替えるための DI ポイント (Issue #51 PR-3)。
-var usersClientFunc = func() (*slackutil.Client, error) {
-	return slackutil.NewClient()
-}
+var usersClientFunc = newCommandClient
 
 var usersListCmd = &cobra.Command{
 	Use:   "list",
