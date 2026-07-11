@@ -112,10 +112,10 @@ export interface AuthInfo {
 export interface TeamInfo {
   id: string;
   name: string;
-  /** Slack subdomain, e.g. "ma-navi-inc". */
+  /** Slack subdomain, e.g. "example-workspace". */
   domain: string;
   /**
-   * Email domain restriction for the workspace, e.g. "ma-navi.co.jp".
+   * Email domain restriction for the workspace, e.g. "example.com".
    * Empty when no domain is configured. Useful for diagnosing SSO domain mismatches.
    */
   email_domain: string;

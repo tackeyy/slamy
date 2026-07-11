@@ -238,7 +238,7 @@ describe("Slack length 上限定数 (navibot Issue #381 / #382)", () => {
     // 実際の Slack はサーバ側で `<@U...>` → `@username`、`<https://long-url|title>` →
     // `title` 等の置換を行い length を再計算する。defensive margin 500 で msg_too_long リスクを抑える。
     const mention = "<@U0123456789>"; // 14 chars in payload, "@longname" expansion 可能性あり
-    const link = "<https://navi.ma-navigator.com/needs/12345?tab=interviews|議事録>"; // ~70 chars in payload
+    const link = "<https://docs.example.invalid/needs/12345?tab=interviews|議事録>"; // ~70 chars in payload
     const line = `${mention} ${link} ${"あ".repeat(50)}\n`;
     const repeat = Math.ceil((CHAT_UPDATE_MAX_LENGTH * 3) / line.length);
     const text = line.repeat(repeat);
