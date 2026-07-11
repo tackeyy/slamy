@@ -43,7 +43,7 @@ tests, or documentation.
 
 ### Prerequisites
 
-- **Node.js 22+** and **npm 10+** (the project targets Node 22 LTS)
+- **Node.js 25+** and **npm 10+**
 - **Git**
 - A Slack workspace with a Slack app + bot token if you want to run end-to-end CLI / MCP smoke tests
 
