@@ -3,6 +3,9 @@
   "version": "2.1.0",
   "description": "Slack CLI tool and library for TypeScript",
   "type": "module",
+  "engines": {
+    "node": ">=25"
+  },
   "main": "dist/lib/index.js",
   "types": "dist/lib/index.d.ts",
   "bin": {
@@ -33,7 +36,7 @@
   },
   "devDependencies": {
     "@changesets/cli": "^2.27.10",
-    "@types/node": "^22.13.5",
+    "@types/node": "^25.9.2",
     "@vitest/coverage-v8": "^4.1.8",
     "markdownlint-cli2": "^0.22.1",
     "typescript": "^6.0.3",
