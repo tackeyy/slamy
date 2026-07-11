@@ -62,6 +62,7 @@ In **OAuth & Permissions** > **Scopes** > **User Token Scopes**, add:
 | `users:read` | View users and their basic info |
 | `users:read.email` | View email addresses |
 | `users.profile:read` | View user profiles |
+| `team:read` | View workspace (team) info |
 
 ### 3. Install and Set Environment Variables
 
@@ -127,6 +128,7 @@ These flags work with any command:
 
 | Flag | Description |
 |---|---|
+| `--workspace <alias>` | Use the configured Slack workspace alias for this invocation |
 | `--json` | Output as JSON |
 | `--plain` | Output as TSV |
 | `--utc` | Display timestamps in UTC (default: local TZ) |
@@ -252,6 +254,14 @@ slamy search messages <query> [--count <n>] [--page <n>] [--sort <field>] [--sor
 slamy auth test [--json] [--plain]
 ```
 
+### `team info` — Get workspace info
+
+```bash
+slamy team info [--json] [--plain]
+```
+
+Returns the workspace domain, `email_domain`, and Enterprise info. The `email_domain` is useful for diagnosing SSO domain mismatches. Requires the `team:read` scope. Note: SSO enforcement settings are **not** exposed by the Slack API.
+
 ### `mcp` — Start MCP server
 
 ```bash
@@ -266,12 +276,50 @@ Starts an MCP server over stdio, exposing all operations as tools for AI agents 
 
 | Variable | Required | Description |
 |---|---|---|
-| `SLACK_USER_TOKEN` | Yes (either) | Slack User OAuth Token (`xoxp-...`) — required for `search messages` and most read operations |
+| `SLAMY_WORKSPACE_<ALIAS>_USER_TOKEN` | When its alias is selected | User OAuth Token for a workspace alias; uppercase the alias and replace hyphens with underscores |
+| `SLAMY_DEFAULT_WORKSPACE` | No | Workspace alias to use when `--workspace` is omitted |
+| `SLACK_USER_TOKEN` | Yes for legacy single-workspace use | Legacy Slack User OAuth Token (`xoxp-...`) — used only when neither an explicit nor default alias is selected |
 | `SLACK_BOT_TOKEN` | Yes (either) | Slack Bot OAuth Token (`xoxb-...`) — used for write operations and `reactions get` |
 | `SLAMY_TZ` | No | IANA timezone used by `engagement` commands (default: `Asia/Tokyo`) |
 | `SLACK_TEAM_ID` | No | Slack Team ID (for workspace-specific operations) |
 
-At least one of `SLACK_USER_TOKEN` / `SLACK_BOT_TOKEN` must be set. When both are set, slamy uses each token for the operations it best fits.
+When both `SLACK_USER_TOKEN` and `SLACK_BOT_TOKEN` are set in legacy mode, slamy uses each token for the operations it best fits.
+
+### Multiple Workspaces
+
+A workspace alias is a local identifier. It is independent of the workspace name, domain, and Team ID in Slack, and slamy does not discover or match aliases automatically. An alias must be 1–63 characters and match `^[a-z0-9]+(?:-[a-z0-9]+)*$` (for example, `primary`, `operations`, or `project-a`).
+
+Configure one User OAuth Token for each alias. The environment variable name is formed by uppercasing the alias and replacing hyphens with underscores:
+
+```bash
+export SLAMY_DEFAULT_WORKSPACE=primary
+export SLAMY_WORKSPACE_PRIMARY_USER_TOKEN='<user-token>'
+export SLAMY_WORKSPACE_OPERATIONS_USER_TOKEN='<user-token>'
+export SLAMY_WORKSPACE_PROJECT_A_USER_TOKEN='<user-token>'
+```
+
+The workspace selection order is:
+
+1. The root persistent flag `--workspace <alias>`
+2. `SLAMY_DEFAULT_WORKSPACE`
+3. Legacy `SLACK_USER_TOKEN`, only when neither alias source is set
+
+There is no `SLAMY_WORKSPACE` selector environment variable; use `--workspace` for an explicit selection.
+
+```bash
+# Uses the default alias, primary
+slamy channels list
+
+# Explicit selection takes precedence over the default
+slamy --workspace operations channels list
+slamy --workspace project-a auth test
+```
+
+Alias selection is fail-closed. If `--workspace` or `SLAMY_DEFAULT_WORKSPACE` selects an alias but its `SLAMY_WORKSPACE_<ALIAS>_USER_TOKEN` is missing, slamy returns an error instead of falling back to `SLACK_USER_TOKEN` or another alias.
+
+Existing single-workspace setups remain compatible: keep `SLACK_USER_TOKEN` and leave both `--workspace` and `SLAMY_DEFAULT_WORKSPACE` unset. To migrate, move that token to an alias-specific variable, set `SLAMY_DEFAULT_WORKSPACE` to the alias, then remove `SLACK_USER_TOKEN` after verifying the new setup.
+
+Treat every token as a secret. Do not commit tokens to a repository, pass them as command-line arguments, or print them to logs, standard output, standard error, or JSON. Provide them through protected environment or secret-management facilities.
 
 ## Output Formats
 
@@ -317,16 +365,25 @@ Add to your `claude_desktop_config.json`:
 ```json
 {
   "mcpServers": {
-    "slamy": {
+    "slamy-primary": {
       "command": "/path/to/slamy",
-      "args": ["mcp"],
+      "args": ["--workspace", "primary", "mcp"],
       "env": {
-        "SLACK_USER_TOKEN": "xoxp-your-user-token"
+        "SLAMY_WORKSPACE_PRIMARY_USER_TOKEN": "<user-token>"
+      }
+    },
+    "slamy-operations": {
+      "command": "/path/to/slamy",
+      "args": ["--workspace", "operations", "mcp"],
+      "env": {
+        "SLAMY_WORKSPACE_OPERATIONS_USER_TOKEN": "<user-token>"
       }
     }
   }
 }
 ```
+
+Run a separate MCP process for each alias. Each process resolves its workspace once at startup and keeps that client fixed for its lifetime; changing environment variables after startup does not switch it. MCP tool schemas intentionally have no `workspace` argument, so workspace selection cannot change per tool call. If possible, inject the environment variables through a protected secret store instead of writing token values directly in the configuration file.
 
 ### Available Tools
 

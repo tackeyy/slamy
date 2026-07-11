@@ -1,21 +1,26 @@
 #!/usr/bin/env node
 import { Command } from "commander";
-import { createWriteStream } from "node:fs";
+import { createWriteStream, readFileSync } from "node:fs";
 import { Readable } from "node:stream";
 import { pipeline } from "node:stream/promises";
-import { basename } from "node:path";
+import { basename, dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { SlamyClient } from "../lib/client.js";
 import { formatTimestamp as libFormatTimestamp } from "../lib/tz.js";
 import { parseSlackTarget } from "../lib/parse-target.js";
 import { jsonOutput as formatJson } from "../lib/cli-format.js";
 import { requireToken } from "../lib/cli-errors.js";
 
+const pkg = JSON.parse(
+  readFileSync(join(dirname(fileURLToPath(import.meta.url)), "../../package.json"), "utf-8"),
+) as { version: string };
+
 const program = new Command();
 
 program
   .name("slamy")
   .description("Slack CLI tool")
-  .version("2.0.0")
+  .version(pkg.version)
   .option("--json", "Output in JSON format")
   .option("--plain", "Output in TSV format")
   .option("--utc", "Display timestamps in UTC (default: local TZ)")
@@ -104,6 +109,39 @@ auth
         console.log(`Authenticated as: ${info.user} (${info.user_id})`);
         console.log(`Team: ${info.team} (${info.team_id})`);
         console.log(`URL: ${info.url}`);
+      }
+    } catch (err: any) {
+      console.error(`Error: ${err.message}`);
+      process.exit(1);
+    }
+  });
+
+// --- team ---
+const team = program.command("team").description("Workspace (team) operations");
+
+team
+  .command("info")
+  .description(
+    "Get workspace info (domain, email_domain, enterprise). Note: SSO enforcement settings are not exposed by the Slack API.",
+  )
+  .action(async () => {
+    try {
+      const client = createClient();
+      const mode = getOutputMode();
+      const info = await client.getTeamInfo();
+
+      if (mode === "json") {
+        jsonOutput(info);
+      } else if (mode === "plain") {
+        console.log(
+          `${info.id}\t${info.name}\t${info.domain}\t${info.email_domain}\t${info.enterprise_id}\t${info.enterprise_name}`,
+        );
+      } else {
+        console.log(`Team: ${info.name} (${info.id})`);
+        console.log(`Domain: ${info.domain}.slack.com`);
+        if (info.email_domain) console.log(`Email domain: ${info.email_domain}`);
+        if (info.enterprise_name)
+          console.log(`Enterprise: ${info.enterprise_name} (${info.enterprise_id})`);
       }
     } catch (err: any) {
       console.error(`Error: ${err.message}`);

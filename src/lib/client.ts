@@ -17,6 +17,7 @@ import type {
   UserProfile,
   SearchResult,
   AuthInfo,
+  TeamInfo,
   ReactionItem,
   ReactionsListResult,
 } from "./types.js";
@@ -780,6 +781,26 @@ export class SlamyClient {
       team_id: res.team_id || "",
       team: res.team || "",
       url: res.url || "",
+    };
+  }
+
+  /**
+   * Fetch workspace (team) info via team.info.
+   * Note: SSO required/enforcement settings are NOT exposed by this API
+   * (Enterprise Grid admin token or SCIM is required for those). This returns
+   * the domain/email_domain, which is useful for diagnosing SSO domain mismatches.
+   */
+  async getTeamInfo(): Promise<TeamInfo> {
+    const res = await this.userClient.team.info();
+    const t: any = res.team || {};
+    return {
+      id: t.id || "",
+      name: t.name || "",
+      domain: t.domain || "",
+      email_domain: t.email_domain || "",
+      enterprise_id: t.enterprise_id || "",
+      enterprise_name: t.enterprise_name || "",
+      icon: t.icon?.image_132 || "",
     };
   }
 

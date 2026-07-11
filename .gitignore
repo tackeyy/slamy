@@ -11,5 +11,6 @@ vitest.config.d.ts.map
 .DS_Store
 .playwright-cli/
 .goal-state/
+.mission-state/
 go-src/coverage.out
 coverage.out
