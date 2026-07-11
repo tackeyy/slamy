@@ -94,3 +94,33 @@ func TestRegisteredMCPToolsDoNotExposeWorkspaceArgument(t *testing.T) {
 		}
 	}
 }
+
+func TestMCPResolverErrorResultDoesNotLeakLegacyToken(t *testing.T) {
+	flag := rootCmd.PersistentFlags().Lookup("workspace")
+	originalChanged := flag.Changed
+	originalWorkspace := workspace
+	originalGetClient := getClientFunc
+	t.Cleanup(func() {
+		flag.Changed = originalChanged
+		workspace = originalWorkspace
+		getClientFunc = originalGetClient
+	})
+	if err := rootCmd.PersistentFlags().Set("workspace", "operations"); err != nil {
+		t.Fatalf("set workspace flag: %v", err)
+	}
+	t.Setenv("SLAMY_WORKSPACE_OPERATIONS_USER_TOKEN", "")
+	canary := "xoxp-legacy-secret-canary"
+	t.Setenv("SLACK_USER_TOKEN", canary)
+	getClientFunc = newCommandClient
+
+	result, err := handleListChannels(context.Background(), makeRequest(nil))
+	if err != nil {
+		t.Fatalf("handleListChannels() error = %v", err)
+	}
+	if !result.IsError {
+		t.Fatal("handleListChannels() result is not an error")
+	}
+	if text := resultText(t, result); strings.Contains(text, canary) {
+		t.Fatalf("MCP error result leaked token: %s", text)
+	}
+}

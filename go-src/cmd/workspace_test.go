@@ -73,3 +73,32 @@ func TestCommonClientFactoryRejectsExplicitEmptyWorkspace(t *testing.T) {
 		t.Fatalf("newCommandClient() error = %v, want invalid alias", err)
 	}
 }
+
+func TestCLIResolverErrorDoesNotLeakLegacyTokenToOutput(t *testing.T) {
+	flag := rootCmd.PersistentFlags().Lookup("workspace")
+	originalChanged := flag.Changed
+	originalWorkspace := workspace
+	originalAuthClient := authClientFunc
+	t.Cleanup(func() {
+		flag.Changed = originalChanged
+		workspace = originalWorkspace
+		authClientFunc = originalAuthClient
+	})
+	if err := rootCmd.PersistentFlags().Set("workspace", "operations"); err != nil {
+		t.Fatalf("set workspace flag: %v", err)
+	}
+	t.Setenv("SLAMY_WORKSPACE_OPERATIONS_USER_TOKEN", "")
+	canary := "xoxp-legacy-secret-canary"
+	t.Setenv("SLACK_USER_TOKEN", canary)
+	authClientFunc = newCommandClient
+
+	stdout, err := captureStdout(t, func() error {
+		return authTestCmd.RunE(authTestCmd, nil)
+	})
+	if err == nil {
+		t.Fatal("auth test succeeded, want resolver error")
+	}
+	if strings.Contains(stdout, canary) || strings.Contains(err.Error(), canary) {
+		t.Fatalf("CLI output leaked token: stdout=%q error=%v", stdout, err)
+	}
+}
