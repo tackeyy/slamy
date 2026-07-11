@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"slices"
 	"strings"
 	"testing"
 
@@ -36,11 +37,17 @@ func TestRootCmd_BasicStructure(t *testing.T) {
 }
 
 func TestRootCmd_HasAllSubcommands(t *testing.T) {
-	want := []string{"auth", "channels", "messages", "reactions", "search", "threads", "users", "mcp"}
-	for _, name := range want {
-		if findSubcommand(rootCmd, name) == nil {
-			t.Errorf("rootCmd missing subcommand %q", name)
+	got := make([]string, 0, len(rootCmd.Commands()))
+	for _, sub := range rootCmd.Commands() {
+		head := strings.Fields(sub.Use)
+		if len(head) > 0 {
+			got = append(got, head[0])
 		}
+	}
+	slices.Sort(got)
+	want := []string{"auth", "channels", "messages", "reactions", "search", "threads", "users"}
+	if !slices.Equal(got, want) {
+		t.Errorf("rootCmd subcommands = %v, want exactly %v", got, want)
 	}
 }
 
@@ -130,8 +137,8 @@ func TestSearchCmd_DefaultFlags(t *testing.T) {
 		t.Fatal("search has no 'messages' subcommand")
 	}
 	tests := []struct {
-		flag    string
-		defVal  string
+		flag   string
+		defVal string
 	}{
 		{"count", "20"},
 		{"page", "1"},
