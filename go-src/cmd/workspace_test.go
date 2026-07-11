@@ -33,8 +33,8 @@ func TestAllCLIClientFactoriesUseExplicitWorkspaceResolver(t *testing.T) {
 	t.Setenv("SLACK_USER_TOKEN", canary)
 
 	factories := []struct {
-		name string
 		fn   func() (*slackutil.Client, error)
+		name string
 	}{
 		{name: "auth", fn: authClientFunc},
 		{name: "channels", fn: channelsClientFunc},
