@@ -1,6 +1,9 @@
 package cmd
 
 import (
+	"bytes"
+	"os"
+	"os/exec"
 	"strings"
 	"testing"
 
@@ -101,4 +104,37 @@ func TestCLIResolverErrorDoesNotLeakLegacyTokenToOutput(t *testing.T) {
 	if strings.Contains(stdout, canary) || strings.Contains(err.Error(), canary) {
 		t.Fatalf("CLI output leaked token: stdout=%q error=%v", stdout, err)
 	}
+}
+
+func TestCLIResolverFailureStderrDoesNotLeakLegacyToken(t *testing.T) {
+	canary := "xoxp-legacy-secret-canary"
+	cmd := exec.Command(os.Args[0], "-test.run=^TestCLIResolverFailureHelperProcess$")
+	cmd.Env = []string{
+		"GO_WANT_CLI_RESOLVER_FAILURE_HELPER=1",
+		"SLACK_USER_TOKEN=" + canary,
+		"SLAMY_WORKSPACE_OPERATIONS_USER_TOKEN=",
+	}
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+
+	err := cmd.Run()
+	if err == nil {
+		t.Fatal("CLI helper succeeded, want resolver failure")
+	}
+	if strings.Contains(stdout.String(), canary) || strings.Contains(stderr.String(), canary) {
+		t.Fatalf("CLI output leaked token: stdout=%q stderr=%q", stdout.String(), stderr.String())
+	}
+	if !strings.Contains(stderr.String(), "SLAMY_WORKSPACE_OPERATIONS_USER_TOKEN is not set") {
+		t.Fatalf("CLI stderr = %q, want missing workspace token error", stderr.String())
+	}
+}
+
+func TestCLIResolverFailureHelperProcess(t *testing.T) {
+	if os.Getenv("GO_WANT_CLI_RESOLVER_FAILURE_HELPER") != "1" {
+		return
+	}
+	rootCmd.SetArgs([]string{"--workspace", "operations", "auth", "test"})
+	Execute()
 }

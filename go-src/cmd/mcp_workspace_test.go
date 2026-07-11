@@ -1,8 +1,10 @@
 package cmd
 
 import (
+	"bytes"
 	"context"
 	"fmt"
+	"log"
 	"strings"
 	"testing"
 
@@ -58,20 +60,32 @@ func TestRunMCPServerResolvesClientOnceAndFixesItForToolCalls(t *testing.T) {
 }
 
 func TestRunMCPServerDoesNotListenWhenResolutionFails(t *testing.T) {
+	flag := rootCmd.PersistentFlags().Lookup("workspace")
+	originalChanged := flag.Changed
+	originalWorkspace := workspace
 	originalGetClient := getClientFunc
 	originalListen := listenMCPServerFunc
 	t.Cleanup(func() {
+		flag.Changed = originalChanged
+		workspace = originalWorkspace
 		getClientFunc = originalGetClient
 		listenMCPServerFunc = originalListen
 	})
 
 	canary := "xoxp-secret-canary"
-	getClientFunc = func() (*slackutil.Client, error) {
-		return nil, fmt.Errorf("SLAMY_WORKSPACE_PRIMARY_USER_TOKEN is not set")
+	if err := rootCmd.PersistentFlags().Set("workspace", "primary"); err != nil {
+		t.Fatalf("set workspace flag: %v", err)
 	}
+	t.Setenv("SLAMY_WORKSPACE_PRIMARY_USER_TOKEN", "")
+	t.Setenv("SLACK_USER_TOKEN", canary)
+	getClientFunc = newCommandClient
+
+	var loggerBuffer bytes.Buffer
+	logger := log.New(&loggerBuffer, "[slamy-mcp] ", 0)
 	listenCalls := 0
 	listenMCPServerFunc = func(s *server.MCPServer) error {
 		listenCalls++
+		logger.Print(canary)
 		return nil
 	}
 
@@ -79,8 +93,8 @@ func TestRunMCPServerDoesNotListenWhenResolutionFails(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), "SLAMY_WORKSPACE_PRIMARY_USER_TOKEN") {
 		t.Fatalf("runMCPServer() error = %v, want resolver error", err)
 	}
-	if strings.Contains(err.Error(), canary) || listenCalls != 0 {
-		t.Fatalf("runMCPServer() leaked token or started server: error=%v listenCalls=%d", err, listenCalls)
+	if strings.Contains(err.Error(), canary) || strings.Contains(loggerBuffer.String(), canary) || listenCalls != 0 {
+		t.Fatalf("runMCPServer() leaked token or started server: error=%v log=%q listenCalls=%d", err, loggerBuffer.String(), listenCalls)
 	}
 }
 

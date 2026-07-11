@@ -29,6 +29,26 @@ func TestWorkspaceCredentialsFormattingRedactsToken(t *testing.T) {
 	}
 }
 
+func TestWrappedResolverErrorDoesNotLeakToken(t *testing.T) {
+	alias := "operations"
+	canary := "xoxp-secret-canary"
+	lookup := func(key string) (string, bool) {
+		if key == "SLACK_USER_TOKEN" {
+			return canary, true
+		}
+		return "", false
+	}
+
+	_, err := ResolveWorkspace(&alias, lookup)
+	if err == nil {
+		t.Fatal("ResolveWorkspace() succeeded, want missing workspace token error")
+	}
+	wrapped := fmt.Errorf("context: %w", err)
+	if strings.Contains(wrapped.Error(), canary) {
+		t.Fatalf("wrapped resolver error leaked token: %v", wrapped)
+	}
+}
+
 func TestResolveWorkspaceSelectsCredentialsFailClosed(t *testing.T) {
 	explicit := "operations"
 	empty := ""
