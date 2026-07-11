@@ -1,6 +1,7 @@
 package slack
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 )
@@ -12,6 +13,19 @@ func TestWorkspaceTokenEnvNameConvertsHyphenatedAlias(t *testing.T) {
 	}
 	if want := "SLAMY_WORKSPACE_PROJECT_A_USER_TOKEN"; got != want {
 		t.Fatalf("WorkspaceTokenEnvName() = %q, want %q", got, want)
+	}
+}
+
+func TestWorkspaceCredentialsFormattingRedactsToken(t *testing.T) {
+	credentials := WorkspaceCredentials{Alias: "primary", token: "xoxp-secret-canary"}
+	for _, formatted := range []string{
+		fmt.Sprintf("%v", credentials),
+		fmt.Sprintf("%+v", credentials),
+		fmt.Sprintf("%#v", credentials),
+	} {
+		if strings.Contains(formatted, credentials.token) {
+			t.Fatalf("formatted credentials leaked token: %s", formatted)
+		}
 	}
 }
 

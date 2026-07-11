@@ -18,6 +18,16 @@ type WorkspaceCredentials struct {
 	token string
 }
 
+// String redacts the credential when formatted.
+func (c WorkspaceCredentials) String() string {
+	return fmt.Sprintf("WorkspaceCredentials{Alias:%q, token:[REDACTED]}", c.Alias)
+}
+
+// GoString redacts the credential for Go-syntax formatting as well.
+func (c WorkspaceCredentials) GoString() string {
+	return c.String()
+}
+
 // WorkspaceTokenEnvName returns the token environment variable for alias.
 func WorkspaceTokenEnvName(alias string) (string, error) {
 	if len(alias) < 1 || len(alias) > 63 || !workspaceAliasPattern.MatchString(alias) {
