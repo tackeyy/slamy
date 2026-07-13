@@ -31,7 +31,7 @@
   },
   "dependencies": {
     "@slack/bolt": "^4.7.3",
-    "@slack/web-api": "^7.16.0",
+    "@slack/web-api": "^7.19.0",
     "commander": "^14.0.3"
   },
   "devDependencies": {
