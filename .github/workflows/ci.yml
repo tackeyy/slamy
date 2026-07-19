@@ -28,7 +28,7 @@ jobs:
 
       - name: Detect changed file scopes
         id: changes
-        uses: actions/github-script@v8
+        uses: actions/github-script@v9
         with:
           script: |
             let files = [];
@@ -112,7 +112,7 @@ jobs:
 
       - name: Setup Go
         if: steps.changes.outputs.go == 'true'
-        uses: actions/setup-go@v6
+        uses: actions/setup-go@v6.5.0
         with:
           go-version-file: go-src/go.mod
           cache-dependency-path: go-src/go.sum
