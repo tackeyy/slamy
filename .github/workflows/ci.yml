@@ -1,79 +1,160 @@
 name: CI
 
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened, ready_for_review]
+  merge_group:
+
+permissions:
+  contents: read
+  pull-requests: read
+
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: >-
+    ci-${{ github.event_name == 'pull_request'
+    && github.event.pull_request.number || github.sha }}
   cancel-in-progress: true
 
-on:
-  push:
-    branches:
-      - main
-  pull_request:
-    branches:
-      - main
-
 jobs:
-  typecheck:
-    name: Type Check
+  quality:
+    name: Quality
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 25
     steps:
-      - uses: actions/checkout@v7
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Detect changed file scopes
+        id: changes
+        uses: actions/github-script@v8
+        with:
+          script: |
+            let files = [];
+            let runAll = context.eventName !== 'pull_request';
+            try {
+              if (!runAll) {
+                const response = await github.paginate(github.rest.pulls.listFiles, {
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  pull_number: context.payload.pull_request.number,
+                  per_page: 100,
+                });
+                files = response.map((file) => file.filename);
+              }
+            } catch (error) {
+              core.warning(`Changed-file detection failed; running all checks: ${error.message}`);
+              runAll = true;
+            }
+            if (files.length === 0) runAll = true;
+
+            const workflow = files.some((file) =>
+              file.startsWith('.github/') || file === 'scripts/check-actions-cost-guard.mjs',
+            );
+            const node = runAll || workflow || files.some((file) =>
+              file.startsWith('src/') ||
+              file.startsWith('test/') ||
+              file.endsWith('.ts') ||
+              file === 'package.json' ||
+              file === 'package-lock.json' ||
+              file.startsWith('tsconfig') ||
+              file === 'vitest.config.ts',
+            );
+            const markdown = runAll || workflow || files.some((file) => file.endsWith('.md'));
+            const go = runAll || workflow || files.some((file) => file.startsWith('go-src/'));
+            const yaml = runAll || workflow || files.some((file) => /\.ya?ml$/.test(file));
+            const shell = runAll || workflow || files.some((file) => file.endsWith('.sh'));
+
+            for (const [scope, enabled] of Object.entries({ node, markdown, go, yaml, shell })) {
+              core.setOutput(scope, enabled ? 'true' : 'false');
+            }
+
+      - name: Verify GitHub Actions cost guard
+        run: node scripts/check-actions-cost-guard.mjs
 
       - name: Setup Node.js
-        uses: actions/setup-node@v6
+        if: steps.changes.outputs.node == 'true' || steps.changes.outputs.markdown == 'true'
+        uses: actions/setup-node@v7
         with:
           node-version: '25'
-          cache: 'npm'
+          cache: npm
 
-      - name: Install dependencies
+      - name: Install Node dependencies
+        if: steps.changes.outputs.node == 'true' || steps.changes.outputs.markdown == 'true'
         run: npm ci --ignore-scripts
 
       - name: Type check
+        if: steps.changes.outputs.node == 'true'
         run: npm run typecheck
 
-  test:
-    name: Test
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@v7
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v6
-        with:
-          node-version: '25'
-          cache: 'npm'
-
-      - name: Install dependencies
-        run: npm ci --ignore-scripts
-
-      - name: Run tests with coverage
+      - name: Run Node tests with coverage
+        id: node-tests
+        if: steps.changes.outputs.node == 'true'
         run: npm run test:coverage
 
-      - name: Upload coverage
+      - name: Upload Node coverage on failure
+        if: failure() && steps.node-tests.outcome == 'failure'
         uses: actions/upload-artifact@v7
-        if: always()
         with:
-          name: coverage
+          name: node-coverage-${{ github.sha }}
           path: coverage/
+          if-no-files-found: ignore
+          retention-days: 1
 
-  build:
-    name: Build
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    needs: [typecheck, test]
-    steps:
-      - uses: actions/checkout@v7
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v6
-        with:
-          node-version: '25'
-          cache: 'npm'
-
-      - name: Install dependencies
-        run: npm ci --ignore-scripts
-
-      - name: Build
+      - name: Build Node package
+        if: steps.changes.outputs.node == 'true'
         run: npm run build
+
+      - name: Run markdownlint
+        if: steps.changes.outputs.markdown == 'true'
+        run: npm run lint:md
+
+      - name: Setup Go
+        if: steps.changes.outputs.go == 'true'
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: go-src/go.mod
+          cache-dependency-path: go-src/go.sum
+
+      - name: Run golangci-lint
+        if: steps.changes.outputs.go == 'true'
+        uses: golangci/golangci-lint-action@v9
+        with:
+          version: v2.9.0
+          working-directory: go-src
+
+      - name: Run Go race tests
+        if: steps.changes.outputs.go == 'true'
+        working-directory: go-src
+        run: go test -race -coverprofile=coverage.out -covermode=atomic ./...
+
+      - name: Upload Go coverage to Codecov
+        if: steps.changes.outputs.go == 'true'
+        uses: codecov/codecov-action@v7
+        with:
+          file: ./go-src/coverage.out
+
+      - name: Setup Python for yamllint
+        if: steps.changes.outputs.yaml == 'true'
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.x'
+          cache: pip
+          cache-dependency-path: .github/requirements-ci.txt
+
+      - name: Install yamllint
+        if: steps.changes.outputs.yaml == 'true'
+        run: python -m pip install -r .github/requirements-ci.txt
+
+      - name: Run yamllint
+        if: steps.changes.outputs.yaml == 'true'
+        run: yamllint .
+
+      - name: Run ShellCheck
+        if: steps.changes.outputs.shell == 'true'
+        uses: ludeeus/action-shellcheck@master
+        with:
+          scandir: '.'
+          severity: warning
+          ignore_paths: node_modules dist go-src
