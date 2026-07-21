@@ -1,13 +1,17 @@
 import type { TeamId } from "./team-id.js";
 
-export type EnvironmentCredentialRef = {
-  provider: "environment";
+export type CredentialReference = {
+  provider: string;
   name: string;
 };
 
+export type EnvironmentCredentialRef = CredentialReference & {
+  provider: "environment";
+};
+
 export type WorkspaceCredentialRefs = {
-  user?: EnvironmentCredentialRef;
-  bot?: EnvironmentCredentialRef;
+  user?: CredentialReference;
+  bot?: CredentialReference;
 };
 
 export type WorkspaceRecord = {

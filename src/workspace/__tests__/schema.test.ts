@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { WorkspaceRegistryError } from "../errors.js";
-import { decodeWorkspaceRegistry, parseWorkspaceRegistryJson } from "../schema.js";
+import {
+  decodeWorkspaceRegistry,
+  parseWorkspaceRegistryJson,
+  serializeWorkspaceRegistry,
+} from "../schema.js";
 
 describe("decodeWorkspaceRegistry", () => {
   it("accepts a version 1 document with Team ID as the canonical identity", () => {
@@ -25,6 +29,29 @@ describe("decodeWorkspaceRegistry", () => {
     expect(document.workspaces[0]?.teamId).toBe("T00000001");
   });
 
+  it("accepts opaque references for registered credential providers", () => {
+    const document = decodeWorkspaceRegistry({
+      version: 1,
+      workspaces: [
+        {
+          teamId: "T00000001",
+          alias: "primary",
+          domain: "primary.slack.com",
+          previousDomains: [],
+          displayName: "Primary",
+          credentialRefs: {
+            user: { provider: "keychain", name: "primary/user" },
+          },
+        },
+      ],
+    });
+
+    expect(document.workspaces[0]?.credentialRefs?.user).toEqual({
+      provider: "keychain",
+      name: "primary/user",
+    });
+  });
+
   it("fails closed for corrupt, unknown, duplicate, ambiguous, or secret-like input", () => {
     const workspace = {
       teamId: "T00000001",
@@ -41,6 +68,15 @@ describe("decodeWorkspaceRegistry", () => {
       {
         version: 1,
         workspaces: [workspace, { ...workspace, teamId: "T00000002" }],
+      },
+      {
+        version: 1,
+        workspaces: [
+          {
+            ...workspace,
+            credentialRefs: { user: { provider: "Invalid Provider", name: "primary/user" } },
+          },
+        ],
       },
       {
         version: 1,
@@ -79,6 +115,43 @@ describe("decodeWorkspaceRegistry", () => {
       decodeWorkspaceRegistry(unsafeDocuments.at(-1));
     } catch (error) {
       expect(String(error)).not.toContain("xoxp-secret-canary");
+    }
+  });
+
+  it.each([
+    "xapp-1-A0123456789-secret-canary",
+    "https://hooks.slack.com/services/T000/B000/commercial-secret-canary",
+    "https://hooks.slack.com/triggers/T000/commercial-trigger-secret-canary",
+    "https://hooks.slack.com/actions/T000/commercial-action-secret-canary",
+    "https://hooks.slack-gov.com/services/T000/B000/gov-secret-canary",
+    "https://hooks.slack-gov.com/triggers/T000/gov-trigger-secret-canary",
+    "https://hooks.slack-gov.com/actions/T000/gov-action-secret-canary",
+  ])("rejects Slack secrets from custom-provider references", (canary) => {
+    const document = {
+      version: 1,
+      workspaces: [
+        {
+          teamId: "T00000001",
+          alias: "primary",
+          domain: "primary.slack.com",
+          previousDomains: [],
+          displayName: "Primary",
+          credentialRefs: { user: { provider: "keychain", name: canary } },
+        },
+      ],
+    };
+
+    for (const action of [
+      () => decodeWorkspaceRegistry(document),
+      () => serializeWorkspaceRegistry(document as never),
+    ]) {
+      expect(action).toThrow(WorkspaceRegistryError);
+      try {
+        action();
+      } catch (error) {
+        expect(String(error)).not.toContain(canary);
+        expect(JSON.stringify(error)).not.toContain(canary);
+      }
     }
   });
 });

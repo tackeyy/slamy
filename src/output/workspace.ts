@@ -1,4 +1,5 @@
 import type { WorkspaceCredentialRefs, WorkspaceView } from "../domain/workspace.js";
+import { looksLikeSlackSecret } from "../domain/slack-secret.js";
 
 export type WorkspaceOutputMode = "human" | "json" | "plain";
 
@@ -85,5 +86,5 @@ function redactUnsafeCredentialRefs(workspace: WorkspaceView): WorkspaceView {
 }
 
 function safeReferenceName(name: string): string {
-  return /^xox[a-z]-/i.test(name) ? "[REDACTED]" : name;
+  return looksLikeSlackSecret(name) ? "[REDACTED]" : name;
 }

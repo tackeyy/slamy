@@ -187,9 +187,10 @@ slamy workspace default --clear
 slamy workspace remove primary
 ```
 
-これらのコマンドはSlackへ接続せず、token値を引数として受け取りません。Phase 1の現時点では、
-registryは既存Slack APIコマンドのroutingにはまだ使われません。credential検証は#86、
-permalink routingは#83で対応します。
+これらのコマンドはSlackへ接続せず、token値を引数として受け取りません。TypeScript libraryには、
+token種別とSlack Team IDを`auth.test`で検証するatomic credential-set resolverも追加済みです。
+既存CLIコマンドへの接続はworkspace-aware adapterへ移行する#92で行い、permalink routingは#83で
+対応します。
 
 ### `channels history` — チャンネルのメッセージ履歴
 
@@ -338,13 +339,26 @@ slamy team info [--json] [--plain]
 ### 複数ワークスペース
 
 TypeScript workspace registryではSlack Team IDを正規識別子とします。alias、現在domain、過去domain、
-表示名、default状態、環境変数credential referenceは変更可能な属性です。registryにはcredential
-reference名だけを保存し、token値は保存しません。破損JSON、未知field、Team ID・alias・domainの
-重複、参照先のないdefault、symlink、group/otherから読めるfileを拒否し、更新時はdocument全体を
-atomicに置き換えます。
+表示名、default状態、credential referenceは変更可能な属性です。referenceは検証済みprovider IDと
+opaqueなreference名を持ちます。組み込みproviderは環境変数名を解決し、custom providerはworkspace
+recordを変更せずKeychainやOAuthのreferenceを解決できます。registryにはreference名だけを保存し、
+token値は保存しません。破損JSON、未知field、Team ID・alias・domainの重複、参照先のないdefault、
+symlink、group/otherから読めるfileを拒否し、更新時はdocument全体をatomicに置き換えます。
 
 上記の`workspace list/add/remove/show/default`を利用でき、`--json`と`--plain`にも対応します。
 POSIXでは専用config directoryを`0700`、registry fileを`0600`で作成します。
+
+libraryから`createCredentialResolver()`を使うと、一つの`WorkspaceRecord`に設定されたUser/Bot
+referenceを一つのsetとして解決・検証できます。別token種別への代替、検証途中の部分set返却、
+cross-workspaceのUser/Bot混在、registry workspaceからlegacy global tokenへのfallbackは行いません。
+raw token値は文字列化、JSON、inspection、provider error、verification errorでredactされます。
+operation終了時は返却setの`destroy()`を呼び出してください。set内の全credentialを冪等に破棄します。
+custom providerとverifierはinterface上raw tokenを扱う必要があるため、trusted componentです。実装を
+検証し、適切に隔離してください。
+
+Slackの`auth.test`が証明するのはidentityとTeam IDであり、操作scopeではありません。Userの
+`search:read`などはrequirement metadataとして保持できますが、実際のmethod policyと
+`missing_scope`処理はworkspace-aware Slack adapterの#92で実装します。
 
 以下の環境変数alias方式は従来のGo CLI契約です。v2中はread-only互換を維持し、削除は早くても
 v3.0.0以降です。旧環境変数だけではSlack Team IDを証明できないため、自動importしません。

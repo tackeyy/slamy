@@ -25,6 +25,7 @@ export type {
 export { parseTeamId } from "../domain/team-id.js";
 export type { TeamId } from "../domain/team-id.js";
 export type {
+  CredentialReference,
   EnvironmentCredentialRef,
   WorkspaceCredentialRefs,
   WorkspaceRecord,
@@ -34,6 +35,20 @@ export { WorkspaceRegistry } from "../workspace/registry.js";
 export { WorkspaceRegistryError } from "../workspace/errors.js";
 export type { WorkspaceRegistryErrorCode } from "../workspace/errors.js";
 export type { WorkspaceRegistryDocument } from "../workspace/types.js";
+export { createCredentialResolver } from "./credentials.js";
+export type { CreateCredentialResolverOptions } from "./credentials.js";
+export { CredentialError, CredentialResolver, EnvironmentCredentialProvider } from "../credentials/index.js";
+export type {
+  AuthIdentity,
+  AuthVerifier,
+  CredentialErrorCode,
+  CredentialHandle,
+  CredentialKind,
+  CredentialProvider,
+  CredentialRequirement,
+  VerifiedCredential,
+  VerifiedCredentialSet,
+} from "../credentials/index.js";
 export type {
   Channel,
   UnreadChannel,

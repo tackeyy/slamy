@@ -189,9 +189,10 @@ slamy workspace default --clear
 slamy workspace remove primary
 ```
 
-These commands do not call Slack and never accept token values. In Phase 1, the registry is not yet
-used to route existing Slack API commands; credential verification is tracked in #86 and permalink
-routing in #83.
+These commands do not call Slack and never accept token values. The TypeScript library now includes
+an atomic credential-set resolver that validates token kind and Slack Team ID with `auth.test`.
+Existing CLI commands are not connected to that resolver until the workspace-aware adapter migration
+in #92; permalink routing remains in #83.
 
 ### `channels history` — Get channel message history
 
@@ -340,14 +341,31 @@ When both `SLACK_USER_TOKEN` and `SLACK_BOT_TOKEN` are set in legacy mode, slamy
 ### Multiple Workspaces
 
 The TypeScript workspace registry uses Slack Team ID as the canonical identifier. Alias, current
-domain, previous domains, display name, default state, and environment-variable credential
-references are mutable attributes. The registry stores credential reference names only, never token
-values. It rejects corrupt JSON, unknown fields, duplicate Team IDs, aliases or domains, dangling
-defaults, symlinks, and group/other-readable files. Updates replace the complete document atomically.
+domain, previous domains, display name, default state, and credential references are mutable
+attributes. A reference contains a validated provider ID and an opaque reference name. The built-in
+provider resolves environment-variable names; custom providers can resolve Keychain or OAuth
+references without changing workspace records. The registry stores reference names only, never
+token values. It rejects corrupt JSON, unknown fields, duplicate Team IDs, aliases or domains,
+dangling defaults, symlinks, and group/other-readable files. Updates replace the complete document
+atomically.
 
 Use `workspace list/add/remove/show/default` as shown above. `--json` and `--plain` are supported.
 The dedicated config directory is created with mode `0700` and the registry file with mode `0600`
 on POSIX systems.
+
+Library integrations can use `createCredentialResolver()` to resolve every configured User/Bot
+reference for one `WorkspaceRecord` as a single verified set. The resolver never substitutes one
+token kind for another, verifies all configured credentials before returning any of them, rejects
+cross-workspace User/Bot combinations, and never falls back from a registry workspace to legacy
+global token variables. Raw token values are redacted from string, JSON, inspection, provider-error,
+and verification-error paths. Call `destroy()` on the returned set when the operation finishes; it
+idempotently destroys every credential in the set. Custom providers and verifiers are trusted
+components because their interfaces necessarily receive raw token material. Validate and isolate
+their implementations accordingly.
+
+Slack `auth.test` proves identity and Team ID but does not attest operation scopes. A requirement may
+carry scope metadata such as User `search:read`; actual method policy and `missing_scope` handling are
+part of the workspace-aware Slack adapter in #92.
 
 The environment-variable alias behavior below is the legacy Go CLI contract. It remains read-only
 compatible throughout v2 and may be removed no earlier than v3.0.0. The variables cannot be safely

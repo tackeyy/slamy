@@ -79,6 +79,24 @@ describe("architecture check", () => {
     expect(result.status).toBe(1);
     expect(result.stderr).toContain("unknown source module: platform/fs.ts (platform)");
   });
+
+  it("allows slack to implement credential ports but rejects the reverse dependency", async () => {
+    const root = await mkdtemp(join(tmpdir(), "slamy-architecture-credentials-"));
+    tempPaths.push(root);
+    await mkdir(join(root, "credentials"));
+    await mkdir(join(root, "slack"));
+    await writeFile(join(root, "slack", "auth.ts"), "export const verify = true;\n");
+    await writeFile(
+      join(root, "credentials", "resolver.ts"),
+      "import { verify } from '../slack/auth.js';\nexport const resolver = verify;\n",
+    );
+
+    const result = runCheck(root);
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain(
+      "forbidden import: credentials/resolver.ts (credentials) -> slack/auth.ts (slack)",
+    );
+  });
 });
 
 function runCheck(root: string) {

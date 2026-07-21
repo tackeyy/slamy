@@ -1,7 +1,7 @@
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { parseTeamId } from "../domain/team-id.js";
-import type { WorkspaceRecord } from "../domain/workspace.js";
+import type { WorkspaceCredentialRefs, WorkspaceRecord } from "../domain/workspace.js";
 import { NodeFileWorkspaceStore } from "../workspace/node-file-workspace-store.js";
 import { WorkspaceRegistry } from "../workspace/registry.js";
 import {
@@ -24,18 +24,24 @@ export type CreateWorkspaceRecordInput = {
   domain: string;
   previousDomains?: string[];
   displayName: string;
+  credentialRefs?: WorkspaceCredentialRefs;
   userTokenEnv?: string;
   botTokenEnv?: string;
 };
 
 export function createWorkspaceRecord(input: CreateWorkspaceRecordInput): WorkspaceRecord {
+  if (input.credentialRefs && (input.userTokenEnv || input.botTokenEnv)) {
+    throw new TypeError("credentialRefs cannot be combined with environment token shortcuts");
+  }
   const candidate: WorkspaceRecord = {
     teamId: parseTeamId(input.teamId),
     alias: validateWorkspaceAlias(input.alias),
     domain: normalizeWorkspaceDomain(input.domain),
     previousDomains: (input.previousDomains ?? []).map(normalizeWorkspaceDomain),
     displayName: input.displayName,
-    ...(input.userTokenEnv || input.botTokenEnv
+    ...(input.credentialRefs
+      ? { credentialRefs: input.credentialRefs }
+      : input.userTokenEnv || input.botTokenEnv
       ? {
           credentialRefs: {
             ...(input.userTokenEnv
