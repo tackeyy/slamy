@@ -1,5 +1,6 @@
 import type { TeamId } from "../domain/team-id.js";
-import type { CredentialKind, CredentialSecret } from "./secret.js";
+
+export type CredentialKind = "user" | "bot";
 
 export type CredentialRequirement = {
   requiredKinds: readonly CredentialKind[];
@@ -7,28 +8,11 @@ export type CredentialRequirement = {
   operation?: string;
 };
 
-export class VerifiedCredential {
+export interface VerifiedCredential {
   readonly kind: CredentialKind;
   readonly teamId: TeamId;
-  readonly #secret: CredentialSecret;
-
-  constructor(kind: CredentialKind, teamId: TeamId, secret: CredentialSecret) {
-    this.kind = kind;
-    this.teamId = teamId;
-    this.#secret = secret;
-  }
-
-  use<Result>(consumer: (token: string) => Result): Result {
-    return this.#secret.use(consumer);
-  }
-
-  destroy(): void {
-    this.#secret.destroy();
-  }
-
-  toJSON(): { kind: CredentialKind; teamId: TeamId; token: "[REDACTED]" } {
-    return { kind: this.kind, teamId: this.teamId, token: "[REDACTED]" };
-  }
+  use<Result>(consumer: (token: string) => Result): Result;
+  destroy(): void;
 }
 
 export type VerifiedCredentialSet = {

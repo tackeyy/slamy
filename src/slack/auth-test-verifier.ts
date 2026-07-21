@@ -1,8 +1,11 @@
 import { LogLevel, WebClient } from "@slack/web-api";
 import { parseTeamId } from "../domain/team-id.js";
-import type { AuthIdentity, AuthVerifier } from "../credentials/auth-verifier.js";
+import type {
+  AuthIdentity,
+  AuthVerifier,
+  CredentialHandle,
+} from "../credentials/auth-verifier.js";
 import { CredentialError } from "../credentials/errors.js";
-import type { CredentialSecret } from "../credentials/secret.js";
 
 type AuthTestResponse = {
   ok?: boolean;
@@ -30,7 +33,7 @@ export class SlackAuthTestVerifier implements AuthVerifier {
     this.#createClient = createClient;
   }
 
-  async verify(secret: CredentialSecret): Promise<AuthIdentity> {
+  async verify(secret: CredentialHandle): Promise<AuthIdentity> {
     let response: AuthTestResponse;
     try {
       const client = secret.use((token) => this.#createClient(token));

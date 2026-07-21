@@ -1,8 +1,7 @@
 import { CredentialError } from "./errors.js";
+import type { CredentialKind } from "./types.js";
 
 const customInspect = Symbol.for("nodejs.util.inspect.custom");
-
-export type CredentialKind = "user" | "bot";
 
 export class CredentialSecret {
   readonly kind: CredentialKind;

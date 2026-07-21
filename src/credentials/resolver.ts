@@ -5,14 +5,14 @@ import { CredentialError } from "./errors.js";
 import type { CredentialProvider, CredentialReference } from "./provider.js";
 import {
   createCredentialSecret,
-  type CredentialKind,
   type CredentialSecret,
 } from "./secret.js";
 import {
-  VerifiedCredential,
+  type CredentialKind,
   type CredentialRequirement,
   type VerifiedCredentialSet,
 } from "./types.js";
+import { createVerifiedCredential } from "./verified-credential.js";
 
 type ReferenceByKind = Partial<Record<CredentialKind, CredentialReference>>;
 type SecretByKind = Partial<Record<CredentialKind, CredentialSecret>>;
@@ -173,10 +173,10 @@ export class CredentialResolver {
       return Object.freeze({
         teamId: actualTeamId,
         ...(secrets.user && userIdentity
-          ? { user: new VerifiedCredential("user", userIdentity.teamId, secrets.user) }
+          ? { user: createVerifiedCredential("user", userIdentity.teamId, secrets.user) }
           : {}),
         ...(secrets.bot && botIdentity
-          ? { bot: new VerifiedCredential("bot", botIdentity.teamId, secrets.bot) }
+          ? { bot: createVerifiedCredential("bot", botIdentity.teamId, secrets.bot) }
           : {}),
         requiredScopes: copyScopes(requirement.requiredScopes),
       });

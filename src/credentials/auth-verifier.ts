@@ -1,5 +1,10 @@
 import type { TeamId } from "../domain/team-id.js";
-import type { CredentialSecret } from "./secret.js";
+import type { CredentialKind } from "./types.js";
+
+export interface CredentialHandle {
+  readonly kind: CredentialKind;
+  use<Result>(consumer: (value: string) => Result): Result;
+}
 
 export type AuthIdentity = {
   teamId: TeamId;
@@ -9,5 +14,5 @@ export type AuthIdentity = {
 };
 
 export interface AuthVerifier {
-  verify(secret: CredentialSecret): Promise<AuthIdentity>;
+  verify(secret: CredentialHandle): Promise<AuthIdentity>;
 }
