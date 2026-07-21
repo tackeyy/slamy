@@ -118,8 +118,11 @@ describe("decodeWorkspaceRegistry", () => {
     }
   });
 
-  it("rejects App-level tokens from custom-provider references", () => {
-    const canary = "xapp-1-A0123456789-secret-canary";
+  it.each([
+    "xapp-1-A0123456789-secret-canary",
+    "https://hooks.slack.com/services/T000/B000/commercial-secret-canary",
+    "https://hooks.slack-gov.com/services/T000/B000/gov-secret-canary",
+  ])("rejects Slack secrets from custom-provider references", (canary) => {
     const document = {
       version: 1,
       workspaces: [

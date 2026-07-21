@@ -43,22 +43,27 @@ describe("workspace output", () => {
       ),
     ).not.toContain("xoxp-secret-canary");
 
-    const appTokenCanary = "xapp-1-A0123456789-secret-canary";
-    const unsafeView = {
-      ...view,
-      credentialRefs: {
-        user: { provider: "keychain", name: appTokenCanary },
-      },
-    };
-    for (const output of [
-      formatWorkspace(unsafeView, "human"),
-      formatWorkspace(unsafeView, "json"),
-      formatWorkspace(unsafeView, "plain"),
-      formatWorkspaceList([unsafeView], "human"),
-      formatWorkspaceList([unsafeView], "json"),
-      formatWorkspaceList([unsafeView], "plain"),
+    for (const canary of [
+      "xapp-1-A0123456789-secret-canary",
+      "https://hooks.slack.com/services/T000/B000/commercial-secret-canary",
+      "https://hooks.slack-gov.com/services/T000/B000/gov-secret-canary",
     ]) {
-      expect(output).not.toContain(appTokenCanary);
+      const unsafeView = {
+        ...view,
+        credentialRefs: {
+          user: { provider: "keychain", name: canary },
+        },
+      };
+      for (const output of [
+        formatWorkspace(unsafeView, "human"),
+        formatWorkspace(unsafeView, "json"),
+        formatWorkspace(unsafeView, "plain"),
+        formatWorkspaceList([unsafeView], "human"),
+        formatWorkspaceList([unsafeView], "json"),
+        formatWorkspaceList([unsafeView], "plain"),
+      ]) {
+        expect(output).not.toContain(canary);
+      }
     }
 
     expect(JSON.parse(formatDefaultWorkspaceCleared("json"))).toEqual({
