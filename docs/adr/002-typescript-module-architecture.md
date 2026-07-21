@@ -274,6 +274,12 @@ short-lived in-memory credential set. Environment variables are the first provid
 OAuth token provider can be added without changing workspace records or command use cases. This
 ADR does not introduce an OAuth server, refresh-token store, or interactive login flow.
 
+Registry version 1 treats a validated provider ID and opaque reference name as an additive extension
+point. An unavailable provider fails closed in the resolver; changing the registry document shape
+requires a new registry version. Provider and verifier implementations are trusted components because
+their ports necessarily access raw token material. The resolver validates and snapshots their returned
+values before applying policy, and callers destroy the complete verified set after each operation.
+
 ### Enterprise Grid
 
 Slack Team ID remains the canonical workspace identifier. Optional Enterprise ID is affiliation

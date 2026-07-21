@@ -11,9 +11,9 @@ Existing Slack API commands do not use that resolver until the workspace-aware a
 Issue #92. URL-based workspace routing follows in Issue #83. Do not remove working legacy token
 variables until every command you use has migrated and been verified.
 
-Legacy `SLAMY_DEFAULT_WORKSPACE` and `SLAMY_WORKSPACE_<ALIAS>_{USER,BOT}_TOKEN` inputs remain
-read-only compatible for the v2 release line. They are deprecated for new configuration and may be
-removed no earlier than v3.0.0.
+Legacy `SLAMY_DEFAULT_WORKSPACE` and `SLAMY_WORKSPACE_<ALIAS>_USER_TOKEN` inputs remain read-only
+compatible for the v2 release line. They are deprecated for new configuration and may be removed
+no earlier than v3.0.0. Alias-specific Bot token input is not part of the legacy Go contract.
 
 ## Why migration is not automatic
 
@@ -40,8 +40,11 @@ If slamy reports that directory durability could not be confirmed, the atomic re
 occurred and the new registry may be active. Inspect `workspace list` before deciding whether to
 retry the operation.
 
-The registry stores only environment-variable reference names such as
-`SLAMY_WORKSPACE_PRIMARY_USER_TOKEN`. It never stores the referenced value.
+The registry stores only credential reference names such as
+`SLAMY_WORKSPACE_PRIMARY_USER_TOKEN` or `primary/user`. It never stores the referenced value.
+Provider IDs are an additive version 1 extension point: structurally valid but unavailable providers
+remain stored and fail closed at resolution time. A change to the registry document shape requires a
+new registry version.
 
 ## Migration steps
 

@@ -341,10 +341,13 @@ When both `SLACK_USER_TOKEN` and `SLACK_BOT_TOKEN` are set in legacy mode, slamy
 ### Multiple Workspaces
 
 The TypeScript workspace registry uses Slack Team ID as the canonical identifier. Alias, current
-domain, previous domains, display name, default state, and environment-variable credential
-references are mutable attributes. The registry stores credential reference names only, never token
-values. It rejects corrupt JSON, unknown fields, duplicate Team IDs, aliases or domains, dangling
-defaults, symlinks, and group/other-readable files. Updates replace the complete document atomically.
+domain, previous domains, display name, default state, and credential references are mutable
+attributes. A reference contains a validated provider ID and an opaque reference name. The built-in
+provider resolves environment-variable names; custom providers can resolve Keychain or OAuth
+references without changing workspace records. The registry stores reference names only, never
+token values. It rejects corrupt JSON, unknown fields, duplicate Team IDs, aliases or domains,
+dangling defaults, symlinks, and group/other-readable files. Updates replace the complete document
+atomically.
 
 Use `workspace list/add/remove/show/default` as shown above. `--json` and `--plain` are supported.
 The dedicated config directory is created with mode `0700` and the registry file with mode `0600`
@@ -355,7 +358,10 @@ reference for one `WorkspaceRecord` as a single verified set. The resolver never
 token kind for another, verifies all configured credentials before returning any of them, rejects
 cross-workspace User/Bot combinations, and never falls back from a registry workspace to legacy
 global token variables. Raw token values are redacted from string, JSON, inspection, provider-error,
-and verification-error paths.
+and verification-error paths. Call `destroy()` on the returned set when the operation finishes; it
+idempotently destroys every credential in the set. Custom providers and verifiers are trusted
+components because their interfaces necessarily receive raw token material. Validate and isolate
+their implementations accordingly.
 
 Slack `auth.test` proves identity and Team ID but does not attest operation scopes. A requirement may
 carry scope metadata such as User `search:read`; actual method policy and `missing_scope` handling are
