@@ -97,6 +97,26 @@ describe("architecture check", () => {
       "forbidden import: credentials/resolver.ts (credentials) -> slack/auth.ts (slack)",
     );
   });
+
+  it("keeps targets independent from credentials and Slack adapters", async () => {
+    const root = await mkdtemp(join(tmpdir(), "slamy-architecture-targets-"));
+    tempPaths.push(root);
+    await mkdir(join(root, "targets"));
+    await mkdir(join(root, "credentials"));
+    await mkdir(join(root, "slack"));
+    await writeFile(join(root, "credentials", "resolver.ts"), "export const secret = true;\n");
+    await writeFile(join(root, "slack", "adapter.ts"), "export const api = true;\n");
+    await writeFile(
+      join(root, "targets", "resolver.ts"),
+      "import { secret } from '../credentials/resolver.js';\nimport { api } from '../slack/adapter.js';\nexport const unsafe = secret || api;\n",
+    );
+
+    const result = runCheck(root);
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain("forbidden import: targets/resolver.ts (targets)");
+    expect(result.stderr).toContain("credentials/resolver.ts (credentials)");
+    expect(result.stderr).toContain("slack/adapter.ts (slack)");
+  });
 });
 
 function runCheck(root: string) {
