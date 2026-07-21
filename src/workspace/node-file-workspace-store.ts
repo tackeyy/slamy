@@ -23,6 +23,8 @@ import type { WorkspaceRegistryDocument } from "./types.js";
 type NodeFileWorkspaceStoreHooks = {
   beforeRename?: () => Promise<void>;
   afterRename?: () => Promise<void>;
+  afterRegistryOpen?: () => Promise<void>;
+  openNoFollowFlag?: number;
   lockTimeoutMs?: number;
   lockRetryMs?: number;
 };
@@ -63,8 +65,12 @@ export class NodeFileWorkspaceStore implements WorkspaceStore {
   async #readUnlocked(): Promise<WorkspaceRegistryDocument> {
     let handle: FileHandle;
     try {
-      const noFollow = (constants as Record<string, number>).O_NOFOLLOW ?? 0;
+      const noFollow =
+        this.#hooks.openNoFollowFlag ??
+        (constants as Record<string, number>).O_NOFOLLOW ??
+        0;
       handle = await open(this.#filePath, constants.O_RDONLY | noFollow);
+      await this.#hooks.afterRegistryOpen?.();
     } catch (error) {
       if (isNotFound(error)) return emptyWorkspaceRegistry();
       throw new WorkspaceRegistryError("UNSAFE_CONFIG", "Unable to open workspace registry safely");
