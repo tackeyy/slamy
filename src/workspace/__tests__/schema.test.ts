@@ -25,6 +25,29 @@ describe("decodeWorkspaceRegistry", () => {
     expect(document.workspaces[0]?.teamId).toBe("T00000001");
   });
 
+  it("accepts opaque references for registered credential providers", () => {
+    const document = decodeWorkspaceRegistry({
+      version: 1,
+      workspaces: [
+        {
+          teamId: "T00000001",
+          alias: "primary",
+          domain: "primary.slack.com",
+          previousDomains: [],
+          displayName: "Primary",
+          credentialRefs: {
+            user: { provider: "keychain", name: "primary/user" },
+          },
+        },
+      ],
+    });
+
+    expect(document.workspaces[0]?.credentialRefs?.user).toEqual({
+      provider: "keychain",
+      name: "primary/user",
+    });
+  });
+
   it("fails closed for corrupt, unknown, duplicate, ambiguous, or secret-like input", () => {
     const workspace = {
       teamId: "T00000001",
@@ -41,6 +64,15 @@ describe("decodeWorkspaceRegistry", () => {
       {
         version: 1,
         workspaces: [workspace, { ...workspace, teamId: "T00000002" }],
+      },
+      {
+        version: 1,
+        workspaces: [
+          {
+            ...workspace,
+            credentialRefs: { user: { provider: "Invalid Provider", name: "primary/user" } },
+          },
+        ],
       },
       {
         version: 1,

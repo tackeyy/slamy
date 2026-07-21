@@ -14,7 +14,7 @@ import {
 describe("credential public API", () => {
   it("composes custom providers and verifiers without Slack SDK types", async () => {
     const provider: CredentialProvider = {
-      providerId: "environment",
+      providerId: "keychain",
       resolveMany(references: readonly CredentialReference[]) {
         return Promise.resolve(
           new Map(references.map((reference) => [reference.name, "xoxp-public-secret-canary"])),
@@ -35,7 +35,9 @@ describe("credential public API", () => {
         alias: "primary",
         domain: "primary.slack.com",
         displayName: "Primary",
-        userTokenEnv: "USER_REF",
+        credentialRefs: {
+          user: { provider: "keychain", name: "primary/user" },
+        },
       }),
       { requiredKinds: ["user"] },
     );

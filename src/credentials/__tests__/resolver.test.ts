@@ -101,6 +101,7 @@ describe("CredentialResolver workspace mode", () => {
   it.each([
     { requiredKinds: [] },
     { requiredKinds: ["user", "user"] },
+    { requiredKinds: ["bot"], requiredScopes: { user: ["search:read"] } },
   ])("rejects invalid requirements", async (requirement) => {
     const resolver = new CredentialResolver([new FakeProvider({})], new FakeVerifier({}));
     await expect(
@@ -220,6 +221,104 @@ describe("CredentialResolver workspace mode", () => {
       ),
     ).rejects.not.toThrow(canary);
   });
+
+  it("sanitizes provider result access and value failures", async () => {
+    const canary = "xoxp-provider-result-secret-canary";
+    for (const unsafeResult of [
+      {
+        get() {
+          throw new Error(canary);
+        },
+      },
+      new Map([["USER_REF", { token: canary } as never]]),
+    ]) {
+      const unsafeProvider: CredentialProvider = {
+        providerId: "environment",
+        resolveMany: () => Promise.resolve(unsafeResult as never),
+      };
+      const resolver = new CredentialResolver([unsafeProvider], new FakeVerifier({}));
+
+      let error: unknown;
+      try {
+        await resolver.resolveForWorkspace(
+          workspace({ user: { provider: "environment", name: "USER_REF" } }),
+          { requiredKinds: ["user"] },
+        );
+      } catch (caught) {
+        error = caught;
+      }
+
+      expect(error).toMatchObject({ code: "CREDENTIAL_PROVIDER_FAILED" });
+      expect(String(error)).not.toContain(canary);
+      expect(JSON.stringify(error)).not.toContain(canary);
+      expect(error instanceof Error ? error.stack : "").not.toContain(canary);
+    }
+  });
+
+  it("sanitizes malformed verifier identities before policy checks", async () => {
+    const canary = "xoxp-identity-result-secret-canary";
+    const unsafeIdentities: unknown[] = [
+      { teamId: "not-a-team" },
+      {
+        get teamId() {
+          throw new Error(canary);
+        },
+      },
+      { teamId: "T00000001", userId: 42 },
+    ];
+
+    for (const identity of unsafeIdentities) {
+      const verifier: AuthVerifier = {
+        verify: () => Promise.resolve(identity as AuthIdentity),
+      };
+      const resolver = new CredentialResolver(
+        [new FakeProvider({ USER_REF: userToken })],
+        verifier,
+      );
+
+      let error: unknown;
+      try {
+        await resolver.resolveForWorkspace(
+          workspace({ user: { provider: "environment", name: "USER_REF" } }),
+          { requiredKinds: ["user"] },
+        );
+      } catch (caught) {
+        error = caught;
+      }
+
+      expect(error).toMatchObject({ code: "AUTH_IDENTITY_INVALID" });
+      expect(String(error)).not.toContain(canary);
+      expect(JSON.stringify(error)).not.toContain(canary);
+      expect(error instanceof Error ? error.stack : "").not.toContain(canary);
+    }
+  });
+
+  it("destroys the complete verified set idempotently", async () => {
+    const resolver = new CredentialResolver(
+      [new FakeProvider({ USER_REF: userToken, BOT_REF: botToken })],
+      new FakeVerifier({
+        [userToken]: { teamId: parseTeamId("T00000001") },
+        [botToken]: { teamId: parseTeamId("T00000001"), botId: "B1" },
+      }),
+    );
+    const result = await resolver.resolveForWorkspace(
+      workspace({
+        user: { provider: "environment", name: "USER_REF" },
+        bot: { provider: "environment", name: "BOT_REF" },
+      }),
+      { requiredKinds: ["user"] },
+    );
+
+    result.destroy();
+    result.destroy();
+
+    expect(() => result.user?.use((token) => token)).toThrowError(
+      expect.objectContaining({ code: "CREDENTIAL_DESTROYED" }),
+    );
+    expect(() => result.bot?.use((token) => token)).toThrowError(
+      expect.objectContaining({ code: "CREDENTIAL_DESTROYED" }),
+    );
+  });
 });
 
 describe("CredentialResolver legacy mode", () => {
@@ -259,5 +358,16 @@ describe("CredentialResolver legacy mode", () => {
     await expect(
       botOnly.resolveLegacySingleWorkspace({ requiredKinds: ["user"] }),
     ).rejects.toMatchObject({ code: "REQUIRED_CREDENTIAL_MISSING" });
+  });
+
+  it("rejects malformed legacy verifier identities", async () => {
+    const resolver = new CredentialResolver(
+      [new FakeProvider({ SLACK_USER_TOKEN: userToken })],
+      { verify: () => Promise.resolve({ teamId: "not-a-team" } as never) },
+    );
+
+    await expect(
+      resolver.resolveLegacySingleWorkspace({ requiredKinds: ["user"] }),
+    ).rejects.toMatchObject({ code: "AUTH_IDENTITY_INVALID" });
   });
 });
