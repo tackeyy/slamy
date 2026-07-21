@@ -114,6 +114,9 @@ describe("parseTargetEvidence", () => {
     ["https://primary.slack.com/archives/%252f/p1700000000000001", "INVALID_URL_ENCODING"],
     ["https://primary.slack.com/archives/C0123ABC%2Fbad/p1700000000000001", "INVALID_URL_ENCODING"],
     ["http://primary.slack.com/archives/C0123ABC/p1700000000000001", "UNSUPPORTED_URL"],
+    ["https:////primary.slack.com/archives/C0123ABC/p1700000000000001", "INVALID_TARGET"],
+    ["https://user@primary.slack.com/archives/C0123ABC/p1700000000000001", "UNSUPPORTED_URL"],
+    ["https://primary.slack.com:444/archives/C0123ABC/p1700000000000001", "UNSUPPORTED_URL"],
     ["https://evil.example/archives/C0123ABC/p1700000000000001", "UNSUPPORTED_URL"],
     ["https://primary.slack.com/not-archives/C0123ABC", "UNSUPPORTED_URL"],
   ])("fails closed for unsafe URL %s", (input, code) => {
