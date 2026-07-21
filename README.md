@@ -16,6 +16,21 @@ A Slack API client and standalone CLI for reading, searching, and posting to Sla
 - **Search** — search messages across channels with Slack query syntax
 - **Multiple output formats** — human-readable text, JSON, and TSV
 
+## Official Slack CLI and slamy
+
+The official [`slack` CLI](https://docs.slack.dev/tools/slack-cli/) owns Slack app development:
+create/link/install/uninstall, manifests, local run, deployment, activity, logs, documentation, and
+ad hoc Web API calls. It can also select a team explicitly for its own commands with `--team` where
+supported. slamy's target scope is task-oriented operations for humans and agents, including a
+single resolver for default, explicit, or permalink-derived workspaces, plus pagination, name
+resolution, and stable output. This target design is being delivered incrementally and is not yet
+available in every slamy command.
+
+slamy does not invoke the official CLI or read its private credential files. It uses documented
+Slack APIs directly, so both tools can be installed and used independently. See
+[ADR 001](docs/adr/001-official-slack-cli-boundary.md) for the responsibility matrix, feature
+acceptance rules, and deprecation criteria.
+
 ## Installation
 
 ### npm (TypeScript API and CLI)

@@ -16,6 +16,20 @@ Slack の閲覧・検索・投稿に対応する Slack API クライアント兼
 - **検索** — Slack クエリ構文でメッセージ横断検索
 - **複数出力フォーマット** — テキスト、JSON、TSV
 
+## Slack 公式 CLI と slamy の役割
+
+Slack 公式の [`slack` CLI](https://docs.slack.dev/tools/slack-cli/) は、アプリの
+create/link/install/uninstall、Manifest、ローカル実行、デプロイ、activity、ログ、ドキュメント、
+任意の Web API 呼び出しなど、Slack アプリ開発を担当します。対応する公式コマンドでは、`--team`
+による明示的なワークスペース選択も行えます。slamy の目標範囲は、人やエージェントが使う
+タスク指向の操作です。default、明示指定、permalink 由来のワークスペースを一つの resolver で
+振り分け、ページネーション、名前解決、安定した出力を提供します。この目標設計は段階的に
+実装中であり、まだ全コマンドでは利用できません。
+
+slamy は公式 CLI を子プロセスとして呼び出さず、その非公開 credential ファイルも読みません。
+公開 Slack API を直接利用するため、両ツールは独立して併用できます。責務分担表、機能追加の
+判断基準、将来の廃止基準は [ADR 001](docs/adr/001-official-slack-cli-boundary.md) を参照してください。
+
 ## インストール
 
 ### npm（TypeScript API / CLI）

@@ -14,6 +14,7 @@ documentation.
 
 - [Ways to Contribute](#ways-to-contribute)
 - [Before You Start](#before-you-start)
+- [Project Scope: Official Slack CLI vs slamy](#project-scope-official-slack-cli-vs-slamy)
 - [Development Setup](#development-setup)
 - [Coding Standards](#coding-standards)
 - [Testing Requirements](#testing-requirements)
@@ -38,6 +39,30 @@ documentation.
 3. Read our **[Testing Guide](docs/TESTING.md)** to understand how we test
 4. Make sure you agree with our **[Code of Conduct](CODE_OF_CONDUCT.md)**
 5. For security-sensitive issues, follow **[SECURITY.md](SECURITY.md)** instead of opening a public issue
+
+## Project Scope: Official Slack CLI vs slamy
+
+Before proposing a feature, check the project's responsibility boundary in
+[ADR 001](docs/adr/001-official-slack-cli-boundary.md).
+
+Use the official [`slack` CLI](https://docs.slack.dev/tools/slack-cli/) for Slack app development,
+including app create/link/install/uninstall, manifests, local run, deployment, activity, logs,
+documentation, and ad hoc calls to arbitrary Web API methods. The official CLI also owns explicit
+`--team` selection for its own commands where supported.
+
+A slamy feature proposal must satisfy every item in this checklist:
+
+- [ ] The official CLI does not already provide the complete task-oriented workflow; the proposal
+  is not a generic wrapper around an official command or arbitrary Web API method.
+- [ ] The feature adds reusable high-level behavior for humans or agents, such as unified default,
+  explicit, or permalink-derived workspace resolution, automatic pagination, Slack ID name
+  resolution, stable machine-readable output, or safe message handling.
+- [ ] The implementation uses documented public Slack APIs without invoking the official CLI as a
+  subprocess or reading its CLI-owned credential store.
+- [ ] The behavior and failure modes have a stable, testable CLI or TypeScript contract.
+
+If any item is unchecked, use or improve the official CLI, or revise the proposal before adding it
+to slamy. Record the boundary review in the feature issue or pull request.
 
 ## 💻 Development Setup
 
