@@ -1,15 +1,14 @@
 import type { Command } from "commander";
-import { parseTeamId } from "../domain/team-id.js";
-import type { WorkspaceRecord } from "../domain/workspace.js";
-import { createWorkspaceRegistry } from "../lib/workspace.js";
+import {
+  createWorkspaceRecord,
+  createWorkspaceRegistry,
+  type WorkspaceRegistry,
+} from "../lib/workspace.js";
 import {
   formatWorkspace,
   formatWorkspaceList,
   type WorkspaceOutputMode,
 } from "../output/workspace.js";
-import { WorkspaceRegistryError } from "../workspace/errors.js";
-import type { WorkspaceRegistry } from "../workspace/registry.js";
-import { normalizeWorkspaceDomain, validateWorkspaceAlias } from "../workspace/schema.js";
 
 export type WorkspaceCommandDependencies = {
   registryFactory: () => WorkspaceRegistry;
@@ -96,20 +95,14 @@ export function registerWorkspaceCommands(
           const registry = dependencies.registryFactory();
           if (options.clear) {
             if (selector !== undefined) {
-              throw new WorkspaceRegistryError(
-                "INVALID_CONFIG",
-                "Do not provide a selector with --clear",
-              );
+              throw new Error("Do not provide a selector with --clear");
             }
             await registry.clearDefault();
             dependencies.writeOut("Default workspace cleared");
             return;
           }
           if (selector === undefined) {
-            throw new WorkspaceRegistryError(
-              "INVALID_CONFIG",
-              "A workspace selector or --clear is required",
-            );
+            throw new Error("A workspace selector or --clear is required");
           }
           const selected = await registry.setDefault(selector);
           dependencies.writeOut(formatWorkspace(selected, outputMode(program)));
@@ -129,26 +122,16 @@ type AddWorkspaceOptions = {
   default?: boolean;
 };
 
-function toWorkspaceRecord(options: AddWorkspaceOptions): WorkspaceRecord {
-  return {
-    teamId: parseTeamId(options.teamId),
-    alias: validateWorkspaceAlias(options.alias),
-    domain: normalizeWorkspaceDomain(options.domain),
-    previousDomains: (options.previousDomain ?? []).map(normalizeWorkspaceDomain),
+function toWorkspaceRecord(options: AddWorkspaceOptions) {
+  return createWorkspaceRecord({
+    teamId: options.teamId,
+    alias: options.alias,
+    domain: options.domain,
+    previousDomains: options.previousDomain,
     displayName: options.name,
-    ...(options.userTokenEnv || options.botTokenEnv
-      ? {
-          credentialRefs: {
-            ...(options.userTokenEnv
-              ? { user: { provider: "environment" as const, name: options.userTokenEnv } }
-              : {}),
-            ...(options.botTokenEnv
-              ? { bot: { provider: "environment" as const, name: options.botTokenEnv } }
-              : {}),
-          },
-        }
-      : {}),
-  };
+    userTokenEnv: options.userTokenEnv,
+    botTokenEnv: options.botTokenEnv,
+  });
 }
 
 function outputMode(program: Command): WorkspaceOutputMode {
