@@ -174,6 +174,23 @@ TypeScript CLI（`npm install`）:
 | `--utc` | タイムスタンプを UTC で表示（デフォルトはローカル TZ） |
 | `--tz <iana>` | 指定 IANA タイムゾーンで表示（例: `Asia/Tokyo`） |
 
+TypeScript CLIでは、Slack APIを呼ばないworkspace registry管理も利用できます。
+
+```bash
+slamy workspace list
+slamy workspace add --team-id T01234567 --alias primary \
+  --domain primary.slack.com --name "Primary" \
+  --user-token-env SLAMY_WORKSPACE_PRIMARY_USER_TOKEN --default
+slamy workspace show primary
+slamy workspace default primary
+slamy workspace default --clear
+slamy workspace remove primary
+```
+
+これらのコマンドはSlackへ接続せず、token値を引数として受け取りません。Phase 1の現時点では、
+registryは既存Slack APIコマンドのroutingにはまだ使われません。credential検証は#86、
+permalink routingは#83で対応します。
+
 ### `channels history` — チャンネルのメッセージ履歴
 
 ```bash
@@ -308,6 +325,7 @@ slamy team info [--json] [--plain]
 
 | 変数 | 必須 | 説明 |
 |---|---|---|
+| `SLAMY_CONFIG_FILE` | No | TypeScript workspace registryのpathを上書き。既定は`$XDG_CONFIG_HOME/slamy/workspaces.json`または`~/.config/slamy/workspaces.json` |
 | `SLAMY_WORKSPACE_<ALIAS>_USER_TOKEN` | 対応するエイリアスの選択時 | ワークスペースエイリアス用の User OAuth Token。エイリアスを大文字化し、ハイフンをアンダースコアへ変換 |
 | `SLAMY_DEFAULT_WORKSPACE` | No | `--workspace` を省略した場合に使用するワークスペースエイリアス |
 | `SLACK_USER_TOKEN` | 従来の単一ワークスペース利用時 | 後方互換用 Slack User OAuth Token (`xoxp-...`)。明示・デフォルトのどちらのエイリアスも選択されない場合のみ使用 |
@@ -318,6 +336,19 @@ slamy team info [--json] [--plain]
 従来モードで `SLACK_USER_TOKEN` / `SLACK_BOT_TOKEN` の両方を設定すると、操作に応じて適切なトークンが自動選択されます。
 
 ### 複数ワークスペース
+
+TypeScript workspace registryではSlack Team IDを正規識別子とします。alias、現在domain、過去domain、
+表示名、default状態、環境変数credential referenceは変更可能な属性です。registryにはcredential
+reference名だけを保存し、token値は保存しません。破損JSON、未知field、Team ID・alias・domainの
+重複、参照先のないdefault、symlink、group/otherから読めるfileを拒否し、更新時はdocument全体を
+atomicに置き換えます。
+
+上記の`workspace list/add/remove/show/default`を利用でき、`--json`と`--plain`にも対応します。
+POSIXでは専用config directoryを`0700`、registry fileを`0600`で作成します。
+
+以下の環境変数alias方式は従来のGo CLI契約です。v2中はread-only互換を維持し、削除は早くても
+v3.0.0以降です。旧環境変数だけではSlack Team IDを証明できないため、自動importしません。
+詳細は[workspace registry移行ガイド](docs/migrations/workspace-registry-v2.md)を参照してください。
 
 ワークスペースエイリアスはローカルの識別子です。Slack 上のワークスペース名、ドメイン、Team ID とは独立しており、slamy がエイリアスを自動検出・照合することはありません。エイリアスは 1〜63 文字で、正規表現 `^[a-z0-9]+(?:-[a-z0-9]+)*$` に一致する必要があります（例: `primary`、`operations`、`project-a`）。
 

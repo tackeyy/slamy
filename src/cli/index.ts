@@ -10,6 +10,7 @@ import { formatTimestamp as libFormatTimestamp } from "../lib/tz.js";
 import { parseSlackTarget } from "../lib/parse-target.js";
 import { jsonOutput as formatJson } from "../lib/cli-format.js";
 import { requireToken } from "../lib/cli-errors.js";
+import { registerWorkspaceCommands } from "./workspace.js";
 
 const pkg = JSON.parse(
   readFileSync(join(dirname(fileURLToPath(import.meta.url)), "../../package.json"), "utf-8"),
@@ -58,6 +59,8 @@ function jsonOutput(data: unknown): void {
 function formatTimestamp(ts: string): string {
   return libFormatTimestamp(ts, getTzOptions());
 }
+
+registerWorkspaceCommands(program);
 
 // channel_id or permalink URL + 補助 ts を受けて、最終的な channel / ts / thread_ts を解決する。
 // permalink URL の場合は URL 由来を優先、明示引数が空のときだけ URL の値を使う。
@@ -1003,4 +1006,4 @@ assistant
     }
   });
 
-program.parse();
+await program.parseAsync();

@@ -176,6 +176,23 @@ TypeScript CLI (`npm install`):
 | `--utc` | Display timestamps in UTC (default: local TZ) |
 | `--tz <iana>` | Display timestamps in the specified IANA timezone (e.g. `Asia/Tokyo`) |
 
+The TypeScript CLI also provides offline workspace registry management:
+
+```bash
+slamy workspace list
+slamy workspace add --team-id T01234567 --alias primary \
+  --domain primary.slack.com --name "Primary" \
+  --user-token-env SLAMY_WORKSPACE_PRIMARY_USER_TOKEN --default
+slamy workspace show primary
+slamy workspace default primary
+slamy workspace default --clear
+slamy workspace remove primary
+```
+
+These commands do not call Slack and never accept token values. In Phase 1, the registry is not yet
+used to route existing Slack API commands; credential verification is tracked in #86 and permalink
+routing in #83.
+
 ### `channels history` — Get channel message history
 
 ```bash
@@ -310,6 +327,7 @@ Returns the workspace domain, `email_domain`, and Enterprise info. The `email_do
 
 | Variable | Required | Description |
 |---|---|---|
+| `SLAMY_CONFIG_FILE` | No | Override the TypeScript workspace registry path; defaults to `$XDG_CONFIG_HOME/slamy/workspaces.json` or `~/.config/slamy/workspaces.json` |
 | `SLAMY_WORKSPACE_<ALIAS>_USER_TOKEN` | When its alias is selected | User OAuth Token for a workspace alias; uppercase the alias and replace hyphens with underscores |
 | `SLAMY_DEFAULT_WORKSPACE` | No | Workspace alias to use when `--workspace` is omitted |
 | `SLACK_USER_TOKEN` | Yes for legacy single-workspace use | Legacy Slack User OAuth Token (`xoxp-...`) — used only when neither an explicit nor default alias is selected |
@@ -320,6 +338,21 @@ Returns the workspace domain, `email_domain`, and Enterprise info. The `email_do
 When both `SLACK_USER_TOKEN` and `SLACK_BOT_TOKEN` are set in legacy mode, slamy uses each token for the operations it best fits.
 
 ### Multiple Workspaces
+
+The TypeScript workspace registry uses Slack Team ID as the canonical identifier. Alias, current
+domain, previous domains, display name, default state, and environment-variable credential
+references are mutable attributes. The registry stores credential reference names only, never token
+values. It rejects corrupt JSON, unknown fields, duplicate Team IDs, aliases or domains, dangling
+defaults, symlinks, and group/other-readable files. Updates replace the complete document atomically.
+
+Use `workspace list/add/remove/show/default` as shown above. `--json` and `--plain` are supported.
+The dedicated config directory is created with mode `0700` and the registry file with mode `0600`
+on POSIX systems.
+
+The environment-variable alias behavior below is the legacy Go CLI contract. It remains read-only
+compatible throughout v2 and may be removed no earlier than v3.0.0. The variables cannot be safely
+auto-imported because they do not prove a Slack Team ID. See the
+[workspace registry migration guide](docs/migrations/workspace-registry-v2.md).
 
 A workspace alias is a local identifier. It is independent of the workspace name, domain, and Team ID in Slack, and slamy does not discover or match aliases automatically. An alias must be 1–63 characters and match `^[a-z0-9]+(?:-[a-z0-9]+)*$` (for example, `primary`, `operations`, or `project-a`).
 
