@@ -102,6 +102,20 @@ function parseAppUrl(url: URL): ParsedTargetEvidence {
     threadTs = parseSlackTimestampEither(match[2]);
   }
 
+  const cid = uniqueQueryValue(url.searchParams, "cid");
+  if (cid !== undefined && parseChannelId(safeDecodedValue(cid)) !== channelId) {
+    throw new TargetError("CHANNEL_CONFLICT", "Slack URL contains conflicting channel IDs");
+  }
+  const queryThread = uniqueQueryValue(url.searchParams, "thread_ts");
+  if (queryThread !== undefined) {
+    if (!threadTs) {
+      throw new TargetError("UNSUPPORTED_URL", "Slack app thread query requires a thread path");
+    }
+    if (parseSlackTimestamp(safeDecodedValue(queryThread)) !== threadTs) {
+      throw new TargetError("TIMESTAMP_CONFLICT", "Slack URL contains conflicting thread timestamps");
+    }
+  }
+
   const workspaceEvidence = workspaceId.startsWith("T")
     ? { teamId: safeTeamId(workspaceId) }
     : { enterpriseId: parseEnterpriseId(workspaceId) };

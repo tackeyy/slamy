@@ -1,5 +1,6 @@
 import { parseTeamId, type TeamId } from "../domain/team-id.js";
 import type { WorkspaceView } from "../domain/workspace.js";
+import { normalizeWorkspaceDomain, validateWorkspaceAlias } from "../workspace/schema.js";
 import { TargetError } from "./errors.js";
 import {
   parseTargetEvidence,
@@ -37,6 +38,14 @@ export type SlackTarget = {
   readonly channelOwnership: "unknown";
 };
 
+type WorkspaceMetadata = {
+  readonly teamId: TeamId;
+  readonly alias: string;
+  readonly domain: string;
+  readonly previousDomains: readonly string[];
+  readonly isDefault: boolean;
+};
+
 export class TargetResolver {
   readonly #catalog: WorkspaceCatalog;
 
@@ -46,8 +55,8 @@ export class TargetResolver {
 
   async resolve(request: ResolveSlackTargetRequest): Promise<SlackTarget> {
     const evidence = parseTargetEvidence(request);
-    const workspaces = await this.#catalog.list();
-    const explicit = request.explicitWorkspace
+    const workspaces = await readWorkspaceMetadata(this.#catalog);
+    const explicit = request.explicitWorkspace !== undefined
       ? resolveSelector(workspaces, request.explicitWorkspace)
       : undefined;
     const targetTeamIds = normalizeTargetTeamIds(request.targetTeamIds);
@@ -61,12 +70,6 @@ export class TargetResolver {
       return createTarget(evidence, explicit, "explicit");
     }
 
-    if (evidence.enterpriseId) {
-      throw new TargetError(
-        "ENTERPRISE_CONTEXT_AMBIGUOUS",
-        "Enterprise URL does not identify one execution workspace",
-      );
-    }
     if (targetTeamIds.length > 1) {
       throw new TargetError(
         "WORKSPACE_AMBIGUOUS",
@@ -77,6 +80,12 @@ export class TargetResolver {
       const targetWorkspace = resolveTeamId(workspaces, targetTeamIds[0]);
       assertSameWorkspace(targetWorkspace, urlWorkspace);
       return createTarget(evidence, targetWorkspace, "target-team-id");
+    }
+    if (evidence.enterpriseId) {
+      throw new TargetError(
+        "ENTERPRISE_CONTEXT_AMBIGUOUS",
+        "Enterprise URL does not identify one execution workspace",
+      );
     }
     if (evidence.teamId) {
       return createTarget(evidence, resolveTeamId(workspaces, evidence.teamId), "url-team-id");
@@ -92,18 +101,18 @@ export class TargetResolver {
 }
 
 function resolveUrlWorkspace(
-  workspaces: readonly WorkspaceView[],
+  workspaces: readonly WorkspaceMetadata[],
   evidence: ParsedTargetEvidence,
-): WorkspaceView | undefined {
+): WorkspaceMetadata | undefined {
   if (evidence.teamId) return resolveTeamId(workspaces, evidence.teamId);
   if (evidence.hostname) return resolveDomain(workspaces, evidence.hostname);
   return undefined;
 }
 
 function resolveSelector(
-  workspaces: readonly WorkspaceView[],
+  workspaces: readonly WorkspaceMetadata[],
   selector: string,
-): WorkspaceView {
+): WorkspaceMetadata {
   const normalized = selector.toLowerCase();
   return requireOne(
     workspaces.filter(
@@ -116,11 +125,11 @@ function resolveSelector(
   );
 }
 
-function resolveTeamId(workspaces: readonly WorkspaceView[], teamId: TeamId): WorkspaceView {
+function resolveTeamId(workspaces: readonly WorkspaceMetadata[], teamId: TeamId): WorkspaceMetadata {
   return requireOne(workspaces.filter((workspace) => workspace.teamId === teamId));
 }
 
-function resolveDomain(workspaces: readonly WorkspaceView[], hostname: string): WorkspaceView {
+function resolveDomain(workspaces: readonly WorkspaceMetadata[], hostname: string): WorkspaceMetadata {
   const normalized = hostname.toLowerCase();
   return requireOne(
     workspaces.filter(
@@ -130,7 +139,7 @@ function resolveDomain(workspaces: readonly WorkspaceView[], hostname: string): 
   );
 }
 
-function resolveDefault(workspaces: readonly WorkspaceView[]): WorkspaceView {
+function resolveDefault(workspaces: readonly WorkspaceMetadata[]): WorkspaceMetadata {
   const matches = workspaces.filter((workspace) => workspace.isDefault);
   if (matches.length === 0) {
     throw new TargetError("DEFAULT_NOT_FOUND", "Default workspace is not configured");
@@ -141,7 +150,7 @@ function resolveDefault(workspaces: readonly WorkspaceView[]): WorkspaceView {
   return matches[0]!;
 }
 
-function requireOne(matches: readonly WorkspaceView[]): WorkspaceView {
+function requireOne(matches: readonly WorkspaceMetadata[]): WorkspaceMetadata {
   if (matches.length === 0) throw notRegistered();
   if (matches.length > 1) {
     throw new TargetError("WORKSPACE_AMBIGUOUS", "Workspace evidence matches multiple records");
@@ -165,15 +174,15 @@ function normalizeTargetTeamIds(values: readonly string[] | undefined): TeamId[]
 }
 
 function assertSameWorkspace(
-  selected: WorkspaceView,
-  evidenceWorkspace: WorkspaceView | undefined,
+  selected: WorkspaceMetadata,
+  evidenceWorkspace: WorkspaceMetadata | undefined,
 ): void {
   if (evidenceWorkspace && selected.teamId !== evidenceWorkspace.teamId) throw conflict();
 }
 
 function createTarget(
   evidence: ParsedTargetEvidence,
-  workspace: WorkspaceView,
+  workspace: WorkspaceMetadata,
   selectedBy: TargetWorkspaceSelection,
 ): SlackTarget {
   return Object.freeze({
@@ -202,4 +211,41 @@ function conflict(): TargetError {
     "WORKSPACE_CONFLICT",
     "Explicit and target workspace evidence conflict",
   );
+}
+
+async function readWorkspaceMetadata(catalog: WorkspaceCatalog): Promise<readonly WorkspaceMetadata[]> {
+  try {
+    const values = await catalog.list();
+    if (!Array.isArray(values)) throw new Error("invalid catalog");
+    return Object.freeze(values.map(snapshotWorkspaceMetadata));
+  } catch {
+    throw new TargetError(
+      "WORKSPACE_CATALOG_INVALID",
+      "Workspace catalog could not provide valid routing metadata",
+    );
+  }
+}
+
+function snapshotWorkspaceMetadata(workspace: WorkspaceView): WorkspaceMetadata {
+  const teamId = parseTeamId(workspace.teamId);
+  const alias = validateWorkspaceAlias(workspace.alias);
+  const rawDomain = workspace.domain;
+  const domain = normalizeWorkspaceDomain(rawDomain);
+  if (rawDomain !== domain) throw new Error("non-normalized domain");
+  const rawPreviousDomains = workspace.previousDomains;
+  if (!Array.isArray(rawPreviousDomains)) throw new Error("invalid domain history");
+  const previousDomains = rawPreviousDomains.map((value) => {
+    const normalized = normalizeWorkspaceDomain(value);
+    if (value !== normalized) throw new Error("non-normalized domain history");
+    return normalized;
+  });
+  const isDefault = workspace.isDefault;
+  if (typeof isDefault !== "boolean") throw new Error("invalid default marker");
+  return Object.freeze({
+    teamId,
+    alias,
+    domain,
+    previousDomains: Object.freeze(previousDomains),
+    isDefault,
+  });
 }
