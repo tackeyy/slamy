@@ -1,9 +1,8 @@
 import { WorkspaceRegistryError } from "./errors.js";
 import { decodeWorkspaceRegistry, normalizeWorkspaceDomain } from "./schema.js";
 import type { WorkspaceStore } from "./store.js";
+import type { WorkspaceView } from "../domain/workspace.js";
 import type { WorkspaceRecord, WorkspaceRegistryDocument } from "./types.js";
-
-export type WorkspaceView = WorkspaceRecord & { isDefault: boolean };
 
 export class WorkspaceRegistry {
   readonly #store: WorkspaceStore;
