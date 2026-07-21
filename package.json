@@ -24,6 +24,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
+    "test:consumer": "node scripts/test-package-consumer.mjs",
     "ci:cost-check": "node scripts/check-actions-cost-guard.mjs",
     "check:architecture": "node scripts/check-architecture.mjs",
     "lint": "npm run lint:md",

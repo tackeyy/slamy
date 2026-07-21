@@ -110,6 +110,10 @@ jobs:
         if: steps.changes.outputs.node == 'true'
         run: npm run build
 
+      - name: Compile package-root consumer
+        if: steps.changes.outputs.node == 'true'
+        run: npm run test:consumer
+
       - name: Run markdownlint
         if: steps.changes.outputs.markdown == 'true'
         run: npm run lint:md

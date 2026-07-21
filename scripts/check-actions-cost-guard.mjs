@@ -36,6 +36,7 @@ for (const gate of [
   'npm run typecheck',
   'npm run test:coverage',
   'npm run build',
+  'npm run test:consumer',
   'npm run lint:md',
   'golangci/golangci-lint-action@',
   'go test -race -coverprofile=coverage.out -covermode=atomic ./...',
