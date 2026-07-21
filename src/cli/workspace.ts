@@ -5,6 +5,7 @@ import {
   type WorkspaceRegistry,
 } from "../lib/workspace.js";
 import {
+  formatDefaultWorkspaceCleared,
   formatWorkspace,
   formatWorkspaceList,
   type WorkspaceOutputMode,
@@ -98,7 +99,7 @@ export function registerWorkspaceCommands(
               throw new Error("Do not provide a selector with --clear");
             }
             await registry.clearDefault();
-            dependencies.writeOut("Default workspace cleared");
+            dependencies.writeOut(formatDefaultWorkspaceCleared(outputMode(program)));
             return;
           }
           if (selector === undefined) {

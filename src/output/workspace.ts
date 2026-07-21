@@ -35,6 +35,12 @@ export function formatWorkspace(workspace: WorkspaceView, mode: WorkspaceOutputM
   ].join("\n");
 }
 
+export function formatDefaultWorkspaceCleared(mode: WorkspaceOutputMode): string {
+  if (mode === "json") return JSON.stringify({ ok: true, defaultTeamId: null }, null, 2);
+  if (mode === "plain") return "ok\t";
+  return "Default workspace cleared";
+}
+
 function formatTsv(workspace: WorkspaceView): string {
   return [
     workspace.teamId,

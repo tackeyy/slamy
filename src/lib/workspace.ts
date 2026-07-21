@@ -4,7 +4,11 @@ import { parseTeamId } from "../domain/team-id.js";
 import type { WorkspaceRecord } from "../domain/workspace.js";
 import { NodeFileWorkspaceStore } from "../workspace/node-file-workspace-store.js";
 import { WorkspaceRegistry } from "../workspace/registry.js";
-import { normalizeWorkspaceDomain, validateWorkspaceAlias } from "../workspace/schema.js";
+import {
+  decodeWorkspaceRegistry,
+  normalizeWorkspaceDomain,
+  validateWorkspaceAlias,
+} from "../workspace/schema.js";
 
 export type { WorkspaceRegistry } from "../workspace/registry.js";
 
@@ -25,7 +29,7 @@ export type CreateWorkspaceRecordInput = {
 };
 
 export function createWorkspaceRecord(input: CreateWorkspaceRecordInput): WorkspaceRecord {
-  return {
+  const candidate: WorkspaceRecord = {
     teamId: parseTeamId(input.teamId),
     alias: validateWorkspaceAlias(input.alias),
     domain: normalizeWorkspaceDomain(input.domain),
@@ -44,6 +48,9 @@ export function createWorkspaceRecord(input: CreateWorkspaceRecordInput): Worksp
         }
       : {}),
   };
+  const validated = decodeWorkspaceRegistry({ version: 1, workspaces: [candidate] }).workspaces[0];
+  if (!validated) throw new Error("Workspace record validation failed");
+  return validated;
 }
 
 export function resolveWorkspaceConfigPath(
