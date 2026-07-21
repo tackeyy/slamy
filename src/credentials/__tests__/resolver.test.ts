@@ -205,21 +205,29 @@ describe("CredentialResolver workspace mode", () => {
       ),
     ).rejects.not.toThrow(canary);
 
-    const unsafeVerifier: AuthVerifier = {
-      verify() {
-        throw new CredentialError("AUTH_VERIFICATION_FAILED", canary);
-      },
-    };
-    const verifierResolver = new CredentialResolver(
-      [new FakeProvider({ USER_REF: userToken })],
-      unsafeVerifier,
-    );
-    await expect(
-      verifierResolver.resolveForWorkspace(
-        workspace({ user: { provider: "environment", name: "USER_REF" } }),
-        { requiredKinds: ["user"] },
-      ),
-    ).rejects.not.toThrow(canary);
+    for (const code of ["AUTH_VERIFICATION_FAILED", "AUTH_IDENTITY_INVALID"] as const) {
+      const unsafeVerifier: AuthVerifier = {
+        verify() {
+          throw new CredentialError(code, canary);
+        },
+      };
+      const verifierResolver = new CredentialResolver(
+        [new FakeProvider({ USER_REF: userToken })],
+        unsafeVerifier,
+      );
+      let error: unknown;
+      try {
+        await verifierResolver.resolveForWorkspace(
+          workspace({ user: { provider: "environment", name: "USER_REF" } }),
+          { requiredKinds: ["user"] },
+        );
+      } catch (caught) {
+        error = caught;
+      }
+      expect(error).toMatchObject({ code: "AUTH_VERIFICATION_FAILED" });
+      expect(String(error)).not.toContain(canary);
+      expect(JSON.stringify(error)).not.toContain(canary);
+    }
   });
 
   it("sanitizes provider result access and value failures", async () => {
