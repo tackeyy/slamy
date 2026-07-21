@@ -1,4 +1,5 @@
 import { parseTeamId } from "../domain/team-id.js";
+import { looksLikeSlackSecret } from "../domain/slack-secret.js";
 import { WorkspaceRegistryError, type WorkspaceRegistryErrorCode } from "./errors.js";
 import type {
   CredentialReference,
@@ -11,7 +12,6 @@ const ALIAS_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 const DOMAIN_PATTERN = /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.slack\.com$/;
 const ENV_NAME_PATTERN = /^[A-Z][A-Z0-9_]*$/;
 const PROVIDER_ID_PATTERN = /^[a-z][a-z0-9-]{0,62}$/;
-const SECRET_PREFIX_PATTERN = /^(?:xox[abprs]-|xoxe\.xox[abp]-)/;
 
 export function emptyWorkspaceRegistry(): WorkspaceRegistryDocument {
   return { version: 1, workspaces: [] };
@@ -139,7 +139,7 @@ function decodeCredentialRef(value: unknown): CredentialReference {
     input.name.length < 1 ||
     input.name.length > 512 ||
     /[\u0000-\u001f\u007f]/.test(input.name) ||
-    SECRET_PREFIX_PATTERN.test(input.name) ||
+    looksLikeSlackSecret(input.name) ||
     (input.provider === "environment" && !ENV_NAME_PATTERN.test(input.name))
   ) {
     throw invalid("Credential reference is invalid");
