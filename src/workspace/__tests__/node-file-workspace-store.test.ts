@@ -5,6 +5,7 @@ import {
   mkdtemp,
   readdir,
   readFile,
+  rename,
   rm,
   symlink,
   writeFile,
@@ -84,6 +85,36 @@ describe("NodeFileWorkspaceStore", () => {
       version: 1,
       workspaces: [],
     });
+  });
+
+  it("rejects symlinks when O_NOFOLLOW is unavailable", async () => {
+    const root = await mkdtemp(join(tmpdir(), "slamy-workspace-no-follow-"));
+    tempPaths.push(root);
+    const target = join(root, "target.json");
+    const linked = join(root, "linked.json");
+    await writeFile(target, '{"version":1,"workspaces":[]}\n', { mode: 0o600 });
+    await symlink(target, linked);
+
+    await expect(
+      new NodeFileWorkspaceStore(linked, { openNoFollowFlag: 0 }).read(),
+    ).rejects.toMatchObject({ code: "UNSAFE_CONFIG" });
+  });
+
+  it("rejects path replacement when O_NOFOLLOW is unavailable", async () => {
+    const root = await mkdtemp(join(tmpdir(), "slamy-workspace-identity-"));
+    tempPaths.push(root);
+    const configPath = join(root, "workspaces.json");
+    const replacementPath = join(root, "replacement.json");
+    await writeFile(configPath, '{"version":1,"workspaces":[]}\n', { mode: 0o600 });
+    await writeFile(replacementPath, '{"version":1,"workspaces":[]}\n', { mode: 0o600 });
+
+    const store = new NodeFileWorkspaceStore(configPath, {
+      openNoFollowFlag: 0,
+      afterRegistryOpen: async () => {
+        await rename(replacementPath, configPath);
+      },
+    });
+    await expect(store.read()).rejects.toMatchObject({ code: "UNSAFE_CONFIG" });
   });
 
   it("serializes independent file-store mutations and fails closed for a stale lock", async () => {
