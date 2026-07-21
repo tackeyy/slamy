@@ -3,6 +3,7 @@ import {
   chmod,
   lstat,
   mkdtemp,
+  readdir,
   readFile,
   rm,
   symlink,
@@ -68,7 +69,6 @@ describe("NodeFileWorkspaceStore", () => {
       failingStore.write({ version: 1, workspaces: [] }),
     ).rejects.toMatchObject({ code: "STORE_WRITE_FAILED" });
     expect(await readFile(configPath, "utf8")).toBe(beforeFailure);
-    expect((await import("node:fs/promises")).then(({ readdir }) => readdir(dirname(configPath))))
-      .resolves.not.toContain(expect.stringContaining(".tmp"));
+    expect((await readdir(dirname(configPath))).some((name) => name.endsWith(".tmp"))).toBe(false);
   });
 });
