@@ -35,7 +35,7 @@ export function createVerifiedCredential(
   teamId: TeamId,
   secret: CredentialSecret,
 ): VerifiedCredential {
-  return new VerifiedCredentialValue(kind, teamId, secret);
+  return Object.freeze(new VerifiedCredentialValue(kind, teamId, secret));
 }
 
 class VerifiedCredentialSetValue implements VerifiedCredentialSet {
@@ -77,5 +77,5 @@ export function createVerifiedCredentialSet(
   bot: VerifiedCredential | undefined,
   requiredScopes: Partial<Record<CredentialKind, readonly string[]>>,
 ): VerifiedCredentialSet {
-  return new VerifiedCredentialSetValue(teamId, user, bot, requiredScopes);
+  return Object.freeze(new VerifiedCredentialSetValue(teamId, user, bot, requiredScopes));
 }
