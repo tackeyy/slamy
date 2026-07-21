@@ -76,8 +76,7 @@ export class CredentialResolver {
       const provider = this.#providers.get(providerId)!;
       try {
         values.set(providerId, await provider.resolveMany(providerReferences));
-      } catch (error) {
-        if (error instanceof CredentialError) throw error;
+      } catch {
         throw new CredentialError(
           "CREDENTIAL_PROVIDER_FAILED",
           "Credential provider could not resolve the requested references",
@@ -126,8 +125,7 @@ export class CredentialResolver {
         if (!secret) continue;
         try {
           identities[kind] = await this.#verifier.verify(secret);
-        } catch (error) {
-          if (error instanceof CredentialError) throw error;
+        } catch {
           throw new CredentialError(
             "AUTH_VERIFICATION_FAILED",
             "Slack credential identity verification failed",
