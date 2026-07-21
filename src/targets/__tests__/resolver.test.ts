@@ -170,6 +170,77 @@ describe("TargetResolver", () => {
     ).rejects.toMatchObject({ code: "ENTERPRISE_CONTEXT_AMBIGUOUS" });
   });
 
+  it("uses one Target Team ID to disambiguate an Enterprise URL", async () => {
+    const target = await new TargetResolver(new FakeCatalog([primary, secondary])).resolve({
+      input: "https://app.slack.com/client/E00000001/C0123ABC",
+      targetTeamIds: ["T00000002"],
+    });
+    expect(target).toMatchObject({
+      workspaceTeamId: "T00000002",
+      enterpriseId: "E00000001",
+      selectedBy: "target-team-id",
+      channelOwnership: "unknown",
+    });
+  });
+
+  it("rejects an empty explicit workspace instead of using the default", async () => {
+    await expect(
+      new TargetResolver(new FakeCatalog([primary])).resolve({
+        input: "C0123ABC",
+        explicitWorkspace: "",
+      }),
+    ).rejects.toMatchObject({ code: "WORKSPACE_NOT_REGISTERED" });
+  });
+
+  it("normalizes malformed and failing catalogs without leaking raw errors", async () => {
+    const canary = "xoxp-catalog-secret-canary";
+    const catalogs: WorkspaceCatalog[] = [
+      { list: () => Promise.reject(new Error(canary)) },
+      { list: () => Promise.resolve(null as unknown as readonly WorkspaceView[]) },
+      {
+        list: () =>
+          Promise.resolve([
+            {
+              get teamId(): never {
+                throw new Error(canary);
+              },
+            } as unknown as WorkspaceView,
+          ]),
+      },
+      {
+        list: () =>
+          Promise.resolve([{ ...primary, previousDomains: null } as unknown as WorkspaceView]),
+      },
+    ];
+
+    for (const catalog of catalogs) {
+      let caught: unknown;
+      try {
+        await new TargetResolver(catalog).resolve({ input: "C0123ABC" });
+      } catch (error) {
+        caught = error;
+      }
+      expect(caught).toMatchObject({ code: "WORKSPACE_CATALOG_INVALID" });
+      expect(String(caught)).not.toContain(canary);
+      expect(JSON.stringify(caught)).not.toContain(canary);
+      expect(caught instanceof Error ? caught.stack : "").not.toContain(canary);
+    }
+  });
+
+  it("snapshots only routing metadata and never reads credential references", async () => {
+    const withPoisonedCredentials = { ...primary } as WorkspaceView;
+    Object.defineProperty(withPoisonedCredentials, "credentialRefs", {
+      enumerable: true,
+      get(): never {
+        throw new Error("xoxp-credential-canary");
+      },
+    });
+    const target = await new TargetResolver({
+      list: () => Promise.resolve([withPoisonedCredentials]),
+    }).resolve({ input: "C0123ABC" });
+    expect(target.workspaceTeamId).toBe("T00000001");
+  });
+
   it("rejects duplicate catalog evidence and a missing default", async () => {
     const duplicateDomain = { ...secondary, domain: primary.domain };
     await expect(

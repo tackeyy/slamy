@@ -74,6 +74,16 @@ describe("parseTargetEvidence", () => {
       channelId: "C0123ABC",
       enterpriseId: "E00000001",
     });
+
+    expect(
+      parseTargetEvidence({
+        input:
+          "https://app.slack.com/client/T00000001/G0123ABC/thread-G0123ABC-1700000000.000001?cid=G0123ABC&thread_ts=1700000000.000001",
+      }),
+    ).toMatchObject({
+      channelId: "G0123ABC",
+      threadTs: "1700000000.000001",
+    });
   });
 
   it("parses legacy channel plus explicit message and thread timestamps", () => {
@@ -119,6 +129,19 @@ describe("parseTargetEvidence", () => {
     ["https://primary.slack.com:444/archives/C0123ABC/p1700000000000001", "UNSUPPORTED_URL"],
     ["https://evil.example/archives/C0123ABC/p1700000000000001", "UNSUPPORTED_URL"],
     ["https://primary.slack.com/not-archives/C0123ABC", "UNSUPPORTED_URL"],
+    ["https://app.slack.com/client/T00000001/C0123ABC?cid=G99999999", "CHANNEL_CONFLICT"],
+    [
+      "https://app.slack.com/client/T00000001/C0123ABC/thread-C0123ABC-1700000000.000001?thread_ts=1700000001.000002",
+      "TIMESTAMP_CONFLICT",
+    ],
+    [
+      "https://app.slack.com/client/T00000001/C0123ABC?thread_ts=1700000000.000001",
+      "UNSUPPORTED_URL",
+    ],
+    [
+      "https://app.slack.com/client/T00000001/C0123ABC?cid=C0123ABC&cid=C0123ABC",
+      "AMBIGUOUS_QUERY",
+    ],
   ])("fails closed for unsafe URL %s", (input, code) => {
     expect(() => parseTargetEvidence({ input })).toThrowError(expect.objectContaining({ code }));
   });
