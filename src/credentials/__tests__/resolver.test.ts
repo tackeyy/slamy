@@ -317,6 +317,11 @@ describe("CredentialResolver workspace mode", () => {
       { requiredKinds: ["user"] },
     );
 
+    expect(Object.isFrozen(result)).toBe(true);
+    expect(Object.isFrozen(result.user)).toBe(true);
+    expect(Object.isFrozen(result.bot)).toBe(true);
+    expect(() => Object.assign(result, { teamId: parseTeamId("T00000002") })).toThrow(TypeError);
+
     result.destroy();
     result.destroy();
 
