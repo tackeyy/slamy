@@ -35,6 +35,9 @@ export function parseTargetEvidence(request: ParseTargetRequest): ParsedTargetEv
 }
 
 function parseUrl(input: string): ParsedTargetEvidence {
+  if (!/^[A-Za-z][A-Za-z0-9+.-]*:\/\/[^/]/.test(input)) {
+    throw new TargetError("INVALID_TARGET", "Slack target URL is invalid");
+  }
   let url: URL;
   try {
     url = new URL(input);
@@ -43,6 +46,9 @@ function parseUrl(input: string): ParsedTargetEvidence {
   }
   if (url.protocol !== "https:") {
     throw new TargetError("UNSUPPORTED_URL", "Slack target URL must use HTTPS");
+  }
+  if (url.username || url.password || url.port) {
+    throw new TargetError("UNSUPPORTED_URL", "Slack target URL authority is unsupported");
   }
   if (/%(?![0-9A-Fa-f]{2})/.test(`${url.pathname}${url.search}`)) {
     throw new TargetError("INVALID_URL_ENCODING", "Slack target URL encoding is invalid");
@@ -178,5 +184,5 @@ function safeTeamId(value: string): TeamId {
 }
 
 function isUrlInput(input: string): boolean {
-  return /^[A-Za-z][A-Za-z0-9+.-]*:\/\//.test(input);
+  return /^[A-Za-z][A-Za-z0-9+.-]*:/.test(input);
 }
