@@ -189,8 +189,8 @@ slamy workspace remove primary
 
 これらのコマンドはSlackへ接続せず、token値を引数として受け取りません。TypeScript libraryには、
 token種別とSlack Team IDを`auth.test`で検証するatomic credential-set resolverも追加済みです。
-既存CLIコマンドへの接続はworkspace-aware adapterへ移行する#92で行い、permalink routingは#83で
-対応します。
+厳格なpermalink Target resolverもlibraryから利用できます。既存CLIコマンドへの接続は
+workspace-aware adapterへ移行する#92で行うため、それまでは従来のtarget処理を継続します。
 
 ### `channels history` — チャンネルのメッセージ履歴
 
@@ -359,6 +359,18 @@ custom providerとverifierはinterface上raw tokenを扱う必要があるため
 Slackの`auth.test`が証明するのはidentityとTeam IDであり、操作scopeではありません。Userの
 `search:read`などはrequirement metadataとして保持できますが、実際のmethod policyと
 `missing_scope`処理はworkspace-aware Slack adapterの#92で実装します。
+
+libraryから`createTargetResolver()`へ`WorkspaceCatalog`を注入すると、Slackの`archives`
+permalink（`thread_ts` / `cid`を含む）、`app.slack.com/client`のchannel URLと観測済みthread URL、
+および厳格な従来channel IDと任意のmessage/thread timestampを解決できます。返却するimmutableな
+Targetはworkspace、channel、message、threadの根拠を一つにまとめます。workspaceは、明示指定、
+Target Team ID、登録済みの現在または過去hostname、URLを伴わない入力に限るregistry defaultの順で
+fail-closedに選択します。競合または未登録のURL根拠をdefaultへfallbackしません。
+
+Slack Connect channelの所有workspaceは`unknown`として返します。曖昧でない根拠から実行workspaceを
+一つ選択できても、接続先のどのworkspaceがchannelを所有するかは推測しません。候補Team IDが複数ある
+場合とEnterprise IDだけの`app.slack.com` URLは明示workspaceが必要です。parserとworkspace選択は
+credentialへアクセスせず、Slack APIも呼びません。
 
 以下の環境変数alias方式は従来のGo CLI契約です。v2中はread-only互換を維持し、削除は早くても
 v3.0.0以降です。旧環境変数だけではSlack Team IDを証明できないため、自動importしません。
