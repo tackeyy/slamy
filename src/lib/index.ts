@@ -35,6 +35,21 @@ export { WorkspaceRegistry } from "../workspace/registry.js";
 export { WorkspaceRegistryError } from "../workspace/errors.js";
 export type { WorkspaceRegistryErrorCode } from "../workspace/errors.js";
 export type { WorkspaceRegistryDocument } from "../workspace/types.js";
+export { createTargetResolver } from "./targets.js";
+export type { CreateTargetResolverOptions } from "./targets.js";
+export { TargetError, TargetResolver, parseTargetEvidence } from "../targets/index.js";
+export type {
+  ChannelId,
+  EnterpriseId,
+  ParseTargetRequest,
+  ParsedTargetEvidence,
+  ResolveSlackTargetRequest,
+  SlackTarget,
+  SlackTimestamp,
+  TargetErrorCode,
+  TargetWorkspaceSelection,
+  WorkspaceCatalog,
+} from "../targets/index.js";
 export { createCredentialResolver } from "./credentials.js";
 export type { CreateCredentialResolverOptions } from "./credentials.js";
 export { CredentialError, CredentialResolver, EnvironmentCredentialProvider } from "../credentials/index.js";
