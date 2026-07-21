@@ -1,4 +1,4 @@
-import type { TeamId } from "../domain/team-id.js";
+import { parseTeamId, type TeamId } from "../domain/team-id.js";
 import type { WorkspaceRecord } from "../domain/workspace.js";
 import type { AuthIdentity, AuthVerifier } from "./auth-verifier.js";
 import { CredentialError } from "./errors.js";
@@ -12,7 +12,10 @@ import {
   type CredentialRequirement,
   type VerifiedCredentialSet,
 } from "./types.js";
-import { createVerifiedCredential } from "./verified-credential.js";
+import {
+  createVerifiedCredential,
+  createVerifiedCredentialSet,
+} from "./verified-credential.js";
 
 type ReferenceByKind = Partial<Record<CredentialKind, CredentialReference>>;
 type SecretByKind = Partial<Record<CredentialKind, CredentialSecret>>;
@@ -75,7 +78,18 @@ export class CredentialResolver {
     for (const [providerId, providerReferences] of groups) {
       const provider = this.#providers.get(providerId)!;
       try {
-        values.set(providerId, await provider.resolveMany(providerReferences));
+        const result = await provider.resolveMany(providerReferences);
+        const get = (result as { get?: unknown } | null)?.get;
+        if (typeof get !== "function") throw new TypeError("Invalid provider result");
+        const snapshot = new Map<string, string | undefined>();
+        for (const reference of providerReferences) {
+          const value = Reflect.apply(get, result, [reference.name]) as unknown;
+          if (value !== undefined && typeof value !== "string") {
+            throw new TypeError("Invalid provider value");
+          }
+          snapshot.set(reference.name, value);
+        }
+        values.set(providerId, snapshot);
       } catch {
         throw new CredentialError(
           "CREDENTIAL_PROVIDER_FAILED",
@@ -123,12 +137,21 @@ export class CredentialResolver {
       for (const kind of ["user", "bot"] as const) {
         const secret = secrets[kind];
         if (!secret) continue;
+        let result: AuthIdentity;
         try {
-          identities[kind] = await this.#verifier.verify(secret);
+          result = await this.#verifier.verify(secret);
         } catch {
           throw new CredentialError(
             "AUTH_VERIFICATION_FAILED",
             "Slack credential identity verification failed",
+          );
+        }
+        try {
+          identities[kind] = normalizeAuthIdentity(result);
+        } catch {
+          throw new CredentialError(
+            "AUTH_IDENTITY_INVALID",
+            "Slack credential returned an invalid identity",
           );
         }
       }
@@ -168,16 +191,16 @@ export class CredentialResolver {
         );
       }
 
-      return Object.freeze({
-        teamId: actualTeamId,
-        ...(secrets.user && userIdentity
-          ? { user: createVerifiedCredential("user", userIdentity.teamId, secrets.user) }
-          : {}),
-        ...(secrets.bot && botIdentity
-          ? { bot: createVerifiedCredential("bot", botIdentity.teamId, secrets.bot) }
-          : {}),
-        requiredScopes: copyScopes(requirement.requiredScopes),
-      });
+      return createVerifiedCredentialSet(
+        actualTeamId,
+        secrets.user && userIdentity
+          ? createVerifiedCredential("user", userIdentity.teamId, secrets.user)
+          : undefined,
+        secrets.bot && botIdentity
+          ? createVerifiedCredential("bot", botIdentity.teamId, secrets.bot)
+          : undefined,
+        copyScopes(requirement.requiredScopes),
+      );
     } catch (error) {
       destroySecrets(secrets);
       throw error;
@@ -197,6 +220,56 @@ function validateRequirement(requirement: CredentialRequirement): void {
       "Credential requirement must contain unique supported token kinds",
     );
   }
+  const scopes = requirement.requiredScopes;
+  if (!scopes) return;
+  const scopeKinds = Object.keys(scopes);
+  if (
+    scopeKinds.some((kind) => kind !== "user" && kind !== "bot") ||
+    scopeKinds.some((kind) => !kinds.includes(kind as CredentialKind)) ||
+    scopeKinds.some((kind) => {
+      const values = scopes[kind as CredentialKind];
+      return (
+        !Array.isArray(values) ||
+        values.some((scope) => typeof scope !== "string" || scope.length === 0) ||
+        new Set(values).size !== values.length
+      );
+    })
+  ) {
+    throw new CredentialError(
+      "INVALID_CREDENTIAL_REQUIREMENT",
+      "Credential scopes must belong to required token kinds and contain unique non-empty values",
+    );
+  }
+}
+
+function normalizeAuthIdentity(value: unknown): AuthIdentity {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) {
+    throw new TypeError("Invalid auth identity");
+  }
+  const input = value as Record<string, unknown>;
+  const teamId = parseTeamId(input.teamId);
+  const userId = optionalIdentityId(input.userId);
+  const botId = optionalIdentityId(input.botId);
+  const enterpriseId = optionalIdentityId(input.enterpriseId);
+  return Object.freeze({
+    teamId,
+    ...(userId ? { userId } : {}),
+    ...(botId ? { botId } : {}),
+    ...(enterpriseId ? { enterpriseId } : {}),
+  });
+}
+
+function optionalIdentityId(value: unknown): string | undefined {
+  if (value === undefined) return undefined;
+  if (
+    typeof value !== "string" ||
+    value.length < 1 ||
+    value.length > 128 ||
+    /[\u0000-\u001f\u007f]/.test(value)
+  ) {
+    throw new TypeError("Invalid auth identity field");
+  }
+  return value;
 }
 
 function copyScopes(

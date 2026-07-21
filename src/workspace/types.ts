@@ -1,6 +1,7 @@
 import type { TeamId } from "../domain/team-id.js";
 
 export type {
+  CredentialReference,
   EnvironmentCredentialRef,
   WorkspaceCredentialRefs,
   WorkspaceRecord,

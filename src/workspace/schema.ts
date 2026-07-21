@@ -1,7 +1,7 @@
 import { parseTeamId } from "../domain/team-id.js";
 import { WorkspaceRegistryError, type WorkspaceRegistryErrorCode } from "./errors.js";
 import type {
-  EnvironmentCredentialRef,
+  CredentialReference,
   WorkspaceCredentialRefs,
   WorkspaceRecord,
   WorkspaceRegistryDocument,
@@ -10,6 +10,8 @@ import type {
 const ALIAS_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 const DOMAIN_PATTERN = /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.slack\.com$/;
 const ENV_NAME_PATTERN = /^[A-Z][A-Z0-9_]*$/;
+const PROVIDER_ID_PATTERN = /^[a-z][a-z0-9-]{0,62}$/;
+const SECRET_PREFIX_PATTERN = /^(?:xox[abprs]-|xoxe\.xox[abp]-)/;
 
 export function emptyWorkspaceRegistry(): WorkspaceRegistryDocument {
   return { version: 1, workspaces: [] };
@@ -126,16 +128,23 @@ function decodeCredentialRefs(value: unknown): WorkspaceCredentialRefs {
   };
 }
 
-function decodeCredentialRef(value: unknown): EnvironmentCredentialRef {
+function decodeCredentialRef(value: unknown): CredentialReference {
   const input = asObject(value, "credential reference");
   assertExactKeys(input, ["provider", "name"], "credential reference");
-  if (input.provider !== "environment") {
-    throw invalid("Credential provider is unsupported");
+  if (typeof input.provider !== "string" || !PROVIDER_ID_PATTERN.test(input.provider)) {
+    throw invalid("Credential provider ID is invalid");
   }
-  if (typeof input.name !== "string" || !ENV_NAME_PATTERN.test(input.name)) {
-    throw invalid("Environment credential reference is invalid");
+  if (
+    typeof input.name !== "string" ||
+    input.name.length < 1 ||
+    input.name.length > 512 ||
+    /[\u0000-\u001f\u007f]/.test(input.name) ||
+    SECRET_PREFIX_PATTERN.test(input.name) ||
+    (input.provider === "environment" && !ENV_NAME_PATTERN.test(input.name))
+  ) {
+    throw invalid("Credential reference is invalid");
   }
-  return { provider: "environment", name: input.name };
+  return { provider: input.provider, name: input.name };
 }
 
 function validateUniqueness(workspaces: WorkspaceRecord[]): void {

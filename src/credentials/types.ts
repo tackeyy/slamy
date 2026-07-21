@@ -20,4 +20,5 @@ export type VerifiedCredentialSet = {
   readonly user?: VerifiedCredential;
   readonly bot?: VerifiedCredential;
   readonly requiredScopes: Partial<Record<CredentialKind, readonly string[]>>;
+  destroy(): void;
 };

@@ -1,6 +1,10 @@
 import type { TeamId } from "../domain/team-id.js";
 import type { CredentialSecret } from "./secret.js";
-import type { CredentialKind, VerifiedCredential } from "./types.js";
+import type {
+  CredentialKind,
+  VerifiedCredential,
+  VerifiedCredentialSet,
+} from "./types.js";
 
 class VerifiedCredentialValue implements VerifiedCredential {
   readonly kind: CredentialKind;
@@ -32,4 +36,46 @@ export function createVerifiedCredential(
   secret: CredentialSecret,
 ): VerifiedCredential {
   return new VerifiedCredentialValue(kind, teamId, secret);
+}
+
+class VerifiedCredentialSetValue implements VerifiedCredentialSet {
+  readonly teamId: TeamId;
+  readonly user?: VerifiedCredential;
+  readonly bot?: VerifiedCredential;
+  readonly requiredScopes: Partial<Record<CredentialKind, readonly string[]>>;
+
+  constructor(
+    teamId: TeamId,
+    user: VerifiedCredential | undefined,
+    bot: VerifiedCredential | undefined,
+    requiredScopes: Partial<Record<CredentialKind, readonly string[]>>,
+  ) {
+    this.teamId = teamId;
+    if (user) this.user = user;
+    if (bot) this.bot = bot;
+    this.requiredScopes = requiredScopes;
+  }
+
+  destroy(): void {
+    this.user?.destroy();
+    this.bot?.destroy();
+  }
+
+  toJSON(): Omit<VerifiedCredentialSet, "destroy"> {
+    return {
+      teamId: this.teamId,
+      ...(this.user ? { user: this.user } : {}),
+      ...(this.bot ? { bot: this.bot } : {}),
+      requiredScopes: this.requiredScopes,
+    };
+  }
+}
+
+export function createVerifiedCredentialSet(
+  teamId: TeamId,
+  user: VerifiedCredential | undefined,
+  bot: VerifiedCredential | undefined,
+  requiredScopes: Partial<Record<CredentialKind, readonly string[]>>,
+): VerifiedCredentialSet {
+  return new VerifiedCredentialSetValue(teamId, user, bot, requiredScopes);
 }

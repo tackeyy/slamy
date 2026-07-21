@@ -1,7 +1,6 @@
-export type CredentialReference = {
-  provider: string;
-  name: string;
-};
+import type { CredentialReference } from "../domain/workspace.js";
+
+export type { CredentialReference } from "../domain/workspace.js";
 
 export interface CredentialProvider {
   readonly providerId: string;

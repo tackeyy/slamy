@@ -25,6 +25,7 @@ export type {
 export { parseTeamId } from "../domain/team-id.js";
 export type { TeamId } from "../domain/team-id.js";
 export type {
+  CredentialReference,
   EnvironmentCredentialRef,
   WorkspaceCredentialRefs,
   WorkspaceRecord,
@@ -44,7 +45,6 @@ export type {
   CredentialHandle,
   CredentialKind,
   CredentialProvider,
-  CredentialReference,
   CredentialRequirement,
   VerifiedCredential,
   VerifiedCredentialSet,
