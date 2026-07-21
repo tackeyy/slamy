@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { constants } from "node:fs";
+import { constants, type BigIntStats, type Stats } from "node:fs";
 import {
   lstat,
   mkdir,
@@ -64,8 +64,9 @@ export class NodeFileWorkspaceStore implements WorkspaceStore {
 
   async #readUnlocked(): Promise<WorkspaceRegistryDocument> {
     let handle: FileHandle;
+    let noFollow: number;
     try {
-      const noFollow =
+      noFollow =
         this.#hooks.openNoFollowFlag ??
         (constants as Record<string, number>).O_NOFOLLOW ??
         0;
@@ -77,11 +78,33 @@ export class NodeFileWorkspaceStore implements WorkspaceStore {
     }
 
     try {
-      const stat = await handle.stat();
-      assertSafeNode(stat, "Workspace registry file", true);
+      await this.#assertOpenedRegistrySafe(handle, noFollow !== 0);
       return parseWorkspaceRegistryJson(await handle.readFile("utf8"));
     } finally {
       await handle.close().catch(() => undefined);
+    }
+  }
+
+  async #assertOpenedRegistrySafe(handle: FileHandle, noFollowEnabled: boolean): Promise<void> {
+    try {
+      const openedStat = await handle.stat({ bigint: true });
+      assertSafeNode(openedStat, "Workspace registry file", true);
+      if (noFollowEnabled) return;
+
+      const pathStat = await lstat(this.#filePath, { bigint: true });
+      assertSafeNode(pathStat, "Workspace registry file", true);
+      if (!sameFileIdentity(pathStat, openedStat)) {
+        throw new WorkspaceRegistryError(
+          "UNSAFE_CONFIG",
+          "Workspace registry path changed while it was being opened",
+        );
+      }
+    } catch (error) {
+      if (error instanceof WorkspaceRegistryError) throw error;
+      throw new WorkspaceRegistryError(
+        "UNSAFE_CONFIG",
+        "Unable to verify the opened workspace registry",
+      );
     }
   }
 
@@ -239,7 +262,7 @@ export class NodeFileWorkspaceStore implements WorkspaceStore {
 }
 
 function assertSafeNode(
-  stat: Awaited<ReturnType<typeof lstat>> | Awaited<ReturnType<FileHandle["stat"]>>,
+  stat: Stats | BigIntStats,
   label: string,
   requireFile: boolean,
 ): void {
@@ -254,6 +277,13 @@ function assertSafeNode(
       throw new WorkspaceRegistryError("UNSAFE_CONFIG", `${label} must be owned by the current user`);
     }
   }
+}
+
+function sameFileIdentity(
+  pathStat: BigIntStats,
+  openedStat: BigIntStats,
+): boolean {
+  return pathStat.ino !== 0n && pathStat.dev === openedStat.dev && pathStat.ino === openedStat.ino;
 }
 
 function isNotFound(error: unknown): boolean {
