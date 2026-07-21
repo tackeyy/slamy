@@ -35,28 +35,49 @@ describe("architecture check", () => {
     expect(forbidden.stderr).toContain("dependency cycle");
   });
 
-  it("rejects ADR-forbidden external imports, slack-to-targets, and unknown modules", async () => {
+  it("rejects ADR-forbidden external imports", async () => {
     const root = await mkdtemp(join(tmpdir(), "slamy-architecture-negative-"));
     tempPaths.push(root);
-    for (const module of ["domain", "slack", "targets", "platform"]) {
-      await mkdir(join(root, module));
-    }
+    await mkdir(join(root, "domain"));
     await writeFile(
       join(root, "domain", "id.ts"),
       "import { WebClient } from '@slack/web-api';\nexport const id = WebClient;\n",
     );
+
+    const result = runCheck(root);
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain(
+      "forbidden external import: domain/id.ts (domain) -> @slack/web-api",
+    );
+  });
+
+  it("rejects the slack-to-targets dependency edge", async () => {
+    const root = await mkdtemp(join(tmpdir(), "slamy-architecture-negative-"));
+    tempPaths.push(root);
+    await mkdir(join(root, "slack"));
+    await mkdir(join(root, "targets"));
     await writeFile(
       join(root, "slack", "adapter.ts"),
       "import { target } from '../targets/target.js';\nexport const adapter = target;\n",
     );
     await writeFile(join(root, "targets", "target.ts"), "export const target = 'C1';\n");
+
+    const result = runCheck(root);
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain(
+      "forbidden import: slack/adapter.ts (slack) -> targets/target.ts (targets)",
+    );
+  });
+
+  it("rejects unknown source modules", async () => {
+    const root = await mkdtemp(join(tmpdir(), "slamy-architecture-negative-"));
+    tempPaths.push(root);
+    await mkdir(join(root, "platform"));
     await writeFile(join(root, "platform", "fs.ts"), "export const unsafe = true;\n");
 
     const result = runCheck(root);
     expect(result.status).toBe(1);
-    expect(result.stderr).toContain("forbidden external import");
-    expect(result.stderr).toContain("slack");
-    expect(result.stderr).toContain("unknown source module");
+    expect(result.stderr).toContain("unknown source module: platform/fs.ts (platform)");
   });
 });
 
