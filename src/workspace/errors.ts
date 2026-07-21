@@ -8,7 +8,9 @@ export type WorkspaceRegistryErrorCode =
   | "WORKSPACE_NOT_FOUND"
   | "WORKSPACE_EXISTS"
   | "UNSAFE_CONFIG"
-  | "STORE_WRITE_FAILED";
+  | "STORE_WRITE_FAILED"
+  | "STORE_DURABILITY_UNCERTAIN"
+  | "STORE_LOCKED";
 
 export class WorkspaceRegistryError extends Error {
   readonly code: WorkspaceRegistryErrorCode;

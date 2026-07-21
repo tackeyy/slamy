@@ -30,7 +30,14 @@ the path for isolated automation and testing.
 On POSIX systems slamy creates the dedicated directory with mode `0700` and the registry file with
 mode `0600`. A symlink, non-regular file, different owner, or group/other permission causes a
 fail-closed error. Each mutation writes and syncs a private temporary file in the same directory,
-then replaces the registry with an atomic rename.
+then replaces the registry with an atomic rename. A private `.lock` file serializes the complete
+read-validate-write transaction across processes. Lock acquisition times out after five seconds;
+slamy never removes a stale lock automatically. Remove one manually only after confirming that no
+slamy process is updating the registry.
+
+If slamy reports that directory durability could not be confirmed, the atomic rename has already
+occurred and the new registry may be active. Inspect `workspace list` before deciding whether to
+retry the operation.
 
 The registry stores only environment-variable reference names such as
 `SLAMY_WORKSPACE_PRIMARY_USER_TOKEN`. It never stores the referenced value.

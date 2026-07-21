@@ -75,10 +75,10 @@ export class WorkspaceRegistry {
   async #mutate(
     mutate: (document: WorkspaceRegistryDocument) => WorkspaceRegistryDocument,
   ): Promise<WorkspaceRegistryDocument> {
-    const current = await this.#read();
-    const next = decodeWorkspaceRegistry(mutate(structuredClone(current)));
-    await this.#store.write(next);
-    return next;
+    return this.#store.update((stored) => {
+      const current = decodeWorkspaceRegistry(stored);
+      return decodeWorkspaceRegistry(mutate(structuredClone(current)));
+    });
   }
 }
 
@@ -101,10 +101,12 @@ function resolveRecord(
     if (exact) return exact;
 
     let domain: string | undefined;
-    try {
-      domain = normalizeWorkspaceDomain(selector);
-    } catch {
-      domain = undefined;
+    if (selector.toLowerCase().endsWith(".slack.com")) {
+      try {
+        domain = normalizeWorkspaceDomain(selector);
+      } catch {
+        domain = undefined;
+      }
     }
     if (domain !== undefined) {
       const byDomain = document.workspaces.find(

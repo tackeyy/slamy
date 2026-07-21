@@ -16,6 +16,14 @@ class MemoryStore implements WorkspaceStore {
     this.writes += 1;
     this.document = structuredClone(document);
   }
+
+  async update(
+    mutate: (document: WorkspaceRegistryDocument) => WorkspaceRegistryDocument,
+  ): Promise<WorkspaceRegistryDocument> {
+    const next = mutate(structuredClone(this.document));
+    await this.write(next);
+    return structuredClone(next);
+  }
 }
 
 class CoordinatedStore extends MemoryStore {
