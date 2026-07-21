@@ -13,6 +13,20 @@ export { formatTimestamp, tzDateToEpochSec } from "./tz.js";
 export type { FormatTimestampOptions } from "./tz.js";
 export { parseSlackTarget } from "./parse-target.js";
 export type { ParsedSlackTarget } from "./parse-target.js";
+export { createWorkspaceRegistry, resolveWorkspaceConfigPath } from "./workspace.js";
+export type { CreateWorkspaceRegistryOptions } from "./workspace.js";
+export { parseTeamId } from "../domain/team-id.js";
+export type { TeamId } from "../domain/team-id.js";
+export type {
+  EnvironmentCredentialRef,
+  WorkspaceCredentialRefs,
+  WorkspaceRecord,
+  WorkspaceView,
+} from "../domain/workspace.js";
+export { WorkspaceRegistry } from "../workspace/registry.js";
+export { WorkspaceRegistryError } from "../workspace/errors.js";
+export type { WorkspaceRegistryErrorCode } from "../workspace/errors.js";
+export type { WorkspaceRegistryDocument } from "../workspace/types.js";
 export type {
   Channel,
   UnreadChannel,
