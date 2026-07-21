@@ -8,7 +8,7 @@ const allowedImports = new Map([
   ["workspace", new Set(["workspace", "domain"])],
   ["credentials", new Set(["credentials", "domain", "workspace"])],
   ["targets", new Set(["targets", "domain", "workspace"])],
-  ["slack", new Set(["slack", "domain", "workspace", "credentials", "targets"])],
+  ["slack", new Set(["slack", "domain", "workspace", "credentials"])],
   ["commands", new Set(["commands", "domain", "workspace", "credentials", "targets", "slack"])],
   ["output", new Set(["output", "domain", "commands"])],
   ["events", new Set(["events", "domain", "workspace", "credentials"])],
@@ -27,6 +27,27 @@ const allowedImports = new Map([
   ],
   ["cli", new Set(["cli", "lib", "output"])],
 ]);
+const exactExternalImports = new Map([
+  ["lib/client.ts", new Set(["@slack/web-api", "node:fs"])],
+  ["lib/events.ts", new Set(["@slack/bolt", "node:events"])],
+  ["lib/workspace.ts", new Set(["node:os", "node:path"])],
+  [
+    "cli/index.ts",
+    new Set([
+      "commander",
+      "node:fs",
+      "node:stream",
+      "node:stream/promises",
+      "node:path",
+      "node:url",
+    ]),
+  ],
+  ["cli/workspace.ts", new Set(["commander"])],
+  [
+    "workspace/node-file-workspace-store.ts",
+    new Set(["node:crypto", "node:fs", "node:fs/promises", "node:path", "node:timers/promises"]),
+  ],
+]);
 
 const files = await listTypeScriptFiles(root);
 const fileSet = new Set(files);
@@ -36,8 +57,18 @@ const violations = [];
 for (const file of files) {
   const source = await readFile(file, "utf8");
   const importerModule = moduleName(file);
+  if (!allowedImports.has(importerModule)) {
+    violations.push(`unknown source module: ${display(file)} (${importerModule})`);
+  }
   for (const specifier of importSpecifiers(source)) {
-    if (!specifier.startsWith(".")) continue;
+    if (!specifier.startsWith(".")) {
+      if (!isAllowedExternalImport(file, importerModule, specifier)) {
+        violations.push(
+          `forbidden external import: ${display(file)} (${importerModule}) -> ${specifier}`,
+        );
+      }
+      continue;
+    }
     const imported = resolveImport(file, specifier, fileSet);
     if (!imported) continue;
     graph.get(file).push(imported);
@@ -113,6 +144,14 @@ function moduleName(file) {
 
 function display(file) {
   return relative(root, file).split(sep).join("/");
+}
+
+function isAllowedExternalImport(file, importerModule, specifier) {
+  const exact = exactExternalImports.get(display(file));
+  if (exact?.has(specifier)) return true;
+  if (importerModule === "slack" && specifier === "@slack/web-api") return true;
+  if (importerModule === "events" && specifier === "@slack/bolt") return true;
+  return false;
 }
 
 function findCycles(dependencies) {
