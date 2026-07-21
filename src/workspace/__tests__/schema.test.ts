@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { WorkspaceRegistryError } from "../errors.js";
-import { decodeWorkspaceRegistry, parseWorkspaceRegistryJson } from "../schema.js";
+import {
+  decodeWorkspaceRegistry,
+  parseWorkspaceRegistryJson,
+  serializeWorkspaceRegistry,
+} from "../schema.js";
 
 describe("decodeWorkspaceRegistry", () => {
   it("accepts a version 1 document with Team ID as the canonical identity", () => {
@@ -111,6 +115,36 @@ describe("decodeWorkspaceRegistry", () => {
       decodeWorkspaceRegistry(unsafeDocuments.at(-1));
     } catch (error) {
       expect(String(error)).not.toContain("xoxp-secret-canary");
+    }
+  });
+
+  it("rejects App-level tokens from custom-provider references", () => {
+    const canary = "xapp-1-A0123456789-secret-canary";
+    const document = {
+      version: 1,
+      workspaces: [
+        {
+          teamId: "T00000001",
+          alias: "primary",
+          domain: "primary.slack.com",
+          previousDomains: [],
+          displayName: "Primary",
+          credentialRefs: { user: { provider: "keychain", name: canary } },
+        },
+      ],
+    };
+
+    for (const action of [
+      () => decodeWorkspaceRegistry(document),
+      () => serializeWorkspaceRegistry(document as never),
+    ]) {
+      expect(action).toThrow(WorkspaceRegistryError);
+      try {
+        action();
+      } catch (error) {
+        expect(String(error)).not.toContain(canary);
+        expect(JSON.stringify(error)).not.toContain(canary);
+      }
     }
   });
 });

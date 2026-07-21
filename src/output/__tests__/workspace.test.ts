@@ -43,6 +43,24 @@ describe("workspace output", () => {
       ),
     ).not.toContain("xoxp-secret-canary");
 
+    const appTokenCanary = "xapp-1-A0123456789-secret-canary";
+    const unsafeView = {
+      ...view,
+      credentialRefs: {
+        user: { provider: "keychain", name: appTokenCanary },
+      },
+    };
+    for (const output of [
+      formatWorkspace(unsafeView, "human"),
+      formatWorkspace(unsafeView, "json"),
+      formatWorkspace(unsafeView, "plain"),
+      formatWorkspaceList([unsafeView], "human"),
+      formatWorkspaceList([unsafeView], "json"),
+      formatWorkspaceList([unsafeView], "plain"),
+    ]) {
+      expect(output).not.toContain(appTokenCanary);
+    }
+
     expect(JSON.parse(formatDefaultWorkspaceCleared("json"))).toEqual({
       ok: true,
       defaultTeamId: null,
