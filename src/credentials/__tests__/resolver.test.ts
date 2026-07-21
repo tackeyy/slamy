@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { parseTeamId } from "../../domain/team-id.js";
 import type { WorkspaceRecord } from "../../domain/workspace.js";
 import type { AuthIdentity, AuthVerifier } from "../auth-verifier.js";
+import { CredentialError } from "../errors.js";
 import type { CredentialProvider, CredentialReference } from "../provider.js";
 import { CredentialResolver } from "../resolver.js";
 import type { CredentialSecret } from "../secret.js";
@@ -185,6 +186,39 @@ describe("CredentialResolver workspace mode", () => {
     expect(error).toMatchObject({ code: "AUTH_VERIFICATION_FAILED" });
     expect(String(error)).not.toContain(canary);
     expect(JSON.stringify(error)).not.toContain(canary);
+  });
+
+  it("rebuilds typed errors thrown by untrusted provider and verifier implementations", async () => {
+    const canary = "xoxp-untrusted-error-secret-canary";
+    const unsafeProvider: CredentialProvider = {
+      providerId: "environment",
+      resolveMany() {
+        throw new CredentialError("CREDENTIAL_PROVIDER_FAILED", canary);
+      },
+    };
+    const providerResolver = new CredentialResolver([unsafeProvider], new FakeVerifier({}));
+    await expect(
+      providerResolver.resolveForWorkspace(
+        workspace({ user: { provider: "environment", name: "USER_REF" } }),
+        { requiredKinds: ["user"] },
+      ),
+    ).rejects.not.toThrow(canary);
+
+    const unsafeVerifier: AuthVerifier = {
+      verify() {
+        throw new CredentialError("AUTH_VERIFICATION_FAILED", canary);
+      },
+    };
+    const verifierResolver = new CredentialResolver(
+      [new FakeProvider({ USER_REF: userToken })],
+      unsafeVerifier,
+    );
+    await expect(
+      verifierResolver.resolveForWorkspace(
+        workspace({ user: { provider: "environment", name: "USER_REF" } }),
+        { requiredKinds: ["user"] },
+      ),
+    ).rejects.not.toThrow(canary);
   });
 });
 
