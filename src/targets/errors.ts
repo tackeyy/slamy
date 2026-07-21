@@ -6,7 +6,12 @@ export type TargetErrorCode =
   | "INVALID_TIMESTAMP"
   | "INVALID_URL_ENCODING"
   | "TIMESTAMP_CONFLICT"
-  | "UNSUPPORTED_URL";
+  | "UNSUPPORTED_URL"
+  | "DEFAULT_NOT_FOUND"
+  | "ENTERPRISE_CONTEXT_AMBIGUOUS"
+  | "WORKSPACE_AMBIGUOUS"
+  | "WORKSPACE_CONFLICT"
+  | "WORKSPACE_NOT_REGISTERED";
 
 export class TargetError extends Error {
   readonly code: TargetErrorCode;
