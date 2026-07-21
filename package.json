@@ -25,6 +25,7 @@
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
     "ci:cost-check": "node scripts/check-actions-cost-guard.mjs",
+    "check:architecture": "node scripts/check-architecture.mjs",
     "lint": "npm run lint:md",
     "lint:md": "markdownlint-cli2 \"**/*.md\" \"#node_modules\" \"#dist\" \"#go-src\" \"#.changeset/*.md\"",
     "changeset": "changeset",

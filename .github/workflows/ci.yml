@@ -50,7 +50,7 @@ jobs:
             if (files.length === 0) runAll = true;
 
             const workflow = files.some((file) =>
-              file.startsWith('.github/') || file === 'scripts/check-actions-cost-guard.mjs',
+              file.startsWith('.github/') || file.startsWith('scripts/'),
             );
             const node = runAll || workflow || files.some((file) =>
               file.startsWith('src/') ||
@@ -87,6 +87,10 @@ jobs:
       - name: Type check
         if: steps.changes.outputs.node == 'true'
         run: npm run typecheck
+
+      - name: Check module architecture
+        if: steps.changes.outputs.node == 'true'
+        run: npm run check:architecture
 
       - name: Run Node tests with coverage
         id: node-tests
