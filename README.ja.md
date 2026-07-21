@@ -30,6 +30,16 @@ slamy は公式 CLI を子プロセスとして呼び出さず、その非公開
 公開 Slack API を直接利用するため、両ツールは独立して併用できます。責務分担表、機能追加の
 判断基準、将来の廃止基準は [ADR 001](docs/adr/001-official-slack-cli-boundary.md) を参照してください。
 
+## アーキテクチャ
+
+TypeScriptをslamyのCLIとライブラリに共通する単一マスター実装とします。現在のGo/TypeScript
+実装から、workspace、credential、target、Slack adapter、command、output、event、CLI、libraryの
+境界を持つ単一packageのモジュール構造へ段階的に移行します。この目標構造はまだ完全には
+実装されていません。
+
+component/data-flow図、import規則、公開API互換方針、Go削除gateは
+[ADR 002](docs/adr/002-typescript-module-architecture.md)を参照してください。
+
 ## インストール
 
 ### npm（TypeScript API / CLI）

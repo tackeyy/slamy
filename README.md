@@ -31,6 +31,16 @@ Slack APIs directly, so both tools can be installed and used independently. See
 [ADR 001](docs/adr/001-official-slack-cli-boundary.md) for the responsibility matrix, feature
 acceptance rules, and deprecation criteria.
 
+## Architecture
+
+TypeScript is the target single implementation for both the slamy CLI and library. The repository
+is migrating incrementally from the current Go/TypeScript implementations to a single-package
+modular architecture with explicit workspace, credential, target, Slack adapter, command, output,
+event, CLI, and library boundaries. This target structure is not yet fully implemented.
+
+See [ADR 002](docs/adr/002-typescript-module-architecture.md) for the component and data-flow
+diagrams, import rules, public API compatibility policy, and Go removal gates.
+
 ## Installation
 
 ### npm (TypeScript API and CLI)
