@@ -34,6 +34,30 @@ describe("architecture check", () => {
     expect(forbidden.stderr).toContain("forbidden import");
     expect(forbidden.stderr).toContain("dependency cycle");
   });
+
+  it("rejects ADR-forbidden external imports, slack-to-targets, and unknown modules", async () => {
+    const root = await mkdtemp(join(tmpdir(), "slamy-architecture-negative-"));
+    tempPaths.push(root);
+    for (const module of ["domain", "slack", "targets", "platform"]) {
+      await mkdir(join(root, module));
+    }
+    await writeFile(
+      join(root, "domain", "id.ts"),
+      "import { WebClient } from '@slack/web-api';\nexport const id = WebClient;\n",
+    );
+    await writeFile(
+      join(root, "slack", "adapter.ts"),
+      "import { target } from '../targets/target.js';\nexport const adapter = target;\n",
+    );
+    await writeFile(join(root, "targets", "target.ts"), "export const target = 'C1';\n");
+    await writeFile(join(root, "platform", "fs.ts"), "export const unsafe = true;\n");
+
+    const result = runCheck(root);
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain("forbidden external import");
+    expect(result.stderr).toContain("slack");
+    expect(result.stderr).toContain("unknown source module");
+  });
 });
 
 function runCheck(root: string) {

@@ -70,5 +70,18 @@ describe("NodeFileWorkspaceStore", () => {
     ).rejects.toMatchObject({ code: "STORE_WRITE_FAILED" });
     expect(await readFile(configPath, "utf8")).toBe(beforeFailure);
     expect((await readdir(dirname(configPath))).some((name) => name.endsWith(".tmp"))).toBe(false);
+
+    const uncertainStore = new NodeFileWorkspaceStore(configPath, {
+      afterRename: async () => {
+        throw new Error("injected directory durability failure");
+      },
+    });
+    await expect(uncertainStore.write({ version: 1, workspaces: [] })).rejects.toMatchObject({
+      code: "STORE_DURABILITY_UNCERTAIN",
+    });
+    expect(JSON.parse(await readFile(configPath, "utf8"))).toEqual({
+      version: 1,
+      workspaces: [],
+    });
   });
 });

@@ -3,6 +3,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
+  createWorkspaceRecord,
   createWorkspaceRegistry,
   parseTeamId,
   WorkspaceRegistry,
@@ -33,5 +34,15 @@ describe("workspace package root API", () => {
     expect(new WorkspaceRegistryError("INVALID_CONFIG", "safe")).toBeInstanceOf(Error);
     await registry.add(record, { makeDefault: true });
     expect((await registry.resolve()).teamId).toBe("T00000001");
+
+    expect(() =>
+      createWorkspaceRecord({
+        teamId: "T00000002",
+        alias: "unsafe",
+        domain: "unsafe.slack.com",
+        displayName: "Unsafe\nName",
+        userTokenEnv: "xoxp-secret-canary",
+      }),
+    ).toThrow(WorkspaceRegistryError);
   });
 });

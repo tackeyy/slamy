@@ -18,6 +18,35 @@ class MemoryStore implements WorkspaceStore {
   }
 }
 
+class CoordinatedStore extends MemoryStore {
+  #reads = 0;
+  #releaseReads!: () => void;
+  #readBarrier = new Promise<void>((resolve) => {
+    this.#releaseReads = resolve;
+  });
+  #transaction = Promise.resolve();
+
+  override async read(): Promise<WorkspaceRegistryDocument> {
+    this.#reads += 1;
+    if (this.#reads === 2) this.#releaseReads();
+    await this.#readBarrier;
+    return super.read();
+  }
+
+  async update(
+    mutate: (document: WorkspaceRegistryDocument) => WorkspaceRegistryDocument,
+  ): Promise<WorkspaceRegistryDocument> {
+    const result = this.#transaction.then(async () => {
+      const next = mutate(structuredClone(this.document));
+      this.document = structuredClone(next);
+      this.writes += 1;
+      return structuredClone(next);
+    });
+    this.#transaction = result.then(() => undefined, () => undefined);
+    return result;
+  }
+}
+
 const primary = {
   teamId: parseTeamId("T00000001"),
   alias: "primary",
@@ -65,5 +94,46 @@ describe("WorkspaceRegistry", () => {
 
     expect(store.writes).toBe(writesBeforeConflict);
     expect(store.document.workspaces).toHaveLength(1);
+  });
+
+  it("serializes concurrent mutations without losing a successful update", async () => {
+    const store = new CoordinatedStore();
+    const first = new WorkspaceRegistry(store);
+    const second = new WorkspaceRegistry(store);
+
+    await Promise.all([
+      first.add(primary),
+      second.add({
+        ...primary,
+        teamId: parseTeamId("T00000002"),
+        alias: "secondary",
+        domain: "secondary.slack.com",
+        previousDomains: [],
+      }),
+    ]);
+
+    expect(store.document.workspaces.map((workspace) => workspace.alias).sort()).toEqual([
+      "primary",
+      "secondary",
+    ]);
+  });
+
+  it("requires a fully-qualified domain so alias and domain labels cannot collide", async () => {
+    const store = new MemoryStore();
+    const registry = new WorkspaceRegistry(store);
+    await registry.add(primary);
+    await registry.add({
+      ...primary,
+      teamId: parseTeamId("T00000002"),
+      alias: "secondary",
+      domain: "primary-label.slack.com",
+      previousDomains: [],
+    });
+
+    expect((await registry.resolve("primary")).teamId).toBe("T00000001");
+    expect((await registry.resolve("primary-label.slack.com")).teamId).toBe("T00000002");
+    await expect(registry.resolve("primary-label")).rejects.toMatchObject({
+      code: "WORKSPACE_NOT_FOUND",
+    });
   });
 });

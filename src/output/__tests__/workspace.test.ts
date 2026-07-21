@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { parseTeamId } from "../../domain/team-id.js";
-import { formatWorkspace, formatWorkspaceList } from "../workspace.js";
+import {
+  formatDefaultWorkspaceCleared,
+  formatWorkspace,
+  formatWorkspaceList,
+} from "../workspace.js";
 
 const view = {
   teamId: parseTeamId("T00000001"),
@@ -38,5 +42,11 @@ describe("workspace output", () => {
         "human",
       ),
     ).not.toContain("xoxp-secret-canary");
+
+    expect(JSON.parse(formatDefaultWorkspaceCleared("json"))).toEqual({
+      ok: true,
+      defaultTeamId: null,
+    });
+    expect(formatDefaultWorkspaceCleared("plain")).toBe("ok\t");
   });
 });

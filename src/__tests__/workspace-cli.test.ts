@@ -55,4 +55,19 @@ describe("workspace CLI", () => {
     expect(stderr).toEqual([]);
     expect(await registry.list()).toEqual([]);
   });
+
+  it("uses structured global output modes when clearing the default", async () => {
+    const program = new Command().exitOverride().option("--json").option("--plain");
+    const registry = new WorkspaceRegistry(new MemoryStore());
+    const stdout: string[] = [];
+    registerWorkspaceCommands(program, {
+      registryFactory: () => registry,
+      writeOut: (line) => stdout.push(line),
+      writeErr: () => undefined,
+    });
+
+    await program.parseAsync(["node", "slamy", "--json", "workspace", "default", "--clear"]);
+
+    expect(JSON.parse(stdout.at(-1) ?? "")).toEqual({ ok: true, defaultTeamId: null });
+  });
 });
