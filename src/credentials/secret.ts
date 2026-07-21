@@ -1,5 +1,6 @@
-import { inspect } from "node:util";
 import { CredentialError } from "./errors.js";
+
+const customInspect = Symbol.for("nodejs.util.inspect.custom");
 
 export type CredentialKind = "user" | "bot";
 
@@ -38,7 +39,7 @@ export class CredentialSecret {
     return "[REDACTED]";
   }
 
-  [inspect.custom](): string {
+  [customInspect](): string {
     return "[REDACTED]";
   }
 }
