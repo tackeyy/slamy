@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { parseTeamId } from "../../domain/team-id.js";
 import { NodeSlackWebApiTransport } from "../web-api-transport.js";
 
 describe("NodeSlackWebApiTransport", () => {
@@ -16,14 +17,14 @@ describe("NodeSlackWebApiTransport", () => {
       token: "xoxp-first",
       arguments: {},
       requestId: "req-1",
-      teamId: "T00000001",
+      teamId: parseTeamId("T00000001"),
     });
     await transport.call({
       method: "chat.postMessage",
       token: "xoxb-second",
       arguments: { channel: "C0123ABC", text: "hello" },
       requestId: "req-2",
-      teamId: "T00000001",
+      teamId: parseTeamId("T00000001"),
     });
 
     expect(created).toEqual([

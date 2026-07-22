@@ -12,7 +12,8 @@ export type SlackAdapterErrorCode =
   | "SLACK_PLATFORM_ERROR"
   | "SLACK_RATE_LIMITED"
   | "SLACK_REQUEST_ERROR"
-  | "WORKSPACE_CONTEXT_MISMATCH";
+  | "WORKSPACE_CONTEXT_MISMATCH"
+  | "WORKSPACE_VERIFICATION_FAILED";
 
 export type SlackAdapterErrorDetails = {
   code: SlackAdapterErrorCode;
