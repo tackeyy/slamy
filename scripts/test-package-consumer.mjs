@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
@@ -15,7 +15,9 @@ try {
     join(fixture, "consumer.mts"),
     `import {
   createCredentialResolver,
+  createSlackWorkspaceContext,
   createTargetResolver,
+  createWorkspaceSlackAdapter,
   createWorkspaceRecord,
   parseTeamId,
   type AuthVerifier,
@@ -51,6 +53,21 @@ const resolver = createCredentialResolver({ providers: [provider], verifier });
 const workspaceView: WorkspaceView = { ...workspace, isDefault: true };
 const catalog: WorkspaceCatalog = { list: () => Promise.resolve([workspaceView]) };
 const targetResolver = createTargetResolver({ workspaceCatalog: catalog });
+const slackAdapter = createWorkspaceSlackAdapter({ requestIdFactory: () => "consumer-request" });
+const slackContext = createSlackWorkspaceContext({
+  teamId: workspace.teamId,
+  credentials: {
+    teamId: workspace.teamId,
+    user: {
+      kind: "user",
+      teamId: workspace.teamId,
+      use: <Result>(consumer: (token: string) => Result) => consumer("xoxp-fixture"),
+      destroy() {},
+    },
+    requiredScopes: { user: ["team:read"] },
+    destroy() {},
+  },
+});
 
 async function consume(): Promise<VerifiedCredentialSet> {
   const set = await resolver.resolveForWorkspace(workspace, requirement);
@@ -60,6 +77,9 @@ async function consume(): Promise<VerifiedCredentialSet> {
 
 void consume;
 void targetResolver.resolve({ input: "C0123ABC" });
+void slackAdapter.getTeamInfo(slackContext);
+// @ts-expect-error slamy intentionally has no generic Slack API passthrough.
+void slackAdapter.apiCall("users.list", {});
 `,
     "utf8",
   );
@@ -86,6 +106,11 @@ void targetResolver.resolve({ input: "C0123ABC" });
     process.stderr.write(result.stderr);
     process.exitCode = result.status ?? 1;
   } else {
+    const declaration = readFileSync(join(root, "dist", "lib", "index.d.ts"), "utf8");
+    if (/@slack\/web-api|WebAPICallResult|apiCall\s*\(/.test(declaration)) {
+      process.stderr.write("Package-root declarations expose a Slack SDK or generic API surface\n");
+      process.exitCode = 1;
+    }
     process.stdout.write("Package-root consumer compile: OK\n");
   }
 } finally {
