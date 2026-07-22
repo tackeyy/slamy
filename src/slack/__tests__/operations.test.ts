@@ -22,6 +22,150 @@ class TransportFailure {
 }
 
 describe("WorkspaceSlackAdapter named operations", () => {
+  it("creates a public channel with the explicit workspace User credential", async () => {
+    const transport = new QueueTransport([
+      {
+        ok: true,
+        channel: {
+          id: "C0123ABC",
+          name: "01-engineering",
+          is_archived: false,
+          is_private: false,
+        },
+      },
+    ]);
+    const adapter = new WorkspaceSlackAdapter({ transport, requestIdFactory: idFactory() });
+    const context = contextWith({ userToken: "xoxp-user", userScopes: ["channels:write"] });
+
+    await expect(
+      adapter.createConversation(context, { name: "01-engineering", isPrivate: false }),
+    ).resolves.toEqual({
+      channelId: "C0123ABC",
+      name: "01-engineering",
+      isArchived: false,
+      isPrivate: false,
+    });
+    expect(transport.requests).toEqual([
+      {
+        method: "conversations.create",
+        token: "xoxp-user",
+        teamId: PRIMARY_TEAM_ID,
+        requestId: "req-1",
+        arguments: { name: "01-engineering", is_private: false, team_id: PRIMARY_TEAM_ID },
+      },
+    ]);
+  });
+
+  it("creates a private channel only with the private-channel scope contract", async () => {
+    const transport = new QueueTransport([
+      {
+        ok: true,
+        channel: {
+          id: "G0123ABC",
+          name: "11-board",
+          is_archived: false,
+          is_private: true,
+        },
+      },
+    ]);
+    const adapter = new WorkspaceSlackAdapter({ transport, requestIdFactory: idFactory() });
+    const context = contextWith({ userToken: "xoxp-user", userScopes: ["groups:write"] });
+
+    await expect(
+      adapter.createConversation(context, { name: "11-board", isPrivate: true }),
+    ).resolves.toMatchObject({ channelId: "G0123ABC", name: "11-board", isPrivate: true });
+    expect(transport.requests[0]).toMatchObject({
+      method: "conversations.create",
+      arguments: { name: "11-board", is_private: true, team_id: PRIMARY_TEAM_ID },
+    });
+  });
+
+  it("sets a public channel purpose through the topic-specific scope", async () => {
+    const transport = new QueueTransport([
+      { ok: true, purpose: "AI・ソフトウェア開発と技術判断を共有します。" },
+    ]);
+    const adapter = new WorkspaceSlackAdapter({ transport, requestIdFactory: idFactory() });
+    const context = contextWith({
+      userToken: "xoxp-user",
+      userScopes: ["channels:write.topic"],
+    });
+
+    await expect(
+      adapter.setConversationPurpose(context, {
+        channelId: "C0123ABC",
+        purpose: "AI・ソフトウェア開発と技術判断を共有します。",
+        isPrivate: false,
+      }),
+    ).resolves.toEqual({
+      channelId: "C0123ABC",
+      value: "AI・ソフトウェア開発と技術判断を共有します。",
+    });
+    expect(transport.requests[0]).toMatchObject({
+      method: "conversations.setPurpose",
+      arguments: {
+        channel: "C0123ABC",
+        purpose: "AI・ソフトウェア開発と技術判断を共有します。",
+      },
+    });
+  });
+
+  it("sets a private channel purpose only with the private topic scope", async () => {
+    const transport = new QueueTransport([{ ok: true }]);
+    const adapter = new WorkspaceSlackAdapter({ transport });
+    const context = contextWith({
+      userToken: "xoxp-user",
+      userScopes: ["groups:write.topic"],
+    });
+
+    await expect(
+      adapter.setConversationPurpose(context, {
+        channelId: "G0123ABC",
+        purpose: "取締役会の議題と決議を扱います。",
+        isPrivate: true,
+      }),
+    ).resolves.toMatchObject({ channelId: "G0123ABC" });
+    expect(transport.requests[0]?.method).toBe("conversations.setPurpose");
+  });
+
+  it("sets a public channel topic through conversations.setTopic", async () => {
+    const transport = new QueueTransport([{ ok: true, topic: "AI・開発" }]);
+    const adapter = new WorkspaceSlackAdapter({ transport });
+    const context = contextWith({
+      userToken: "xoxp-user",
+      userScopes: ["channels:write.topic"],
+    });
+
+    await expect(
+      adapter.setConversationTopic(context, {
+        channelId: "C0123ABC",
+        topic: "AI・開発",
+        isPrivate: false,
+      }),
+    ).resolves.toEqual({ channelId: "C0123ABC", value: "AI・開発" });
+    expect(transport.requests[0]).toMatchObject({
+      method: "conversations.setTopic",
+      arguments: { channel: "C0123ABC", topic: "AI・開発" },
+    });
+  });
+
+  it("sets a private channel topic only with the private topic scope", async () => {
+    const transport = new QueueTransport([{ ok: true }]);
+    const adapter = new WorkspaceSlackAdapter({ transport });
+    const context = contextWith({
+      userToken: "xoxp-user",
+      userScopes: ["groups:write.topic"],
+    });
+
+    await expect(
+      adapter.setConversationTopic(context, {
+        channelId: "G0123ABC",
+        topic: "取締役会",
+        isPrivate: true,
+      }),
+    ).resolves.toEqual({ channelId: "G0123ABC", value: "取締役会" });
+    expect(transport.requests[0]?.method).toBe("conversations.setTopic");
+  });
+
   it("verifies User and Bot identities against the explicit workspace", async () => {
     const transport = new QueueTransport([
       { ok: true, team_id: PRIMARY_TEAM_ID, user_id: "U00000001" },
@@ -107,6 +251,86 @@ describe("WorkspaceSlackAdapter named operations", () => {
       },
     ]);
     expect(transport.requests.every((request) => request.teamId === PRIMARY_TEAM_ID)).toBe(true);
+  });
+
+  it("lists private conversations with groups:read and no public-scope fallback", async () => {
+    const transport = new QueueTransport([
+      {
+        ok: true,
+        channels: [
+          { id: "G0123ABC", name: "11-board", is_archived: false, is_private: true },
+        ],
+        response_metadata: { next_cursor: "" },
+      },
+    ]);
+    const adapter = new WorkspaceSlackAdapter({ transport });
+    const context = contextWith({ userToken: "xoxp-user", userScopes: ["groups:read"] });
+
+    await expect(adapter.listAllPrivateConversations(context)).resolves.toEqual([
+      {
+        channelId: "G0123ABC",
+        name: "11-board",
+        isArchived: false,
+        isPrivate: true,
+      },
+    ]);
+    expect(transport.requests[0]).toMatchObject({
+      method: "conversations.list",
+      arguments: { team_id: PRIMARY_TEAM_ID, types: "private_channel", limit: 200 },
+    });
+  });
+
+  it("reads back public channel topic and purpose for verification", async () => {
+    const transport = new QueueTransport([
+      {
+        ok: true,
+        channel: {
+          id: "C0123ABC",
+          name: "01-engineering",
+          is_archived: false,
+          is_private: false,
+          topic: { value: "AI・開発" },
+          purpose: { value: "AI・ソフトウェア開発と技術判断を共有します。" },
+        },
+      },
+    ]);
+    const adapter = new WorkspaceSlackAdapter({ transport });
+    const context = contextWith({ userToken: "xoxp-user", userScopes: ["channels:read"] });
+
+    await expect(
+      adapter.getConversationInfo(context, { channelId: "C0123ABC", isPrivate: false }),
+    ).resolves.toMatchObject({
+      channelId: "C0123ABC",
+      topic: "AI・開発",
+      purpose: "AI・ソフトウェア開発と技術判断を共有します。",
+    });
+    expect(transport.requests[0]).toMatchObject({
+      method: "conversations.info",
+      arguments: { channel: "C0123ABC", include_num_members: true },
+    });
+  });
+
+  it("reads back private channel metadata only with groups:read", async () => {
+    const transport = new QueueTransport([
+      {
+        ok: true,
+        channel: {
+          id: "G0123ABC",
+          name: "11-board",
+          is_archived: false,
+          is_private: true,
+          topic: { value: "取締役会" },
+          purpose: { value: "取締役会の議題と決議を扱います。" },
+        },
+      },
+    ]);
+    const adapter = new WorkspaceSlackAdapter({ transport });
+    const context = contextWith({ userToken: "xoxp-user", userScopes: ["groups:read"] });
+
+    await expect(
+      adapter.getConversationInfo(context, { channelId: "G0123ABC", isPrivate: true }),
+    ).resolves.toMatchObject({ isPrivate: true, topic: "取締役会" });
+    expect(transport.requests[0]?.method).toBe("conversations.info");
   });
 
   it("preserves a normalized rate limit from a later conversation page", async () => {

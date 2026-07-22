@@ -5,6 +5,15 @@ export type SlackOperation =
   | "verify-bot"
   | "get-team-info"
   | "list-public-conversations"
+  | "list-private-conversations"
+  | "get-public-conversation-info"
+  | "get-private-conversation-info"
+  | "create-public-conversation"
+  | "create-private-conversation"
+  | "set-public-conversation-purpose"
+  | "set-private-conversation-purpose"
+  | "set-public-conversation-topic"
+  | "set-private-conversation-topic"
   | "search-messages"
   | "post-message";
 
@@ -12,6 +21,10 @@ export type SlackApiMethod =
   | "auth.test"
   | "team.info"
   | "conversations.list"
+  | "conversations.info"
+  | "conversations.create"
+  | "conversations.setPurpose"
+  | "conversations.setTopic"
   | "search.messages"
   | "chat.postMessage";
 
@@ -36,6 +49,78 @@ const POLICIES: readonly SlackMethodPolicy[] = Object.freeze(
       ["channels:read"],
       "cursor",
       "team_id",
+    ),
+    policy(
+      "list-private-conversations",
+      "conversations.list",
+      "user",
+      ["groups:read"],
+      "cursor",
+      "team_id",
+    ),
+    policy(
+      "get-public-conversation-info",
+      "conversations.info",
+      "user",
+      ["channels:read"],
+      "none",
+      null,
+    ),
+    policy(
+      "get-private-conversation-info",
+      "conversations.info",
+      "user",
+      ["groups:read"],
+      "none",
+      null,
+    ),
+    policy(
+      "create-public-conversation",
+      "conversations.create",
+      "user",
+      ["channels:write"],
+      "none",
+      "team_id",
+    ),
+    policy(
+      "create-private-conversation",
+      "conversations.create",
+      "user",
+      ["groups:write"],
+      "none",
+      "team_id",
+    ),
+    policy(
+      "set-public-conversation-purpose",
+      "conversations.setPurpose",
+      "user",
+      ["channels:write.topic"],
+      "none",
+      null,
+    ),
+    policy(
+      "set-private-conversation-purpose",
+      "conversations.setPurpose",
+      "user",
+      ["groups:write.topic"],
+      "none",
+      null,
+    ),
+    policy(
+      "set-public-conversation-topic",
+      "conversations.setTopic",
+      "user",
+      ["channels:write.topic"],
+      "none",
+      null,
+    ),
+    policy(
+      "set-private-conversation-topic",
+      "conversations.setTopic",
+      "user",
+      ["groups:write.topic"],
+      "none",
+      null,
     ),
     policy(
       "search-messages",

@@ -20,7 +20,7 @@ describe("workspace Slack adapter public API", () => {
       method: "chat.postMessage",
       credentialKind: "bot",
     });
-    expect(listSlackMethodPolicies()).toHaveLength(6);
+    expect(listSlackMethodPolicies()).toHaveLength(15);
     expect(SlackAdapterError).toBeTypeOf("function");
   });
 

@@ -11,6 +11,7 @@ import { parseSlackTarget } from "../lib/parse-target.js";
 import { jsonOutput as formatJson } from "../lib/cli-format.js";
 import { requireToken } from "../lib/cli-errors.js";
 import { registerWorkspaceCommands } from "./workspace.js";
+import { registerChannelManagementCommands } from "./channels.js";
 
 const pkg = JSON.parse(
   readFileSync(join(dirname(fileURLToPath(import.meta.url)), "../../package.json"), "utf-8"),
@@ -154,6 +155,8 @@ team
 
 // --- channels ---
 const channels = program.command("channels").description("Channel operations");
+
+registerChannelManagementCommands(channels, program);
 
 channels
   .command("list")

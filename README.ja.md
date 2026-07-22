@@ -84,10 +84,14 @@ go build -o ../slamy .
 |---|---|
 | `channels:history` | パブリックチャンネルのメッセージ閲覧 |
 | `channels:read` | チャンネル情報の取得 |
+| `channels:write` | パブリックチャンネルの作成 |
+| `channels:write.topic` | パブリックチャンネルのtopic・説明設定 |
 | `chat:write` | メッセージ送信（自分として投稿） |
 | `files:read` | チャンネル内で共有されたファイルのダウンロード |
 | `groups:history` | プライベートチャンネルのメッセージ閲覧 |
 | `groups:read` | プライベートチャンネル情報の取得 |
+| `groups:write` | プライベートチャンネルの作成 |
+| `groups:write.topic` | プライベートチャンネルのtopic・説明設定 |
 | `reactions:write` | 絵文字リアクションの追加 |
 | `search:read` | メッセージ検索 |
 | `users:read` | ユーザー情報の取得 |
@@ -152,6 +156,21 @@ slamy channels list [--limit <number>] [--include-archived] [--json] [--plain]
 | `--include-archived` | No | アーカイブ済みチャンネルを含める |
 | `--json` | No | JSON 形式で出力 |
 | `--plain` | No | TSV 形式で出力 |
+
+### `channels create` — チャンネル作成・整合
+
+```bash
+slamy channels create 01-engineering \
+  --workspace wedgeai \
+  --topic "AI・ソフトウェア開発" \
+  --purpose "AI・ソフトウェア開発と技術判断を共有します。" \
+  --dry-run
+```
+
+`--workspace`を必須とし、Team IDとUser Tokenを照合してから実行します。同名チャンネルが存在する場合は
+重複作成せず、topicとpurposeを指定値へ整えます。`--private`を付けるとprivate channelを対象とします。
+`--dry-run`はcredentialを読まず、Slack APIも呼ばずに予定操作だけを返します。通常実行では作成・設定後に
+`conversations.info`で再取得し、名前、公開範囲、topic、purposeが一致した場合だけ成功とします。
 
 ### グローバルオプション
 
