@@ -16,6 +16,7 @@ import {
   type SlackMethodPolicy,
   type SlackOperation,
 } from "./method-policy.js";
+import { collectCursorPages } from "./pagination.js";
 import type { SlackTransport } from "./transport.js";
 import {
   createSlackWorkspaceContext,
@@ -40,6 +41,43 @@ export type WorkspaceSlackAdapterOptions = {
 export type SlackTeamInfo = {
   readonly teamId: TeamId;
   readonly name: string;
+};
+
+export type SlackAuthIdentity = {
+  readonly teamId: TeamId;
+  readonly userId: string;
+  readonly botId?: string;
+  readonly enterpriseId?: string;
+};
+
+export type SlackPublicConversation = {
+  readonly channelId: string;
+  readonly name: string;
+  readonly isArchived: boolean;
+  readonly isPrivate: boolean;
+};
+
+export type SlackConversationPage = {
+  readonly conversations: readonly SlackPublicConversation[];
+  readonly nextCursor?: string;
+};
+
+export type SlackListPublicConversationsInput = {
+  readonly limit?: number;
+  readonly cursor?: string;
+  readonly excludeArchived?: boolean;
+  readonly maxPages?: number;
+};
+
+export type SlackSearchMessagesInput = {
+  readonly query: string;
+  readonly count?: number;
+};
+
+export type SlackSearchMessage = {
+  readonly channelId: string;
+  readonly timestamp: string;
+  readonly text: string;
 };
 
 export type SlackPostMessageInput = {
@@ -70,25 +108,106 @@ export class WorkspaceSlackAdapter {
     return this.#execute("get-team-info", context, {}, mapTeamInfo);
   }
 
-  postMessage(
+  verifyWorkspace(
+    context: SlackWorkspaceContext,
+    credentialKind: CredentialKind,
+  ): Promise<SlackAuthIdentity> {
+    const operation = credentialKind === "user" ? "verify-user" : "verify-bot";
+    return this.#execute(operation, context, {}, (value, teamId) =>
+      mapAuthIdentity(value, teamId, credentialKind),
+    );
+  }
+
+  async listPublicConversations(
+    context: SlackWorkspaceContext,
+    input: SlackListPublicConversationsInput = {},
+  ): Promise<SlackConversationPage> {
+    let args: Readonly<Record<string, unknown>>;
+    try {
+      const limit = input.limit ?? 200;
+      if (!Number.isInteger(limit) || limit < 1 || limit > 200) throw new TypeError();
+      const cursor = input.cursor === undefined ? undefined : parseCursor(input.cursor);
+      if (input.excludeArchived !== undefined && typeof input.excludeArchived !== "boolean") {
+        throw new TypeError();
+      }
+      args = Object.freeze({
+        types: "public_channel",
+        limit,
+        ...(cursor ? { cursor } : {}),
+        ...(input.excludeArchived === undefined
+          ? {}
+          : { exclude_archived: input.excludeArchived }),
+      });
+    } catch {
+      throw this.#inputError("list-public-conversations", context);
+    }
+    return this.#execute("list-public-conversations", context, args, mapConversationPage);
+  }
+
+  async listAllPublicConversations(
+    context: SlackWorkspaceContext,
+    input: SlackListPublicConversationsInput = {},
+  ): Promise<readonly SlackPublicConversation[]> {
+    const pages = await collectCursorPages({
+      ...(input.maxPages === undefined ? {} : { maxPages: input.maxPages }),
+      fetchPage: (cursor) =>
+        this.listPublicConversations(context, {
+          ...input,
+          ...(cursor === undefined ? {} : { cursor }),
+        }),
+      getNextCursor: (page) => page.nextCursor,
+    });
+    return Object.freeze(pages.flatMap((page) => page.conversations));
+  }
+
+  async searchMessages(
+    context: SlackWorkspaceContext,
+    input: SlackSearchMessagesInput,
+  ): Promise<readonly SlackSearchMessage[]> {
+    let args: Readonly<Record<string, unknown>>;
+    try {
+      if (
+        typeof input.query !== "string" ||
+        input.query.trim().length === 0 ||
+        input.query.length > 4_096 ||
+        /[\u0000\u007f]/.test(input.query)
+      ) {
+        throw new TypeError();
+      }
+      const count = input.count ?? 20;
+      if (!Number.isInteger(count) || count < 1 || count > 100) throw new TypeError();
+      args = Object.freeze({ query: input.query, count });
+    } catch {
+      throw this.#inputError("search-messages", context);
+    }
+    return this.#execute("search-messages", context, args, mapSearchMessages);
+  }
+
+  async postMessage(
     context: SlackWorkspaceContext,
     input: SlackPostMessageInput,
   ): Promise<SlackPostMessageResult> {
-    const channelId = parseChannelId(input.channelId);
-    if (typeof input.text !== "string" || input.text.length === 0) {
-      return Promise.reject(this.#inputError("post-message", context));
-    }
-    const threadTs = input.threadTs === undefined ? undefined : parseTimestamp(input.threadTs);
-    return this.#execute(
-      "post-message",
-      context,
-      Object.freeze({
+    let args: Readonly<Record<string, unknown>>;
+    try {
+      const channelId = parseChannelId(input.channelId);
+      if (
+        typeof input.text !== "string" ||
+        input.text.length === 0 ||
+        input.text.length > 40_000 ||
+        /[\u0000\u007f]/.test(input.text)
+      ) {
+        throw new TypeError();
+      }
+      const threadTs = input.threadTs === undefined ? undefined : parseTimestamp(input.threadTs);
+      args = Object.freeze({
         channel: channelId,
         text: input.text,
         ...(threadTs ? { thread_ts: threadTs } : {}),
-      }),
-      mapPostMessage,
-    );
+      });
+    } catch {
+      throw this.#inputError("post-message", context);
+    }
+    return this.#execute("post-message", context, args, mapPostMessage);
   }
 
   async #execute<Result>(
@@ -219,7 +338,7 @@ export class WorkspaceSlackAdapter {
   #inputError(operation: SlackOperation, context: SlackWorkspaceContext): SlackAdapterError {
     const policy = getSlackMethodPolicy(operation);
     return adapterError(
-      "INVALID_SLACK_RESPONSE",
+      "INVALID_SLACK_INPUT",
       "Slack operation input is invalid",
       policy,
       context.teamId,
@@ -234,8 +353,74 @@ function mapTeamInfo(value: unknown, expectedTeamId: TeamId): SlackTeamInfo {
   const team = safeObject(input.team);
   const teamId = parseTeamId(team.id);
   const name = safeText(team.name, 200);
-  if (teamId !== expectedTeamId) throw new TypeError("Team mismatch");
+  if (teamId !== expectedTeamId) throw new ResponseMappingError("team-mismatch");
   return Object.freeze({ teamId, name });
+}
+
+function mapAuthIdentity(
+  value: unknown,
+  expectedTeamId: TeamId,
+  credentialKind: CredentialKind,
+): SlackAuthIdentity {
+  const input = safeObject(value);
+  if (input.ok !== true) throw platformResult(input);
+  const teamId = parseTeamId(input.team_id);
+  if (teamId !== expectedTeamId) throw new ResponseMappingError("team-mismatch");
+  const userId = parseIdentityId(input.user_id);
+  const botId = input.bot_id === undefined ? undefined : parseIdentityId(input.bot_id);
+  if (credentialKind === "bot" && !botId) throw new ResponseMappingError("invalid");
+  if (credentialKind === "user" && botId) throw new ResponseMappingError("invalid");
+  const enterpriseId =
+    input.enterprise_id === undefined ? undefined : parseIdentityId(input.enterprise_id);
+  return Object.freeze({
+    teamId,
+    userId,
+    ...(botId ? { botId } : {}),
+    ...(enterpriseId ? { enterpriseId } : {}),
+  });
+}
+
+function mapConversationPage(value: unknown): SlackConversationPage {
+  const input = safeObject(value);
+  if (input.ok !== true) throw platformResult(input);
+  if (!Array.isArray(input.channels) || input.channels.length > 10_000) {
+    throw new ResponseMappingError("invalid");
+  }
+  const conversations = input.channels.map((value) => {
+    const channel = safeObject(value);
+    return Object.freeze({
+      channelId: parseChannelId(channel.id),
+      name: safeText(channel.name, 255),
+      isArchived: safeBoolean(channel.is_archived),
+      isPrivate: safeBoolean(channel.is_private),
+    });
+  });
+  const metadata = input.response_metadata;
+  const nextCursor =
+    metadata === undefined ? undefined : optionalCursor(safeObject(metadata).next_cursor);
+  return Object.freeze({
+    conversations: Object.freeze(conversations),
+    ...(nextCursor ? { nextCursor } : {}),
+  });
+}
+
+function mapSearchMessages(value: unknown): readonly SlackSearchMessage[] {
+  const input = safeObject(value);
+  if (input.ok !== true) throw platformResult(input);
+  const messages = safeObject(input.messages);
+  if (!Array.isArray(messages.matches) || messages.matches.length > 10_000) {
+    throw new ResponseMappingError("invalid");
+  }
+  return Object.freeze(
+    messages.matches.map((value) => {
+      const match = safeObject(value);
+      return Object.freeze({
+        channelId: parseChannelId(match.channel_id),
+        timestamp: parseTimestamp(match.ts),
+        text: safeMessageText(match.text),
+      });
+    }),
+  );
 }
 
 function mapPostMessage(value: unknown): SlackPostMessageResult {
@@ -254,6 +439,35 @@ function normalizeFailure(
   requestId: string,
 ): SlackAdapterError {
   if (cause instanceof SlackAdapterError) return cause;
+  if (cause instanceof ResponseMappingError) {
+    if (cause.kind === "team-mismatch") {
+      return adapterError(
+        "WORKSPACE_CONTEXT_MISMATCH",
+        "Slack response belongs to a different workspace",
+        policy,
+        teamId,
+        requestId,
+      );
+    }
+    if (cause.kind === "platform") {
+      return new SlackAdapterError({
+        code: "SLACK_PLATFORM_ERROR",
+        message: "Slack rejected the operation",
+        requestId,
+        method: policy.method,
+        teamId,
+        credentialKind: policy.credentialKind,
+        platformCode: cause.platformCode ?? "unknown_error",
+      });
+    }
+    return adapterError(
+      "INVALID_SLACK_RESPONSE",
+      "Slack transport returned an invalid response",
+      policy,
+      teamId,
+      requestId,
+    );
+  }
   try {
     const input = safeObject(cause);
     const code = input.code;
@@ -314,11 +528,8 @@ function normalizeFailure(
   );
 }
 
-function platformResult(input: Record<string, unknown>): Record<string, unknown> {
-  return {
-    code: "slack_webapi_platform_error",
-    data: { error: input.error },
-  };
+function platformResult(input: Record<string, unknown>): ResponseMappingError {
+  return new ResponseMappingError("platform", safePlatformCode(input.error));
 }
 
 function safeObject(value: unknown): Record<string, unknown> {
@@ -354,10 +565,75 @@ function parseTimestamp(value: unknown): string {
   return value;
 }
 
+function parseIdentityId(value: unknown): string {
+  if (
+    typeof value !== "string" ||
+    value.length < 2 ||
+    value.length > 128 ||
+    !/^[A-Z][A-Z0-9]+$/.test(value)
+  ) {
+    throw new ResponseMappingError("invalid");
+  }
+  return value;
+}
+
+function safeBoolean(value: unknown): boolean {
+  if (typeof value !== "boolean") throw new ResponseMappingError("invalid");
+  return value;
+}
+
+function safeMessageText(value: unknown): string {
+  if (
+    typeof value !== "string" ||
+    value.length > 1_000_000 ||
+    /[\u0000\u007f]/.test(value)
+  ) {
+    throw new ResponseMappingError("invalid");
+  }
+  return value;
+}
+
+function parseCursor(value: unknown): string {
+  if (
+    typeof value !== "string" ||
+    value.length < 1 ||
+    value.length > 2_048 ||
+    value.trim() !== value ||
+    /[\u0000-\u001f\u007f]/.test(value)
+  ) {
+    throw new TypeError("Invalid Slack cursor");
+  }
+  return value;
+}
+
+function optionalCursor(value: unknown): string | undefined {
+  if (value === undefined || value === null || value === "") return undefined;
+  try {
+    return parseCursor(value);
+  } catch {
+    throw new ResponseMappingError("invalid");
+  }
+}
+
 function safePlatformCode(value: unknown): string {
   return typeof value === "string" && /^[a-z0-9_]{1,64}$/.test(value)
     ? value
     : "unknown_error";
+}
+
+class ResponseMappingError extends Error {
+  readonly kind: "invalid" | "platform" | "team-mismatch";
+  readonly platformCode?: string;
+
+  constructor(
+    kind: "invalid" | "platform" | "team-mismatch",
+    platformCode?: string,
+  ) {
+    super("Slack response mapping failed");
+    this.name = "ResponseMappingError";
+    this.kind = kind;
+    if (platformCode !== undefined) this.platformCode = platformCode;
+  }
 }
 
 function adapterError(
