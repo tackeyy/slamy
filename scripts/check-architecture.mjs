@@ -28,6 +28,7 @@ const allowedImports = new Map([
   ["cli", new Set(["cli", "lib", "output"])],
 ]);
 const exactExternalImports = new Map([
+  ["slack/web-api-transport.ts", new Set(["@slack/web-api"])],
   ["lib/client.ts", new Set(["@slack/web-api", "node:fs"])],
   ["lib/events.ts", new Set(["@slack/bolt", "node:events"])],
   ["lib/workspace.ts", new Set(["node:os", "node:path"])],
@@ -149,7 +150,6 @@ function display(file) {
 function isAllowedExternalImport(file, importerModule, specifier) {
   const exact = exactExternalImports.get(display(file));
   if (exact?.has(specifier)) return true;
-  if (importerModule === "slack" && specifier === "@slack/web-api") return true;
   if (importerModule === "events" && specifier === "@slack/bolt") return true;
   return false;
 }
