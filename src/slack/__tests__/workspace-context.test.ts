@@ -54,6 +54,38 @@ describe("createSlackWorkspaceContext", () => {
       credentialKind: "user",
     });
   });
+
+  it("normalizes hostile factory inputs without rereading their getters", () => {
+    const canary = "xoxp-context-factory-getter-canary";
+    const hostile = Object.create(null) as {
+      teamId: typeof primary;
+      credentials: VerifiedCredentialSet;
+    };
+    Object.defineProperty(hostile, "teamId", {
+      get(): never {
+        throw new Error(canary);
+      },
+    });
+    Object.defineProperty(hostile, "credentials", {
+      get(): never {
+        throw new Error(canary);
+      },
+    });
+
+    let caught: unknown;
+    try {
+      createSlackWorkspaceContext(hostile);
+    } catch (error) {
+      caught = error;
+    }
+    expect(caught).toMatchObject({
+      code: "WORKSPACE_CONTEXT_MISMATCH",
+      teamId: "TUNKNOWN",
+    });
+    expect(String(caught)).not.toContain(canary);
+    expect(JSON.stringify(caught)).not.toContain(canary);
+    expect(caught instanceof Error ? caught.stack : "").not.toContain(canary);
+  });
 });
 
 function credentialSet(

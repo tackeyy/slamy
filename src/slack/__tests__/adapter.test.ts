@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { WorkspaceSlackAdapter } from "../adapter.js";
 import type { SlackDiagnosticEvent } from "../diagnostics.js";
+import { SlackAdapterError } from "../errors.js";
 import type { SlackTransport, SlackTransportRequest } from "../transport.js";
 import { contextWith, PRIMARY_TEAM_ID } from "./helpers.js";
 
@@ -279,5 +280,41 @@ describe("WorkspaceSlackAdapter", () => {
     expect(JSON.stringify(caught)).not.toContain("xoxp-sdk-canary");
     expect(caught instanceof Error ? caught.stack : "").not.toContain("xoxp-sdk-canary");
     expect(JSON.stringify(events)).not.toContain("xoxp-sdk-canary");
+  });
+
+  it("does not trust a SlackAdapterError received from the transport boundary", async () => {
+    const canary = "xoxp-forged-adapter-error-canary";
+    const transport = new FakeTransport();
+    transport.failure = new SlackAdapterError({
+      code: "SLACK_PLATFORM_ERROR",
+      message: canary,
+      requestId: canary,
+      method: "team.info",
+      teamId: PRIMARY_TEAM_ID,
+      credentialKind: "user",
+      platformCode: "invalid_auth",
+    });
+    const adapter = new WorkspaceSlackAdapter({
+      transport,
+      requestIdFactory: () => "safe-request-id",
+    });
+
+    let caught: unknown;
+    try {
+      await adapter.getTeamInfo(
+        contextWith({ userToken: "xoxp-user", userScopes: ["team:read"] }),
+      );
+    } catch (error) {
+      caught = error;
+    }
+    expect(caught).toMatchObject({
+      code: "INVALID_SLACK_RESPONSE",
+      requestId: "safe-request-id",
+      method: "team.info",
+      teamId: PRIMARY_TEAM_ID,
+    });
+    expect(String(caught)).not.toContain(canary);
+    expect(JSON.stringify(caught)).not.toContain(canary);
+    expect(caught instanceof Error ? caught.stack : "").not.toContain(canary);
   });
 });
