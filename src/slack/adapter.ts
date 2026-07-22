@@ -18,10 +18,16 @@ import {
 } from "./method-policy.js";
 import { collectCursorPages } from "./pagination.js";
 import type { SlackTransport } from "./transport.js";
-import {
-  createSlackWorkspaceContext,
-  type SlackWorkspaceContext,
-} from "./workspace-context.js";
+import type { SlackWorkspaceContext } from "./workspace-context.js";
+
+const UNKNOWN_TEAM_ID = parseTeamId("TUNKNOWN");
+
+type SlackExecutionContext = {
+  readonly teamId: TeamId;
+  readonly user?: VerifiedCredential;
+  readonly bot?: VerifiedCredential;
+  readonly requiredScopes: Readonly<Partial<Record<CredentialKind, readonly string[]>>>;
+};
 
 export type SlackVerificationHookInput = {
   readonly teamId: TeamId;
@@ -136,6 +142,9 @@ export class WorkspaceSlackAdapter implements WorkspaceSlackOperations {
     context: SlackWorkspaceContext,
     credentialKind: CredentialKind,
   ): Promise<SlackAuthIdentity> {
+    if (credentialKind !== "user" && credentialKind !== "bot") {
+      return Promise.reject(this.#inputError("verify-user", context));
+    }
     const operation = credentialKind === "user" ? "verify-user" : "verify-bot";
     return this.#execute(operation, context, {}, (value, teamId) =>
       mapAuthIdentity(value, teamId, credentialKind),
@@ -296,15 +305,39 @@ export class WorkspaceSlackAdapter implements WorkspaceSlackOperations {
   #validateContext(
     context: SlackWorkspaceContext,
     policy: SlackMethodPolicy,
-  ): SlackWorkspaceContext {
+  ): SlackExecutionContext {
     try {
-      return createSlackWorkspaceContext({ teamId: context.teamId, credentials: context.credentials });
+      const teamId = parseTeamId(context.teamId);
+      const credentials = context.credentials;
+      const credentialTeamId = parseTeamId(credentials.teamId);
+      const user = credentials.user;
+      const bot = credentials.bot;
+      if (
+        credentialTeamId !== teamId ||
+        (user !== undefined &&
+          (user.kind !== "user" || parseTeamId(user.teamId) !== teamId)) ||
+        (bot !== undefined &&
+          (bot.kind !== "bot" || parseTeamId(bot.teamId) !== teamId))
+      ) {
+        throw new TypeError();
+      }
+
+      const sourceScopes = credentials.requiredScopes;
+      const requiredScopes = Object.freeze({
+        ...(sourceScopes.user === undefined
+          ? {}
+          : { user: copyScopeContract(sourceScopes.user) }),
+        ...(sourceScopes.bot === undefined
+          ? {}
+          : { bot: copyScopeContract(sourceScopes.bot) }),
+      });
+      return Object.freeze({ teamId, user, bot, requiredScopes });
     } catch {
       throw adapterError(
         "WORKSPACE_CONTEXT_MISMATCH",
         "Slack workspace context does not match its verified credentials",
         policy,
-        context.teamId,
+        safeContextTeamId(context),
         "unavailable",
       );
     }
@@ -325,11 +358,11 @@ export class WorkspaceSlackAdapter implements WorkspaceSlackOperations {
   }
 
   #selectCredential(
-    context: SlackWorkspaceContext,
+    context: SlackExecutionContext,
     policy: SlackMethodPolicy,
     requestId: string,
   ): VerifiedCredential {
-    const credential = context.credentials[policy.credentialKind];
+    const credential = context[policy.credentialKind];
     if (!credential) {
       throw adapterError(
         "CREDENTIAL_UNAVAILABLE",
@@ -343,11 +376,11 @@ export class WorkspaceSlackAdapter implements WorkspaceSlackOperations {
   }
 
   #assertScopeContract(
-    context: SlackWorkspaceContext,
+    context: SlackExecutionContext,
     policy: SlackMethodPolicy,
     requestId: string,
   ): void {
-    const declared = context.credentials.requiredScopes[policy.credentialKind] ?? [];
+    const declared = context.requiredScopes[policy.credentialKind] ?? [];
     if (!policy.requiredScopes.every((scope) => declared.includes(scope))) {
       throw adapterError(
         "CREDENTIAL_SCOPE_CONTRACT_MISMATCH",
@@ -365,9 +398,35 @@ export class WorkspaceSlackAdapter implements WorkspaceSlackOperations {
       "INVALID_SLACK_INPUT",
       "Slack operation input is invalid",
       policy,
-      context.teamId,
+      safeContextTeamId(context),
       "unavailable",
     );
+  }
+}
+
+function copyScopeContract(value: unknown): readonly string[] {
+  if (!Array.isArray(value) || value.length > 1_000) throw new TypeError();
+  return Object.freeze(
+    value.map((scope) => {
+      if (
+        typeof scope !== "string" ||
+        scope.length < 1 ||
+        scope.length > 256 ||
+        !/^[a-zA-Z0-9._:-]+$/.test(scope)
+      ) {
+        throw new TypeError();
+      }
+      return scope;
+    }),
+  );
+}
+
+function safeContextTeamId(context: unknown): TeamId {
+  try {
+    if (context === null || typeof context !== "object") return UNKNOWN_TEAM_ID;
+    return parseTeamId((context as { readonly teamId?: unknown }).teamId);
+  } catch {
+    return UNKNOWN_TEAM_ID;
   }
 }
 
