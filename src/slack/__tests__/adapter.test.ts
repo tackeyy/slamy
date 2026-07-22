@@ -97,6 +97,54 @@ describe("WorkspaceSlackAdapter", () => {
     expect(transport.requests).toHaveLength(0);
   });
 
+  it("normalizes hostile context getters before any transport call", async () => {
+    const canary = "xoxp-context-getter-canary";
+    const transport = new FakeTransport();
+    const adapter = new WorkspaceSlackAdapter({ transport });
+    const base = contextWith({ userToken: "xoxp-user", userScopes: ["team:read"] });
+    const poisonedScopes = { ...base.credentials };
+    Object.defineProperty(poisonedScopes, "requiredScopes", {
+      get(): never {
+        throw new Error(canary);
+      },
+    });
+    const poisonedTeam = { ...base };
+    Object.defineProperty(poisonedTeam, "teamId", {
+      get(): never {
+        throw new Error(canary);
+      },
+    });
+
+    for (const context of [
+      { ...base, credentials: poisonedScopes },
+      poisonedTeam,
+    ]) {
+      let caught: unknown;
+      try {
+        await adapter.getTeamInfo(context);
+      } catch (error) {
+        caught = error;
+      }
+      expect(caught).toMatchObject({ code: "WORKSPACE_CONTEXT_MISMATCH" });
+      expect(String(caught)).not.toContain(canary);
+      expect(JSON.stringify(caught)).not.toContain(canary);
+      expect(caught instanceof Error ? caught.stack : "").not.toContain(canary);
+    }
+    expect(transport.requests).toHaveLength(0);
+  });
+
+  it("rejects an unsupported runtime credential kind instead of selecting Bot", async () => {
+    const transport = new FakeTransport();
+    const adapter = new WorkspaceSlackAdapter({ transport });
+    await expect(
+      adapter.verifyWorkspace(
+        contextWith({ userToken: "xoxp-user", botToken: "xoxb-bot" }),
+        "admin" as "user",
+      ),
+    ).rejects.toMatchObject({ code: "INVALID_SLACK_INPUT" });
+    expect(transport.requests).toHaveLength(0);
+  });
+
   it("emits frozen local-correlation diagnostics and isolates sink failures", async () => {
     const transport = new FakeTransport();
     transport.response = { ok: true, team: { id: PRIMARY_TEAM_ID, name: "Primary" } };
