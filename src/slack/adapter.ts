@@ -16,7 +16,7 @@ import {
   type SlackMethodPolicy,
   type SlackOperation,
 } from "./method-policy.js";
-import { collectCursorPages } from "./pagination.js";
+import { collectCursorPages, CursorPaginationError } from "./pagination.js";
 import type { SlackTransport } from "./transport.js";
 import type { SlackWorkspaceContext } from "./workspace-context.js";
 
@@ -157,19 +157,14 @@ export class WorkspaceSlackAdapter implements WorkspaceSlackOperations {
   ): Promise<SlackConversationPage> {
     let args: Readonly<Record<string, unknown>>;
     try {
-      const limit = input.limit ?? 200;
-      if (!Number.isInteger(limit) || limit < 1 || limit > 200) throw new TypeError();
-      const cursor = input.cursor === undefined ? undefined : parseCursor(input.cursor);
-      if (input.excludeArchived !== undefined && typeof input.excludeArchived !== "boolean") {
-        throw new TypeError();
-      }
+      const safeInput = snapshotConversationListInput(input, false);
       args = Object.freeze({
         types: "public_channel",
-        limit,
-        ...(cursor ? { cursor } : {}),
-        ...(input.excludeArchived === undefined
+        limit: safeInput.limit,
+        ...(safeInput.cursor ? { cursor: safeInput.cursor } : {}),
+        ...(safeInput.excludeArchived === undefined
           ? {}
-          : { exclude_archived: input.excludeArchived }),
+          : { exclude_archived: safeInput.excludeArchived }),
       });
     } catch {
       throw this.#inputError("list-public-conversations", context);
@@ -181,16 +176,32 @@ export class WorkspaceSlackAdapter implements WorkspaceSlackOperations {
     context: SlackWorkspaceContext,
     input: SlackListPublicConversationsInput = {},
   ): Promise<readonly SlackPublicConversation[]> {
-    const pages = await collectCursorPages({
-      ...(input.maxPages === undefined ? {} : { maxPages: input.maxPages }),
-      fetchPage: (cursor) =>
-        this.listPublicConversations(context, {
-          ...input,
-          ...(cursor === undefined ? {} : { cursor }),
-        }),
-      getNextCursor: (page) => page.nextCursor,
-    });
-    return Object.freeze(pages.flatMap((page) => page.conversations));
+    let safeInput: ConversationListInputSnapshot;
+    try {
+      safeInput = snapshotConversationListInput(input, true);
+    } catch {
+      throw this.#paginationError(context);
+    }
+    try {
+      const pages = await collectCursorPages({
+        ...(safeInput.maxPages === undefined ? {} : { maxPages: safeInput.maxPages }),
+        fetchPage: (cursor) =>
+          this.listPublicConversations(context, {
+            limit: safeInput.limit,
+            ...(safeInput.excludeArchived === undefined
+              ? {}
+              : { excludeArchived: safeInput.excludeArchived }),
+            ...(cursor === undefined ? {} : { cursor }),
+          }),
+        getNextCursor: (page) => page.nextCursor,
+        preserveFetchError: (error) => error instanceof SlackAdapterError,
+      });
+      return Object.freeze(pages.flatMap((page) => page.conversations));
+    } catch (error) {
+      if (error instanceof SlackAdapterError) throw error;
+      if (error instanceof CursorPaginationError) throw this.#paginationError(context);
+      throw this.#paginationError(context);
+    }
   }
 
   async searchMessages(
@@ -407,6 +418,57 @@ export class WorkspaceSlackAdapter implements WorkspaceSlackOperations {
       "unavailable",
     );
   }
+
+  #paginationError(context: SlackWorkspaceContext): SlackAdapterError {
+    const policy = getSlackMethodPolicy("list-public-conversations");
+    const teamId = safeContextTeamId(context);
+    let requestId = "unavailable";
+    try {
+      requestId = validateRequestId(this.#requestIdFactory());
+    } catch {
+      // Local pagination failures remain safe even when correlation ID generation fails.
+    }
+    return adapterError(
+      "PAGINATION_INVALID",
+      "Slack cursor pagination could not continue safely",
+      policy,
+      teamId,
+      requestId,
+    );
+  }
+}
+
+type ConversationListInputSnapshot = {
+  readonly limit: number;
+  readonly cursor?: string;
+  readonly excludeArchived?: boolean;
+  readonly maxPages?: number;
+};
+
+function snapshotConversationListInput(
+  input: SlackListPublicConversationsInput,
+  includeMaxPages: boolean,
+): ConversationListInputSnapshot {
+  const limit = input.limit ?? 200;
+  if (!Number.isInteger(limit) || limit < 1 || limit > 200) throw new TypeError();
+  const cursor = input.cursor === undefined ? undefined : parseCursor(input.cursor);
+  const excludeArchived = input.excludeArchived;
+  if (excludeArchived !== undefined && typeof excludeArchived !== "boolean") {
+    throw new TypeError();
+  }
+  const maxPages = includeMaxPages ? input.maxPages : undefined;
+  if (
+    maxPages !== undefined &&
+    (!Number.isInteger(maxPages) || maxPages < 1 || maxPages > 1_000)
+  ) {
+    throw new TypeError();
+  }
+  return Object.freeze({
+    limit,
+    ...(cursor ? { cursor } : {}),
+    ...(excludeArchived === undefined ? {} : { excludeArchived }),
+    ...(maxPages === undefined ? {} : { maxPages }),
+  });
 }
 
 function copyScopeContract(value: unknown): readonly string[] {

@@ -14,14 +14,29 @@ export class CursorPaginationError extends Error {
 export type CollectCursorPagesOptions<Page> = {
   fetchPage(cursor: string | undefined): Promise<Page>;
   getNextCursor(page: Page): unknown;
+  preserveFetchError?(error: unknown): boolean;
   maxPages?: number;
 };
 
 export async function collectCursorPages<Page>(
   options: CollectCursorPagesOptions<Page>,
 ): Promise<readonly Page[]> {
-  const maxPages = options.maxPages ?? 1_000;
-  if (!Number.isInteger(maxPages) || maxPages < 1 || maxPages > 1_000) throw invalid();
+  let maxPages: number;
+  let preserveFetchError: ((error: unknown) => boolean) | undefined;
+  try {
+    maxPages = options.maxPages ?? 1_000;
+    preserveFetchError = options.preserveFetchError;
+    if (
+      !Number.isInteger(maxPages) ||
+      maxPages < 1 ||
+      maxPages > 1_000 ||
+      (preserveFetchError !== undefined && typeof preserveFetchError !== "function")
+    ) {
+      throw new TypeError();
+    }
+  } catch {
+    throw invalid();
+  }
 
   const pages: Page[] = [];
   const seenCursors = new Set<string>();
@@ -29,15 +44,27 @@ export async function collectCursorPages<Page>(
 
   for (;;) {
     let page: Page;
-    let rawNext: unknown;
     try {
       page = await options.fetchPage(cursor);
-      rawNext = options.getNextCursor(page);
     } catch (error) {
       if (error instanceof CursorPaginationError) throw error;
+      let preserve = false;
+      try {
+        preserve = preserveFetchError?.(error) === true;
+      } catch {
+        // A hostile predicate cannot make an untrusted error observable.
+      }
+      if (preserve) throw error;
       throw invalid();
     }
     pages.push(page);
+
+    let rawNext: unknown;
+    try {
+      rawNext = options.getNextCursor(page);
+    } catch {
+      throw invalid();
+    }
 
     if (rawNext === undefined || rawNext === null || rawNext === "") {
       return Object.freeze([...pages]);
