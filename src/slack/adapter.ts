@@ -91,7 +91,31 @@ export type SlackPostMessageResult = {
   readonly timestamp: string;
 };
 
-export class WorkspaceSlackAdapter {
+export interface WorkspaceSlackOperations {
+  verifyWorkspace(
+    context: SlackWorkspaceContext,
+    credentialKind: CredentialKind,
+  ): Promise<SlackAuthIdentity>;
+  getTeamInfo(context: SlackWorkspaceContext): Promise<SlackTeamInfo>;
+  listPublicConversations(
+    context: SlackWorkspaceContext,
+    input?: SlackListPublicConversationsInput,
+  ): Promise<SlackConversationPage>;
+  listAllPublicConversations(
+    context: SlackWorkspaceContext,
+    input?: SlackListPublicConversationsInput,
+  ): Promise<readonly SlackPublicConversation[]>;
+  searchMessages(
+    context: SlackWorkspaceContext,
+    input: SlackSearchMessagesInput,
+  ): Promise<readonly SlackSearchMessage[]>;
+  postMessage(
+    context: SlackWorkspaceContext,
+    input: SlackPostMessageInput,
+  ): Promise<SlackPostMessageResult>;
+}
+
+export class WorkspaceSlackAdapter implements WorkspaceSlackOperations {
   readonly #transport: SlackTransport;
   readonly #requestIdFactory: SlackRequestIdFactory;
   readonly #diagnosticSink?: SlackDiagnosticSink;

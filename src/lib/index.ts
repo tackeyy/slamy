@@ -50,6 +50,37 @@ export type {
   TargetWorkspaceSelection,
   WorkspaceCatalog,
 } from "../targets/index.js";
+export { createWorkspaceSlackAdapter } from "./slack.js";
+export type { CreateWorkspaceSlackAdapterOptions } from "./slack.js";
+export {
+  SlackAdapterError,
+  createSlackWorkspaceContext,
+  getSlackMethodPolicy,
+  listSlackMethodPolicies,
+} from "../slack/index.js";
+export type {
+  CreateSlackWorkspaceContextInput,
+  SlackAdapterErrorCode,
+  SlackApiMethod,
+  SlackAuthIdentity,
+  SlackConversationPage,
+  SlackDiagnosticEvent,
+  SlackDiagnosticSink,
+  SlackListPublicConversationsInput,
+  SlackMethodPolicy,
+  SlackOperation,
+  SlackPostMessageInput,
+  SlackPostMessageResult,
+  SlackPublicConversation,
+  SlackRequestIdFactory,
+  SlackSearchMessage,
+  SlackSearchMessagesInput,
+  SlackTeamInfo,
+  SlackVerificationHook,
+  SlackVerificationHookInput,
+  SlackWorkspaceContext,
+  WorkspaceSlackOperations,
+} from "../slack/index.js";
 export { createCredentialResolver } from "./credentials.js";
 export type { CreateCredentialResolverOptions } from "./credentials.js";
 export { CredentialError, CredentialResolver, EnvironmentCredentialProvider } from "../credentials/index.js";

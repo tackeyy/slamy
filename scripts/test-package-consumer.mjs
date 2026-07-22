@@ -61,7 +61,7 @@ const slackContext = createSlackWorkspaceContext({
     user: {
       kind: "user",
       teamId: workspace.teamId,
-      use: <Result>(consumer: (token: string) => Result) => consumer("xoxp-fixture"),
+      use: <Result,>(consumer: (token: string) => Result) => consumer("xoxp-fixture"),
       destroy() {},
     },
     requiredScopes: { user: ["team:read"] },
