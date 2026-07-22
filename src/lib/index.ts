@@ -64,6 +64,7 @@ export type {
   SlackApiMethod,
   SlackAuthIdentity,
   SlackConversationPage,
+  SlackCreateConversationInput,
   SlackDiagnosticEvent,
   SlackDiagnosticSink,
   SlackListPublicConversationsInput,

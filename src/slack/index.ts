@@ -2,6 +2,7 @@ export { WorkspaceSlackAdapter } from "./adapter.js";
 export type {
   SlackAuthIdentity,
   SlackConversationPage,
+  SlackCreateConversationInput,
   SlackListPublicConversationsInput,
   SlackPostMessageInput,
   SlackPostMessageResult,

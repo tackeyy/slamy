@@ -22,6 +22,40 @@ class TransportFailure {
 }
 
 describe("WorkspaceSlackAdapter named operations", () => {
+  it("creates a public channel with the explicit workspace User credential", async () => {
+    const transport = new QueueTransport([
+      {
+        ok: true,
+        channel: {
+          id: "C0123ABC",
+          name: "01-engineering",
+          is_archived: false,
+          is_private: false,
+        },
+      },
+    ]);
+    const adapter = new WorkspaceSlackAdapter({ transport, requestIdFactory: idFactory() });
+    const context = contextWith({ userToken: "xoxp-user", userScopes: ["channels:write"] });
+
+    await expect(
+      adapter.createConversation(context, { name: "01-engineering", isPrivate: false }),
+    ).resolves.toEqual({
+      channelId: "C0123ABC",
+      name: "01-engineering",
+      isArchived: false,
+      isPrivate: false,
+    });
+    expect(transport.requests).toEqual([
+      {
+        method: "conversations.create",
+        token: "xoxp-user",
+        teamId: PRIMARY_TEAM_ID,
+        requestId: "req-1",
+        arguments: { name: "01-engineering", is_private: false, team_id: PRIMARY_TEAM_ID },
+      },
+    ]);
+  });
+
   it("verifies User and Bot identities against the explicit workspace", async () => {
     const transport = new QueueTransport([
       { ok: true, team_id: PRIMARY_TEAM_ID, user_id: "U00000001" },

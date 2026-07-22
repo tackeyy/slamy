@@ -5,6 +5,7 @@ export type SlackOperation =
   | "verify-bot"
   | "get-team-info"
   | "list-public-conversations"
+  | "create-public-conversation"
   | "search-messages"
   | "post-message";
 
@@ -12,6 +13,7 @@ export type SlackApiMethod =
   | "auth.test"
   | "team.info"
   | "conversations.list"
+  | "conversations.create"
   | "search.messages"
   | "chat.postMessage";
 
@@ -35,6 +37,14 @@ const POLICIES: readonly SlackMethodPolicy[] = Object.freeze(
       "user",
       ["channels:read"],
       "cursor",
+      "team_id",
+    ),
+    policy(
+      "create-public-conversation",
+      "conversations.create",
+      "user",
+      ["channels:write"],
+      "none",
       "team_id",
     ),
     policy(

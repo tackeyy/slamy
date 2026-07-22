@@ -37,6 +37,14 @@ describe("Slack method policy", () => {
         workspaceArgument: "team_id",
       },
       {
+        operation: "create-public-conversation",
+        method: "conversations.create",
+        credentialKind: "user",
+        requiredScopes: ["channels:write"],
+        pagination: "none",
+        workspaceArgument: "team_id",
+      },
+      {
         operation: "search-messages",
         method: "search.messages",
         credentialKind: "user",
