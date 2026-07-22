@@ -5,6 +5,7 @@ export type SlackOperation =
   | "verify-bot"
   | "get-team-info"
   | "list-public-conversations"
+  | "list-private-conversations"
   | "create-public-conversation"
   | "create-private-conversation"
   | "set-public-conversation-purpose"
@@ -43,6 +44,14 @@ const POLICIES: readonly SlackMethodPolicy[] = Object.freeze(
       "conversations.list",
       "user",
       ["channels:read"],
+      "cursor",
+      "team_id",
+    ),
+    policy(
+      "list-private-conversations",
+      "conversations.list",
+      "user",
+      ["groups:read"],
       "cursor",
       "team_id",
     ),

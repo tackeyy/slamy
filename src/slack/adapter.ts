@@ -135,6 +135,10 @@ export interface WorkspaceSlackOperations {
     context: SlackWorkspaceContext,
     input?: SlackListPublicConversationsInput,
   ): Promise<readonly SlackPublicConversation[]>;
+  listAllPrivateConversations(
+    context: SlackWorkspaceContext,
+    input?: SlackListPublicConversationsInput,
+  ): Promise<readonly SlackPublicConversation[]>;
   createConversation(
     context: SlackWorkspaceContext,
     input: SlackCreateConversationInput,
@@ -237,6 +241,44 @@ export class WorkspaceSlackAdapter implements WorkspaceSlackOperations {
     } catch (error) {
       if (isTrustedSlackAdapterError(error)) throw error;
       throw this.#paginationError(context);
+    }
+  }
+
+  async listAllPrivateConversations(
+    context: SlackWorkspaceContext,
+    input: SlackListPublicConversationsInput = {},
+  ): Promise<readonly SlackPublicConversation[]> {
+    let safeInput: ConversationListInputSnapshot;
+    try {
+      safeInput = snapshotConversationListInput(input, true);
+    } catch {
+      throw this.#paginationError(context, "list-private-conversations");
+    }
+    try {
+      const pages = await collectCursorPages({
+        ...(safeInput.maxPages === undefined ? {} : { maxPages: safeInput.maxPages }),
+        ...(safeInput.cursor === undefined ? {} : { initialCursor: safeInput.cursor }),
+        fetchPage: (cursor) =>
+          this.#execute(
+            "list-private-conversations",
+            context,
+            Object.freeze({
+              types: "private_channel",
+              limit: safeInput.limit,
+              ...(cursor === undefined ? {} : { cursor }),
+              ...(safeInput.excludeArchived === undefined
+                ? {}
+                : { exclude_archived: safeInput.excludeArchived }),
+            }),
+            mapConversationPage,
+          ),
+        getNextCursor: (page) => page.nextCursor,
+        preserveFetchError: isTrustedSlackAdapterError,
+      });
+      return Object.freeze(pages.flatMap((page) => page.conversations));
+    } catch (error) {
+      if (isTrustedSlackAdapterError(error)) throw error;
+      throw this.#paginationError(context, "list-private-conversations");
     }
   }
 
@@ -538,8 +580,11 @@ export class WorkspaceSlackAdapter implements WorkspaceSlackOperations {
     );
   }
 
-  #paginationError(context: SlackWorkspaceContext): SlackAdapterError {
-    const policy = getSlackMethodPolicy("list-public-conversations");
+  #paginationError(
+    context: SlackWorkspaceContext,
+    operation: "list-public-conversations" | "list-private-conversations" = "list-public-conversations",
+  ): SlackAdapterError {
+    const policy = getSlackMethodPolicy(operation);
     const teamId = safeContextTeamId(context);
     let requestId = "unavailable";
     try {

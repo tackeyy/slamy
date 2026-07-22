@@ -253,6 +253,33 @@ describe("WorkspaceSlackAdapter named operations", () => {
     expect(transport.requests.every((request) => request.teamId === PRIMARY_TEAM_ID)).toBe(true);
   });
 
+  it("lists private conversations with groups:read and no public-scope fallback", async () => {
+    const transport = new QueueTransport([
+      {
+        ok: true,
+        channels: [
+          { id: "G0123ABC", name: "11-board", is_archived: false, is_private: true },
+        ],
+        response_metadata: { next_cursor: "" },
+      },
+    ]);
+    const adapter = new WorkspaceSlackAdapter({ transport });
+    const context = contextWith({ userToken: "xoxp-user", userScopes: ["groups:read"] });
+
+    await expect(adapter.listAllPrivateConversations(context)).resolves.toEqual([
+      {
+        channelId: "G0123ABC",
+        name: "11-board",
+        isArchived: false,
+        isPrivate: true,
+      },
+    ]);
+    expect(transport.requests[0]).toMatchObject({
+      method: "conversations.list",
+      arguments: { team_id: PRIMARY_TEAM_ID, types: "private_channel", limit: 200 },
+    });
+  });
+
   it("preserves a normalized rate limit from a later conversation page", async () => {
     const transport = new QueueTransport([
       { ok: true, channels: [], response_metadata: { next_cursor: "cursor-2" } },
