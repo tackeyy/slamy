@@ -6,6 +6,7 @@ export type SlackOperation =
   | "get-team-info"
   | "list-public-conversations"
   | "create-public-conversation"
+  | "create-private-conversation"
   | "search-messages"
   | "post-message";
 
@@ -44,6 +45,14 @@ const POLICIES: readonly SlackMethodPolicy[] = Object.freeze(
       "conversations.create",
       "user",
       ["channels:write"],
+      "none",
+      "team_id",
+    ),
+    policy(
+      "create-private-conversation",
+      "conversations.create",
+      "user",
+      ["groups:write"],
       "none",
       "team_id",
     ),

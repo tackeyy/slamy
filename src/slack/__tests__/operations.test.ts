@@ -56,6 +56,30 @@ describe("WorkspaceSlackAdapter named operations", () => {
     ]);
   });
 
+  it("creates a private channel only with the private-channel scope contract", async () => {
+    const transport = new QueueTransport([
+      {
+        ok: true,
+        channel: {
+          id: "G0123ABC",
+          name: "11-board",
+          is_archived: false,
+          is_private: true,
+        },
+      },
+    ]);
+    const adapter = new WorkspaceSlackAdapter({ transport, requestIdFactory: idFactory() });
+    const context = contextWith({ userToken: "xoxp-user", userScopes: ["groups:write"] });
+
+    await expect(
+      adapter.createConversation(context, { name: "11-board", isPrivate: true }),
+    ).resolves.toMatchObject({ channelId: "G0123ABC", name: "11-board", isPrivate: true });
+    expect(transport.requests[0]).toMatchObject({
+      method: "conversations.create",
+      arguments: { name: "11-board", is_private: true, team_id: PRIMARY_TEAM_ID },
+    });
+  });
+
   it("verifies User and Bot identities against the explicit workspace", async () => {
     const transport = new QueueTransport([
       { ok: true, team_id: PRIMARY_TEAM_ID, user_id: "U00000001" },

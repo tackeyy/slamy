@@ -84,7 +84,7 @@ export type SlackSearchMessagesInput = {
 
 export type SlackCreateConversationInput = {
   readonly name: string;
-  readonly isPrivate: false;
+  readonly isPrivate: boolean;
 };
 
 export type SlackSearchMessage = {
@@ -244,13 +244,21 @@ export class WorkspaceSlackAdapter implements WorkspaceSlackOperations {
   ): Promise<SlackPublicConversation> {
     let args: Readonly<Record<string, unknown>>;
     try {
-      if (input.isPrivate !== false) throw new TypeError();
+      if (typeof input.isPrivate !== "boolean") throw new TypeError();
       const name = parseConversationName(input.name);
-      args = Object.freeze({ name, is_private: false });
+      args = Object.freeze({ name, is_private: input.isPrivate });
     } catch {
-      throw this.#inputError("create-public-conversation", context);
+      throw this.#inputError(
+        input.isPrivate === true ? "create-private-conversation" : "create-public-conversation",
+        context,
+      );
     }
-    return this.#execute("create-public-conversation", context, args, mapCreatedConversation);
+    return this.#execute(
+      input.isPrivate ? "create-private-conversation" : "create-public-conversation",
+      context,
+      args,
+      mapCreatedConversation,
+    );
   }
 
   async postMessage(
