@@ -307,6 +307,10 @@ resolver returns a typed ambiguity result and does not use the default.
 | 7 | Distribution switch | Point npm/global/Homebrew installation and documentation to the TypeScript binary only | Installation smoke tests and migration guide pass; rollback artifact is identified |
 | 8 | [#93](https://github.com/tackeyy/slamy/issues/93) | Remove Go source, release, and CI paths | All gates below are satisfied |
 
+Issue #92 completes stage 4 as an additive library boundary. It intentionally does not reroute the
+legacy CLI or `SlamyClient`; stages 5 and 6 perform those vertical migrations without changing the
+package-root contract prematurely.
+
 Go may be removed only when all of the following are true:
 
 1. Every supported Go command and flag has a TypeScript parity or an approved deprecation.
