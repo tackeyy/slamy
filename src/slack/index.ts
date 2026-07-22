@@ -4,6 +4,8 @@ export type {
   SlackConversationPage,
   SlackCreateConversationInput,
   SlackConversationMetadataResult,
+  SlackConversationInfo,
+  SlackGetConversationInfoInput,
   SlackSetConversationPurposeInput,
   SlackSetConversationTopicInput,
   SlackListPublicConversationsInput,

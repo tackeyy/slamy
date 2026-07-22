@@ -6,6 +6,8 @@ export type SlackOperation =
   | "get-team-info"
   | "list-public-conversations"
   | "list-private-conversations"
+  | "get-public-conversation-info"
+  | "get-private-conversation-info"
   | "create-public-conversation"
   | "create-private-conversation"
   | "set-public-conversation-purpose"
@@ -19,6 +21,7 @@ export type SlackApiMethod =
   | "auth.test"
   | "team.info"
   | "conversations.list"
+  | "conversations.info"
   | "conversations.create"
   | "conversations.setPurpose"
   | "conversations.setTopic"
@@ -54,6 +57,22 @@ const POLICIES: readonly SlackMethodPolicy[] = Object.freeze(
       ["groups:read"],
       "cursor",
       "team_id",
+    ),
+    policy(
+      "get-public-conversation-info",
+      "conversations.info",
+      "user",
+      ["channels:read"],
+      "none",
+      null,
+    ),
+    policy(
+      "get-private-conversation-info",
+      "conversations.info",
+      "user",
+      ["groups:read"],
+      "none",
+      null,
     ),
     policy(
       "create-public-conversation",

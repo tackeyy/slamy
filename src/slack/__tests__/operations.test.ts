@@ -280,6 +280,59 @@ describe("WorkspaceSlackAdapter named operations", () => {
     });
   });
 
+  it("reads back public channel topic and purpose for verification", async () => {
+    const transport = new QueueTransport([
+      {
+        ok: true,
+        channel: {
+          id: "C0123ABC",
+          name: "01-engineering",
+          is_archived: false,
+          is_private: false,
+          topic: { value: "AI・開発" },
+          purpose: { value: "AI・ソフトウェア開発と技術判断を共有します。" },
+        },
+      },
+    ]);
+    const adapter = new WorkspaceSlackAdapter({ transport });
+    const context = contextWith({ userToken: "xoxp-user", userScopes: ["channels:read"] });
+
+    await expect(
+      adapter.getConversationInfo(context, { channelId: "C0123ABC", isPrivate: false }),
+    ).resolves.toMatchObject({
+      channelId: "C0123ABC",
+      topic: "AI・開発",
+      purpose: "AI・ソフトウェア開発と技術判断を共有します。",
+    });
+    expect(transport.requests[0]).toMatchObject({
+      method: "conversations.info",
+      arguments: { channel: "C0123ABC", include_num_members: true },
+    });
+  });
+
+  it("reads back private channel metadata only with groups:read", async () => {
+    const transport = new QueueTransport([
+      {
+        ok: true,
+        channel: {
+          id: "G0123ABC",
+          name: "11-board",
+          is_archived: false,
+          is_private: true,
+          topic: { value: "取締役会" },
+          purpose: { value: "取締役会の議題と決議を扱います。" },
+        },
+      },
+    ]);
+    const adapter = new WorkspaceSlackAdapter({ transport });
+    const context = contextWith({ userToken: "xoxp-user", userScopes: ["groups:read"] });
+
+    await expect(
+      adapter.getConversationInfo(context, { channelId: "G0123ABC", isPrivate: true }),
+    ).resolves.toMatchObject({ isPrivate: true, topic: "取締役会" });
+    expect(transport.requests[0]?.method).toBe("conversations.info");
+  });
+
   it("preserves a normalized rate limit from a later conversation page", async () => {
     const transport = new QueueTransport([
       { ok: true, channels: [], response_metadata: { next_cursor: "cursor-2" } },

@@ -104,6 +104,16 @@ export type SlackConversationMetadataResult = {
   readonly value: string;
 };
 
+export type SlackGetConversationInfoInput = {
+  readonly channelId: string;
+  readonly isPrivate: boolean;
+};
+
+export type SlackConversationInfo = SlackPublicConversation & {
+  readonly topic: string;
+  readonly purpose: string;
+};
+
 export type SlackSearchMessage = {
   readonly channelId: string;
   readonly timestamp: string;
@@ -139,6 +149,10 @@ export interface WorkspaceSlackOperations {
     context: SlackWorkspaceContext,
     input?: SlackListPublicConversationsInput,
   ): Promise<readonly SlackPublicConversation[]>;
+  getConversationInfo(
+    context: SlackWorkspaceContext,
+    input: SlackGetConversationInfoInput,
+  ): Promise<SlackConversationInfo>;
   createConversation(
     context: SlackWorkspaceContext,
     input: SlackCreateConversationInput,
@@ -280,6 +294,30 @@ export class WorkspaceSlackAdapter implements WorkspaceSlackOperations {
       if (isTrustedSlackAdapterError(error)) throw error;
       throw this.#paginationError(context, "list-private-conversations");
     }
+  }
+
+  getConversationInfo(
+    context: SlackWorkspaceContext,
+    input: SlackGetConversationInfoInput,
+  ): Promise<SlackConversationInfo> {
+    let channelId: string;
+    try {
+      if (typeof input.isPrivate !== "boolean") throw new TypeError();
+      channelId = parseChannelId(input.channelId);
+    } catch {
+      throw this.#inputError(
+        input.isPrivate === true
+          ? "get-private-conversation-info"
+          : "get-public-conversation-info",
+        context,
+      );
+    }
+    return this.#execute(
+      input.isPrivate ? "get-private-conversation-info" : "get-public-conversation-info",
+      context,
+      Object.freeze({ channel: channelId, include_num_members: true }),
+      mapConversationInfo,
+    );
   }
 
   async searchMessages(
@@ -728,6 +766,29 @@ function mapCreatedConversation(value: unknown): SlackPublicConversation {
     isArchived: safeBoolean(channel.is_archived),
     isPrivate: safeBoolean(channel.is_private),
   });
+}
+
+function mapConversationInfo(value: unknown): SlackConversationInfo {
+  const input = safeObject(value);
+  if (input.ok !== true) throw platformResult(input);
+  const channel = safeObject(input.channel);
+  return Object.freeze({
+    channelId: parseChannelId(channel.id),
+    name: parseConversationName(channel.name),
+    isArchived: safeBoolean(channel.is_archived),
+    isPrivate: safeBoolean(channel.is_private),
+    topic: mapMetadataValue(channel.topic),
+    purpose: mapMetadataValue(channel.purpose),
+  });
+}
+
+function mapMetadataValue(value: unknown): string {
+  const metadata = safeObject(value);
+  const text = metadata.value;
+  if (typeof text !== "string" || text.length > 250 || /[\u0000\u007f]/.test(text)) {
+    throw new ResponseMappingError("invalid");
+  }
+  return text;
 }
 
 function mapAcknowledgement(value: unknown): void {
