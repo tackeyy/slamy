@@ -15,6 +15,7 @@ try {
     join(fixture, "consumer.mts"),
     `import {
   createCredentialResolver,
+  createTargetResolver,
   createWorkspaceRecord,
   parseTeamId,
   type AuthVerifier,
@@ -22,6 +23,8 @@ try {
   type CredentialProvider,
   type CredentialReference,
   type CredentialRequirement,
+  type WorkspaceCatalog,
+  type WorkspaceView,
   type VerifiedCredentialSet,
 } from "slamy";
 
@@ -45,6 +48,9 @@ const workspace = createWorkspaceRecord({
 });
 const requirement: CredentialRequirement = { requiredKinds: ["user"] };
 const resolver = createCredentialResolver({ providers: [provider], verifier });
+const workspaceView: WorkspaceView = { ...workspace, isDefault: true };
+const catalog: WorkspaceCatalog = { list: () => Promise.resolve([workspaceView]) };
+const targetResolver = createTargetResolver({ workspaceCatalog: catalog });
 
 async function consume(): Promise<VerifiedCredentialSet> {
   const set = await resolver.resolveForWorkspace(workspace, requirement);
@@ -53,6 +59,7 @@ async function consume(): Promise<VerifiedCredentialSet> {
 }
 
 void consume;
+void targetResolver.resolve({ input: "C0123ABC" });
 `,
     "utf8",
   );

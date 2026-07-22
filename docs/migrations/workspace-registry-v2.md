@@ -8,8 +8,9 @@ references are attributes.
 
 Issue #86 adds the TypeScript library credential resolver and `auth.test` Team ID verification.
 Existing Slack API commands do not use that resolver until the workspace-aware adapter migration in
-Issue #92. URL-based workspace routing follows in Issue #83. Do not remove working legacy token
-variables until every command you use has migrated and been verified.
+Issue #92. Issue #83 adds strict URL-based workspace routing to the library, without changing the
+existing CLI command path. Do not remove working legacy token variables until every command you use
+has migrated and been verified.
 
 Legacy `SLAMY_DEFAULT_WORKSPACE` and `SLAMY_WORKSPACE_<ALIAS>_USER_TOKEN` inputs remain read-only
 compatible for the v2 release line. They are deprecated for new configuration and may be removed
@@ -68,7 +69,7 @@ new registry version.
 5. Use the Issue #86 library resolver to verify every configured token against the record's Team ID.
    Treat User and Bot credentials as one set; any missing required kind, token-kind mismatch,
    cross-Team combination, or `auth.test` mismatch is a fail-closed error.
-6. After Issue #83 is released, verify permalink-derived routing separately. Existing CLI commands
+6. Verify permalink-derived routing through the Issue #83 library API. Existing CLI commands
    continue on their legacy path until Issue #92 connects the verified resolver and Slack adapter.
 7. Remove legacy selectors only after every command you use has migrated and its fail-closed behavior
    has been verified. v2 itself does not require their removal.

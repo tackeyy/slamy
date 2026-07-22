@@ -192,7 +192,8 @@ slamy workspace remove primary
 These commands do not call Slack and never accept token values. The TypeScript library now includes
 an atomic credential-set resolver that validates token kind and Slack Team ID with `auth.test`.
 Existing CLI commands are not connected to that resolver until the workspace-aware adapter migration
-in #92; permalink routing remains in #83.
+in #92. The library's strict permalink Target resolver is available now, but CLI commands continue
+to use their legacy target path until #92.
 
 ### `channels history` — Get channel message history
 
@@ -366,6 +367,19 @@ their implementations accordingly.
 Slack `auth.test` proves identity and Team ID but does not attest operation scopes. A requirement may
 carry scope metadata such as User `search:read`; actual method policy and `missing_scope` handling are
 part of the workspace-aware Slack adapter in #92.
+
+Library integrations can also use `createTargetResolver()` with an injected `WorkspaceCatalog`.
+The resolver accepts Slack `archives` permalinks (including `thread_ts` and `cid`),
+`app.slack.com/client` channel or observed thread URLs, and strict legacy channel IDs with optional
+message/thread timestamps. It returns one immutable Target containing the selected workspace,
+channel, message, and thread evidence. Selection is fail-closed in this order: explicit workspace,
+Target Team ID, registered current or previous hostname, then the registry default only for inputs
+without a URL. Conflicting or unregistered URL evidence never falls back to the default.
+
+Slack Connect channel ownership is deliberately reported as `unknown`. A single execution workspace
+may be selected from unambiguous evidence, but slamy does not infer which connected workspace owns
+the channel. Multiple candidate Team IDs and Enterprise-only `app.slack.com` URLs require explicit
+workspace disambiguation. Parsing and workspace selection do not access credentials or call Slack.
 
 The environment-variable alias behavior below is the legacy Go CLI contract. It remains read-only
 compatible throughout v2 and may be removed no earlier than v3.0.0. The variables cannot be safely
