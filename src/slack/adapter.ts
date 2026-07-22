@@ -281,7 +281,12 @@ export class WorkspaceSlackAdapter implements WorkspaceSlackOperations {
         this.#transport.call({
           method: policy.method,
           token,
-          arguments: args,
+          arguments: Object.freeze({
+            ...args,
+            ...(policy.workspaceArgument === null
+              ? {}
+              : { [policy.workspaceArgument]: safeContext.teamId }),
+          }),
           requestId,
           teamId: safeContext.teamId,
         }),
@@ -497,8 +502,9 @@ function mapSearchMessages(value: unknown): readonly SlackSearchMessage[] {
   return Object.freeze(
     messages.matches.map((value) => {
       const match = safeObject(value);
+      const channel = safeObject(match.channel);
       return Object.freeze({
-        channelId: parseChannelId(match.channel_id),
+        channelId: parseChannelId(channel.id),
         timestamp: parseTimestamp(match.ts),
         text: safeMessageText(match.text),
       });

@@ -21,22 +21,31 @@ export type SlackMethodPolicy = {
   readonly credentialKind: CredentialKind;
   readonly requiredScopes: readonly string[];
   readonly pagination: "none" | "cursor";
+  readonly workspaceArgument: "team" | "team_id" | null;
 };
 
 const POLICIES: readonly SlackMethodPolicy[] = Object.freeze(
   [
-    policy("verify-user", "auth.test", "user", [], "none"),
-    policy("verify-bot", "auth.test", "bot", [], "none"),
-    policy("get-team-info", "team.info", "user", ["team:read"], "none"),
+    policy("verify-user", "auth.test", "user", [], "none", null),
+    policy("verify-bot", "auth.test", "bot", [], "none", null),
+    policy("get-team-info", "team.info", "user", ["team:read"], "none", "team"),
     policy(
       "list-public-conversations",
       "conversations.list",
       "user",
       ["channels:read"],
       "cursor",
+      "team_id",
     ),
-    policy("search-messages", "search.messages", "user", ["search:read"], "none"),
-    policy("post-message", "chat.postMessage", "bot", ["chat:write"], "none"),
+    policy(
+      "search-messages",
+      "search.messages",
+      "user",
+      ["search:read"],
+      "none",
+      "team_id",
+    ),
+    policy("post-message", "chat.postMessage", "bot", ["chat:write"], "none", null),
   ],
 );
 
@@ -56,6 +65,7 @@ function policy(
   credentialKind: CredentialKind,
   requiredScopes: readonly string[],
   pagination: SlackMethodPolicy["pagination"],
+  workspaceArgument: SlackMethodPolicy["workspaceArgument"],
 ): SlackMethodPolicy {
   return Object.freeze({
     operation,
@@ -63,5 +73,6 @@ function policy(
     credentialKind,
     requiredScopes: Object.freeze([...requiredScopes]),
     pagination,
+    workspaceArgument,
   });
 }
