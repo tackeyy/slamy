@@ -91,8 +91,13 @@ describe("WorkspaceSlackAdapter named operations", () => {
       },
     ]);
     expect(transport.requests.map((request) => request.arguments)).toEqual([
-      { types: "public_channel", limit: 200 },
-      { types: "public_channel", limit: 200, cursor: "cursor-2" },
+      { team_id: PRIMARY_TEAM_ID, types: "public_channel", limit: 200 },
+      {
+        team_id: PRIMARY_TEAM_ID,
+        types: "public_channel",
+        limit: 200,
+        cursor: "cursor-2",
+      },
     ]);
     expect(transport.requests.every((request) => request.teamId === PRIMARY_TEAM_ID)).toBe(true);
   });
@@ -104,7 +109,7 @@ describe("WorkspaceSlackAdapter named operations", () => {
         messages: {
           matches: [
             {
-              channel_id: "C0123ABC",
+              channel: { id: "C0123ABC", name: "general" },
               ts: "1700000000.000001",
               text: "first\nsecond",
             },
@@ -126,7 +131,7 @@ describe("WorkspaceSlackAdapter named operations", () => {
       method: "search.messages",
       token: "xoxp-user",
       teamId: PRIMARY_TEAM_ID,
-      arguments: { query: "release", count: 20 },
+      arguments: { team_id: PRIMARY_TEAM_ID, query: "release", count: 20 },
     });
   });
 

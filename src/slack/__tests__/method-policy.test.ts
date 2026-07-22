@@ -10,6 +10,7 @@ describe("Slack method policy", () => {
         credentialKind: "user",
         requiredScopes: [],
         pagination: "none",
+        workspaceArgument: null,
       },
       {
         operation: "verify-bot",
@@ -17,6 +18,7 @@ describe("Slack method policy", () => {
         credentialKind: "bot",
         requiredScopes: [],
         pagination: "none",
+        workspaceArgument: null,
       },
       {
         operation: "get-team-info",
@@ -24,6 +26,7 @@ describe("Slack method policy", () => {
         credentialKind: "user",
         requiredScopes: ["team:read"],
         pagination: "none",
+        workspaceArgument: "team",
       },
       {
         operation: "list-public-conversations",
@@ -31,6 +34,7 @@ describe("Slack method policy", () => {
         credentialKind: "user",
         requiredScopes: ["channels:read"],
         pagination: "cursor",
+        workspaceArgument: "team_id",
       },
       {
         operation: "search-messages",
@@ -38,6 +42,7 @@ describe("Slack method policy", () => {
         credentialKind: "user",
         requiredScopes: ["search:read"],
         pagination: "none",
+        workspaceArgument: "team_id",
       },
       {
         operation: "post-message",
@@ -45,6 +50,7 @@ describe("Slack method policy", () => {
         credentialKind: "bot",
         requiredScopes: ["chat:write"],
         pagination: "none",
+        workspaceArgument: null,
       },
     ]);
   });

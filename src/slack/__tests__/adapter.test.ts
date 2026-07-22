@@ -161,6 +161,7 @@ describe("WorkspaceSlackAdapter", () => {
     await adapter.getTeamInfo(
       contextWith({ userToken: "xoxp-user", userScopes: ["team:read"] }),
     );
+    expect(transport.requests[0]?.arguments).toEqual({ team: PRIMARY_TEAM_ID });
     expect(events).toEqual([
       {
         requestId: "local-correlation-1",
