@@ -133,6 +133,20 @@ describe("WorkspaceSlackAdapter named operations", () => {
     });
   });
 
+  it("starts all-conversation traversal from the caller's explicit cursor", async () => {
+    const transport = new QueueTransport([
+      { ok: true, channels: [], response_metadata: { next_cursor: "" } },
+    ]);
+    const adapter = new WorkspaceSlackAdapter({ transport });
+
+    await adapter.listAllPublicConversations(
+      contextWith({ userToken: "xoxp-user", userScopes: ["channels:read"] }),
+      { cursor: "cursor-start" },
+    );
+
+    expect(transport.requests[0]?.arguments).toMatchObject({ cursor: "cursor-start" });
+  });
+
   it("maps message search through the User-only search policy", async () => {
     const transport = new QueueTransport([
       {

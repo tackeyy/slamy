@@ -91,4 +91,19 @@ describe("collectCursorPages", () => {
       }),
     ).rejects.toBe(approved);
   });
+
+  it("starts from an explicit initial cursor and treats it as already seen", async () => {
+    const seen: Array<string | undefined> = [];
+    await expect(
+      collectCursorPages({
+        initialCursor: "cursor-1",
+        fetchPage(cursor) {
+          seen.push(cursor);
+          return Promise.resolve({ next: "cursor-1" });
+        },
+        getNextCursor: (page) => page.next,
+      }),
+    ).rejects.toMatchObject({ code: "PAGINATION_INVALID" });
+    expect(seen).toEqual(["cursor-1"]);
+  });
 });
