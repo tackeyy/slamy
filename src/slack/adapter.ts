@@ -87,6 +87,23 @@ export type SlackCreateConversationInput = {
   readonly isPrivate: boolean;
 };
 
+export type SlackSetConversationPurposeInput = {
+  readonly channelId: string;
+  readonly purpose: string;
+  readonly isPrivate: boolean;
+};
+
+export type SlackSetConversationTopicInput = {
+  readonly channelId: string;
+  readonly topic: string;
+  readonly isPrivate: boolean;
+};
+
+export type SlackConversationMetadataResult = {
+  readonly channelId: string;
+  readonly value: string;
+};
+
 export type SlackSearchMessage = {
   readonly channelId: string;
   readonly timestamp: string;
@@ -122,6 +139,14 @@ export interface WorkspaceSlackOperations {
     context: SlackWorkspaceContext,
     input: SlackCreateConversationInput,
   ): Promise<SlackPublicConversation>;
+  setConversationPurpose(
+    context: SlackWorkspaceContext,
+    input: SlackSetConversationPurposeInput,
+  ): Promise<SlackConversationMetadataResult>;
+  setConversationTopic(
+    context: SlackWorkspaceContext,
+    input: SlackSetConversationTopicInput,
+  ): Promise<SlackConversationMetadataResult>;
   searchMessages(
     context: SlackWorkspaceContext,
     input: SlackSearchMessagesInput,
@@ -258,6 +283,66 @@ export class WorkspaceSlackAdapter implements WorkspaceSlackOperations {
       context,
       args,
       mapCreatedConversation,
+    );
+  }
+
+  setConversationPurpose(
+    context: SlackWorkspaceContext,
+    input: SlackSetConversationPurposeInput,
+  ): Promise<SlackConversationMetadataResult> {
+    let channelId: string;
+    let purpose: string;
+    try {
+      if (typeof input.isPrivate !== "boolean") throw new TypeError();
+      channelId = parseChannelId(input.channelId);
+      purpose = parseConversationMetadata(input.purpose);
+    } catch {
+      throw this.#inputError(
+        input.isPrivate === true
+          ? "set-private-conversation-purpose"
+          : "set-public-conversation-purpose",
+        context,
+      );
+    }
+    return this.#execute(
+      input.isPrivate
+        ? "set-private-conversation-purpose"
+        : "set-public-conversation-purpose",
+      context,
+      Object.freeze({ channel: channelId, purpose }),
+      (value) => {
+        mapAcknowledgement(value);
+        return Object.freeze({ channelId, value: purpose });
+      },
+    );
+  }
+
+  setConversationTopic(
+    context: SlackWorkspaceContext,
+    input: SlackSetConversationTopicInput,
+  ): Promise<SlackConversationMetadataResult> {
+    let channelId: string;
+    let topic: string;
+    try {
+      if (typeof input.isPrivate !== "boolean") throw new TypeError();
+      channelId = parseChannelId(input.channelId);
+      topic = parseConversationMetadata(input.topic);
+    } catch {
+      throw this.#inputError(
+        input.isPrivate === true
+          ? "set-private-conversation-topic"
+          : "set-public-conversation-topic",
+        context,
+      );
+    }
+    return this.#execute(
+      input.isPrivate ? "set-private-conversation-topic" : "set-public-conversation-topic",
+      context,
+      Object.freeze({ channel: channelId, topic }),
+      (value) => {
+        mapAcknowledgement(value);
+        return Object.freeze({ channelId, value: topic });
+      },
     );
   }
 
@@ -600,6 +685,11 @@ function mapCreatedConversation(value: unknown): SlackPublicConversation {
   });
 }
 
+function mapAcknowledgement(value: unknown): void {
+  const input = safeObject(value);
+  if (input.ok !== true) throw platformResult(input);
+}
+
 function mapSearchMessages(value: unknown): readonly SlackSearchMessage[] {
   const input = safeObject(value);
   if (input.ok !== true) throw platformResult(input);
@@ -762,6 +852,18 @@ function parseConversationName(value: unknown): string {
     !/^[a-z0-9][a-z0-9_-]*$/.test(value)
   ) {
     throw new TypeError("Invalid Slack conversation name");
+  }
+  return value;
+}
+
+function parseConversationMetadata(value: unknown): string {
+  if (
+    typeof value !== "string" ||
+    value.length < 1 ||
+    value.length > 250 ||
+    /[\u0000\u007f]/.test(value)
+  ) {
+    throw new TypeError("Invalid Slack conversation metadata");
   }
   return value;
 }

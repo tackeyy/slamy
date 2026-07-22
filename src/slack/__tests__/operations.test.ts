@@ -80,6 +80,92 @@ describe("WorkspaceSlackAdapter named operations", () => {
     });
   });
 
+  it("sets a public channel purpose through the topic-specific scope", async () => {
+    const transport = new QueueTransport([
+      { ok: true, purpose: "AI・ソフトウェア開発と技術判断を共有します。" },
+    ]);
+    const adapter = new WorkspaceSlackAdapter({ transport, requestIdFactory: idFactory() });
+    const context = contextWith({
+      userToken: "xoxp-user",
+      userScopes: ["channels:write.topic"],
+    });
+
+    await expect(
+      adapter.setConversationPurpose(context, {
+        channelId: "C0123ABC",
+        purpose: "AI・ソフトウェア開発と技術判断を共有します。",
+        isPrivate: false,
+      }),
+    ).resolves.toEqual({
+      channelId: "C0123ABC",
+      value: "AI・ソフトウェア開発と技術判断を共有します。",
+    });
+    expect(transport.requests[0]).toMatchObject({
+      method: "conversations.setPurpose",
+      arguments: {
+        channel: "C0123ABC",
+        purpose: "AI・ソフトウェア開発と技術判断を共有します。",
+      },
+    });
+  });
+
+  it("sets a private channel purpose only with the private topic scope", async () => {
+    const transport = new QueueTransport([{ ok: true }]);
+    const adapter = new WorkspaceSlackAdapter({ transport });
+    const context = contextWith({
+      userToken: "xoxp-user",
+      userScopes: ["groups:write.topic"],
+    });
+
+    await expect(
+      adapter.setConversationPurpose(context, {
+        channelId: "G0123ABC",
+        purpose: "取締役会の議題と決議を扱います。",
+        isPrivate: true,
+      }),
+    ).resolves.toMatchObject({ channelId: "G0123ABC" });
+    expect(transport.requests[0]?.method).toBe("conversations.setPurpose");
+  });
+
+  it("sets a public channel topic through conversations.setTopic", async () => {
+    const transport = new QueueTransport([{ ok: true, topic: "AI・開発" }]);
+    const adapter = new WorkspaceSlackAdapter({ transport });
+    const context = contextWith({
+      userToken: "xoxp-user",
+      userScopes: ["channels:write.topic"],
+    });
+
+    await expect(
+      adapter.setConversationTopic(context, {
+        channelId: "C0123ABC",
+        topic: "AI・開発",
+        isPrivate: false,
+      }),
+    ).resolves.toEqual({ channelId: "C0123ABC", value: "AI・開発" });
+    expect(transport.requests[0]).toMatchObject({
+      method: "conversations.setTopic",
+      arguments: { channel: "C0123ABC", topic: "AI・開発" },
+    });
+  });
+
+  it("sets a private channel topic only with the private topic scope", async () => {
+    const transport = new QueueTransport([{ ok: true }]);
+    const adapter = new WorkspaceSlackAdapter({ transport });
+    const context = contextWith({
+      userToken: "xoxp-user",
+      userScopes: ["groups:write.topic"],
+    });
+
+    await expect(
+      adapter.setConversationTopic(context, {
+        channelId: "G0123ABC",
+        topic: "取締役会",
+        isPrivate: true,
+      }),
+    ).resolves.toEqual({ channelId: "G0123ABC", value: "取締役会" });
+    expect(transport.requests[0]?.method).toBe("conversations.setTopic");
+  });
+
   it("verifies User and Bot identities against the explicit workspace", async () => {
     const transport = new QueueTransport([
       { ok: true, team_id: PRIMARY_TEAM_ID, user_id: "U00000001" },
