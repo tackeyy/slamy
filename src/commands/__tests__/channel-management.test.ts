@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import { parseTeamId } from "../../domain/team-id.js";
 import type { WorkspaceSlackOperations } from "../../slack/index.js";
 import { contextWith } from "../../slack/__tests__/helpers.js";
-import { ChannelEnsureError, ensureChannel } from "../manager.js";
+import { ChannelEnsureError, ensureChannel } from "../channel-management.js";
 
 describe("ensureChannel", () => {
   it("returns a plan without resolving credentials or calling Slack", async () => {

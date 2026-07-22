@@ -1,27 +1,23 @@
 import { Command } from "commander";
 import { describe, expect, it, vi } from "vitest";
-import { parseTeamId } from "../domain/team-id.js";
 import { registerChannelManagementCommands } from "../cli/channels.js";
 
 describe("channels create CLI", () => {
   it("prints a JSON dry-run plan without resolving credentials", async () => {
     const writeOut = vi.fn();
-    const credentialResolverFactory = vi.fn();
+    const ensureChannel = vi.fn().mockResolvedValue({
+      status: "planned",
+      teamId: "T00000001",
+      workspace: "wedgeai",
+      name: "01-engineering",
+      isPrivate: false,
+      topic: "AI・開発",
+      purpose: "AI・ソフトウェア開発と技術判断を共有します。",
+    });
     const program = new Command().option("--json");
     const channels = program.command("channels");
     registerChannelManagementCommands(channels, program, {
-      registryFactory: () => ({
-        resolve: vi.fn().mockResolvedValue({
-          teamId: parseTeamId("T00000001"),
-          alias: "wedgeai",
-          domain: "wedgeai.slack.com",
-          previousDomains: [],
-          displayName: "Wedge AI, Inc.",
-          isDefault: false,
-        }),
-      }) as never,
-      credentialResolverFactory,
-      slackFactory: vi.fn(),
+      ensureChannel,
       writeOut,
       writeErr: vi.fn(),
     });
@@ -47,6 +43,13 @@ describe("channels create CLI", () => {
       workspace: "wedgeai",
       name: "01-engineering",
     });
-    expect(credentialResolverFactory).not.toHaveBeenCalled();
+    expect(ensureChannel).toHaveBeenCalledWith({
+      workspace: "wedgeai",
+      name: "01-engineering",
+      isPrivate: false,
+      topic: "AI・開発",
+      purpose: "AI・ソフトウェア開発と技術判断を共有します。",
+      dryRun: true,
+    });
   });
 });

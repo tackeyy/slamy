@@ -44,6 +44,7 @@ const exactExternalImports = new Map([
     ]),
   ],
   ["cli/workspace.ts", new Set(["commander"])],
+  ["cli/channels.ts", new Set(["commander"])],
   [
     "workspace/node-file-workspace-store.ts",
     new Set(["node:crypto", "node:fs", "node:fs/promises", "node:path", "node:timers/promises"]),
