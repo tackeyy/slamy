@@ -26,7 +26,9 @@ export class SlackAuthTestVerifier implements AuthVerifier {
   async verify(secret: CredentialHandle): Promise<AuthIdentity> {
     let response: AuthTestResponse;
     try {
-      response = (await secret.use((token) => this.#transport.authTest(token))) as AuthTestResponse;
+      response = snapshotAuthTestResponse(
+        await secret.use((token) => this.#transport.authTest(token)),
+      );
     } catch {
       throw new CredentialError(
         "AUTH_VERIFICATION_FAILED",
@@ -59,4 +61,18 @@ export class SlackAuthTestVerifier implements AuthVerifier {
       ...(response.enterprise_id ? { enterpriseId: response.enterprise_id } : {}),
     };
   }
+}
+
+function snapshotAuthTestResponse(value: unknown): AuthTestResponse {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) {
+    throw new TypeError("Invalid auth.test response");
+  }
+  const response = value as Record<string, unknown>;
+  return {
+    ok: response.ok as boolean | undefined,
+    team_id: response.team_id as string | undefined,
+    user_id: response.user_id as string | undefined,
+    bot_id: response.bot_id as string | undefined,
+    enterprise_id: response.enterprise_id as string | undefined,
+  };
 }
