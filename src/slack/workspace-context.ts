@@ -1,6 +1,8 @@
 import type { VerifiedCredentialSet } from "../credentials/types.js";
-import type { TeamId } from "../domain/team-id.js";
+import { parseTeamId, type TeamId } from "../domain/team-id.js";
 import { SlackAdapterError } from "./errors.js";
+
+const UNKNOWN_TEAM_ID = parseTeamId("TUNKNOWN");
 
 export type SlackWorkspaceContext = {
   readonly teamId: TeamId;
@@ -15,18 +17,25 @@ export type CreateSlackWorkspaceContextInput = {
 export function createSlackWorkspaceContext(
   input: CreateSlackWorkspaceContextInput,
 ): SlackWorkspaceContext {
+  let teamId = UNKNOWN_TEAM_ID;
   try {
+    teamId = parseTeamId(input.teamId);
+    const credentials = input.credentials;
+    const credentialTeamId = parseTeamId(credentials.teamId);
+    const user = credentials.user;
+    const bot = credentials.bot;
     if (
-      input.credentials.teamId !== input.teamId ||
-      (input.credentials.user && input.credentials.user.teamId !== input.teamId) ||
-      (input.credentials.bot && input.credentials.bot.teamId !== input.teamId)
+      credentialTeamId !== teamId ||
+      (user !== undefined &&
+        (user.kind !== "user" || parseTeamId(user.teamId) !== teamId)) ||
+      (bot !== undefined &&
+        (bot.kind !== "bot" || parseTeamId(bot.teamId) !== teamId))
     ) {
-      throw mismatch(input.teamId);
+      throw new TypeError();
     }
-    return Object.freeze({ teamId: input.teamId, credentials: input.credentials });
-  } catch (error) {
-    if (error instanceof SlackAdapterError) throw error;
-    throw mismatch(input.teamId);
+    return Object.freeze({ teamId, credentials });
+  } catch {
+    throw mismatch(teamId);
   }
 }
 

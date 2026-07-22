@@ -589,7 +589,6 @@ function normalizeFailure(
   teamId: TeamId,
   requestId: string,
 ): SlackAdapterError {
-  if (cause instanceof SlackAdapterError) return cause;
   if (cause instanceof ResponseMappingError) {
     if (cause.kind === "team-mismatch") {
       return adapterError(
