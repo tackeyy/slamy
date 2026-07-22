@@ -190,10 +190,10 @@ slamy workspace remove primary
 ```
 
 These commands do not call Slack and never accept token values. The TypeScript library now includes
-an atomic credential-set resolver that validates token kind and Slack Team ID with `auth.test`.
-Existing CLI commands are not connected to that resolver until the workspace-aware adapter migration
-in #92. The library's strict permalink Target resolver is available now, but CLI commands continue
-to use their legacy target path until #92.
+an atomic credential-set resolver, strict permalink Target resolver, and named workspace-aware Slack
+operations. Existing CLI commands and the `SlamyClient` compatibility facade continue to use their
+legacy path until the command migrations in #89 and #91; adding the adapter does not silently change
+their token or routing behavior.
 
 ### `channels history` — Get channel message history
 
@@ -365,8 +365,40 @@ components because their interfaces necessarily receive raw token material. Vali
 their implementations accordingly.
 
 Slack `auth.test` proves identity and Team ID but does not attest operation scopes. A requirement may
-carry scope metadata such as User `search:read`; actual method policy and `missing_scope` handling are
-part of the workspace-aware Slack adapter in #92.
+carry scope metadata such as User `search:read`. The workspace-aware adapter checks this declared
+contract before transport and normalizes Slack's eventual `missing_scope` response as a secret-safe
+platform error; the declaration is not proof of the token's grants.
+
+Library callers create one explicit context from a verified credential set and pass it to every
+named operation:
+
+```ts
+import {
+  createSlackWorkspaceContext,
+  createWorkspaceSlackAdapter,
+} from "slamy";
+
+const context = createSlackWorkspaceContext({
+  teamId: workspace.teamId,
+  credentials,
+});
+const slack = createWorkspaceSlackAdapter();
+
+try {
+  await slack.postMessage(context, { channelId: "C0123ABC", text: "hello" });
+} finally {
+  credentials.destroy();
+}
+```
+
+The package exposes named slamy-owned DTOs only, not a generic `apiCall`. Policies pin each operation
+to one User or Bot credential kind and its required scope metadata. Calls use a non-cached SDK client
+with automatic retries disabled; rate limits surface as `SlackAdapterError` with
+`retryAfterSeconds`. Cursor traversal follows `response_metadata.next_cursor`, rejects repeated or
+malformed cursors, and is bounded. Diagnostics contain only a local request ID, method, Team ID,
+credential kind, outcome, and normalized error code. The local request ID is a slamy correlation ID,
+not Slack's `x-slack-req-id`. For methods that support organization-wide tokens, the method policy
+maps the explicit context Team ID to Slack's documented `team` or `team_id` argument.
 
 Library integrations can also use `createTargetResolver()` with an injected `WorkspaceCatalog`.
 The resolver accepts Slack `archives` permalinks (including `thread_ts` and `cid`),

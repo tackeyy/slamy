@@ -187,10 +187,10 @@ slamy workspace default --clear
 slamy workspace remove primary
 ```
 
-これらのコマンドはSlackへ接続せず、token値を引数として受け取りません。TypeScript libraryには、
-token種別とSlack Team IDを`auth.test`で検証するatomic credential-set resolverも追加済みです。
-厳格なpermalink Target resolverもlibraryから利用できます。既存CLIコマンドへの接続は
-workspace-aware adapterへ移行する#92で行うため、それまでは従来のtarget処理を継続します。
+これらのコマンドはSlackへ接続せず、token値を引数として受け取りません。TypeScript libraryでは、
+atomic credential-set resolver、厳格なpermalink Target resolver、名前付きworkspace-aware Slack操作を
+利用できます。既存CLIコマンドと`SlamyClient`互換facadeは、#89・#91のコマンド移行が完了するまで
+従来経路を維持します。adapter追加だけでtokenやroutingの挙動を暗黙に切り替えません。
 
 ### `channels history` — チャンネルのメッセージ履歴
 
@@ -357,8 +357,39 @@ custom providerとverifierはinterface上raw tokenを扱う必要があるため
 検証し、適切に隔離してください。
 
 Slackの`auth.test`が証明するのはidentityとTeam IDであり、操作scopeではありません。Userの
-`search:read`などはrequirement metadataとして保持できますが、実際のmethod policyと
-`missing_scope`処理はworkspace-aware Slack adapterの#92で実装します。
+`search:read`などはrequirement metadataとして保持できます。workspace-aware adapterはtransport前に
+この宣言契約を確認し、Slackから返る`missing_scope`をsecret-safeなplatform errorへ正規化しますが、
+宣言自体はtokenへscopeが付与済みであることの証明ではありません。
+
+library callerは、検証済みcredential setから明示contextを一つ作り、すべての名前付き操作へ渡します。
+
+```ts
+import {
+  createSlackWorkspaceContext,
+  createWorkspaceSlackAdapter,
+} from "slamy";
+
+const context = createSlackWorkspaceContext({
+  teamId: workspace.teamId,
+  credentials,
+});
+const slack = createWorkspaceSlackAdapter();
+
+try {
+  await slack.postMessage(context, { channelId: "C0123ABC", text: "hello" });
+} finally {
+  credentials.destroy();
+}
+```
+
+packageが公開するのはslamy所有の名前付きDTOだけで、汎用`apiCall`は公開しません。policyは操作ごとに
+UserまたはBotのcredential種別と必要scope metadataを固定します。呼び出しごとにcacheしないSDK clientを
+使い、自動retryは無効です。rate limitは`retryAfterSeconds`を持つ`SlackAdapterError`として上位へ返します。
+cursorは`response_metadata.next_cursor`だけを追跡し、反復・不正cursorを拒否して上限を設けます。
+diagnosticsにはlocal request ID、method、Team ID、credential種別、結果、正規化済みerror codeだけを含めます。
+local request IDはslamy内の相関IDであり、Slackの`x-slack-req-id`ではありません。
+organization-wide token対応methodでは、policyが明示contextのTeam IDをSlack仕様の`team`または
+`team_id`引数へ写像します。
 
 libraryから`createTargetResolver()`へ`WorkspaceCatalog`を注入すると、Slackの`archives`
 permalink（`thread_ts` / `cid`を含む）、`app.slack.com/client`のchannel URLと観測済みthread URL、

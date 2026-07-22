@@ -7,10 +7,10 @@ identity. Slack Team ID is its canonical key. Aliases, domains, names, defaults,
 references are attributes.
 
 Issue #86 adds the TypeScript library credential resolver and `auth.test` Team ID verification.
-Existing Slack API commands do not use that resolver until the workspace-aware adapter migration in
-Issue #92. Issue #83 adds strict URL-based workspace routing to the library, without changing the
-existing CLI command path. Do not remove working legacy token variables until every command you use
-has migrated and been verified.
+Issue #83 adds strict URL-based workspace routing, and Issue #92 adds explicit-context named Slack
+operations to the library. Existing CLI commands and `SlamyClient` remain on their compatibility path
+until the vertical command migrations in Issues #89 and #91. Do not remove working legacy token
+variables until every command you use has migrated and been verified.
 
 Legacy `SLAMY_DEFAULT_WORKSPACE` and `SLAMY_WORKSPACE_<ALIAS>_USER_TOKEN` inputs remain read-only
 compatible for the v2 release line. They are deprecated for new configuration and may be removed
@@ -69,8 +69,9 @@ new registry version.
 5. Use the Issue #86 library resolver to verify every configured token against the record's Team ID.
    Treat User and Bot credentials as one set; any missing required kind, token-kind mismatch,
    cross-Team combination, or `auth.test` mismatch is a fail-closed error.
-6. Verify permalink-derived routing through the Issue #83 library API. Existing CLI commands
-   continue on their legacy path until Issue #92 connects the verified resolver and Slack adapter.
+6. Verify permalink-derived routing through the Issue #83 library API. Library integrations may
+   combine the selected workspace, Issue #86 credential set, and Issue #92 Slack adapter explicitly.
+   Existing CLI commands continue on their legacy path until Issues #89 and #91 migrate them.
 7. Remove legacy selectors only after every command you use has migrated and its fail-closed behavior
    has been verified. v2 itself does not require their removal.
 
@@ -85,8 +86,9 @@ token variables, derives Team ID with `auth.test`, and rejects a cross-Team User
 read-only compatibility for v2 and may be removed no earlier than v3.0.0.
 
 `auth.test` does not return a credential's granted scope set. It verifies identity and Team ID only.
-Operation-specific scope enforcement and `missing_scope` normalization belong to the Slack adapter
-introduced by Issue #92.
+The Issue #92 Slack adapter checks operation-specific declared scope metadata before transport and
+normalizes `missing_scope` as a safe platform error. This metadata is a caller contract, not an
+attestation of scopes actually granted by Slack.
 
 ## Rollback
 

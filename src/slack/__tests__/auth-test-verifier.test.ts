@@ -17,9 +17,11 @@ describe("SlackAuthTestVerifier", () => {
       bot_id: "B1",
     });
     const seenTokens: string[] = [];
-    const verifier = new SlackAuthTestVerifier((token) => {
-      seenTokens.push(token);
-      return { auth: { test: token.startsWith("xoxp-") ? userTest : botTest } };
+    const verifier = new SlackAuthTestVerifier({
+      authTest(token) {
+        seenTokens.push(token);
+        return token.startsWith("xoxp-") ? userTest() : botTest();
+      },
     });
 
     await expect(
@@ -38,9 +40,9 @@ describe("SlackAuthTestVerifier", () => {
     { ok: false, error: "token_revoked" },
     { ok: false, error: "token_expired" },
   ])("maps Slack authentication failures to one safe error", async (response) => {
-    const verifier = new SlackAuthTestVerifier(() => ({
-      auth: { test: vi.fn().mockResolvedValue(response) },
-    }));
+    const verifier = new SlackAuthTestVerifier({
+      authTest: vi.fn().mockResolvedValue(response),
+    });
 
     await expect(
       verifier.verify(createCredentialSecret("xoxp-user-secret-canary", "user")),
@@ -51,9 +53,9 @@ describe("SlackAuthTestVerifier", () => {
     { ok: true },
     { ok: true, team_id: "invalid" },
   ])("rejects missing or malformed Team IDs", async (response) => {
-    const verifier = new SlackAuthTestVerifier(() => ({
-      auth: { test: vi.fn().mockResolvedValue(response) },
-    }));
+    const verifier = new SlackAuthTestVerifier({
+      authTest: vi.fn().mockResolvedValue(response),
+    });
 
     await expect(
       verifier.verify(createCredentialSecret("xoxp-user-secret-canary", "user")),
@@ -62,9 +64,9 @@ describe("SlackAuthTestVerifier", () => {
 
   it("does not expose SDK errors or tokens", async () => {
     const canary = "xoxp-sdk-error-secret-canary";
-    const verifier = new SlackAuthTestVerifier(() => ({
-      auth: { test: vi.fn().mockRejectedValue(new Error(canary)) },
-    }));
+    const verifier = new SlackAuthTestVerifier({
+      authTest: vi.fn().mockRejectedValue(new Error(canary)),
+    });
 
     let error: unknown;
     try {
@@ -76,5 +78,29 @@ describe("SlackAuthTestVerifier", () => {
     expect(String(error)).not.toContain(canary);
     expect(JSON.stringify(error)).not.toContain(canary);
     expect((error as Error).stack).not.toContain(canary);
+  });
+
+  it("does not expose hostile auth.test response getters", async () => {
+    const canary = "xoxp-auth-response-getter-canary";
+    const response = Object.create(null) as Record<string, unknown>;
+    Object.defineProperty(response, "ok", {
+      get(): never {
+        throw new Error(canary);
+      },
+    });
+    const verifier = new SlackAuthTestVerifier({
+      authTest: vi.fn().mockResolvedValue(response),
+    });
+
+    let error: unknown;
+    try {
+      await verifier.verify(createCredentialSecret("xoxp-user-secret-canary", "user"));
+    } catch (caught) {
+      error = caught;
+    }
+    expect(error).toMatchObject({ code: "AUTH_VERIFICATION_FAILED" });
+    expect(String(error)).not.toContain(canary);
+    expect(JSON.stringify(error)).not.toContain(canary);
+    expect(error instanceof Error ? error.stack : "").not.toContain(canary);
   });
 });
