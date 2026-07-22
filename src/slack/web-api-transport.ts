@@ -1,5 +1,9 @@
 import { LogLevel, WebClient } from "@slack/web-api";
-import type { SlackTransport, SlackTransportRequest } from "./transport.js";
+import type {
+  SlackAuthTestTransport,
+  SlackTransport,
+  SlackTransportRequest,
+} from "./transport.js";
 
 export type NodeSlackWebApiClientOptions = {
   readonly rejectRateLimitedCalls: true;
@@ -22,7 +26,7 @@ const CLIENT_OPTIONS: NodeSlackWebApiClientOptions = Object.freeze({
   logLevel: "error",
 });
 
-export class NodeSlackWebApiTransport implements SlackTransport {
+export class NodeSlackWebApiTransport implements SlackTransport, SlackAuthTestTransport {
   readonly #createClient: SlackWebApiClientFactory;
 
   constructor(createClient: SlackWebApiClientFactory = createProductionClient) {
@@ -32,6 +36,11 @@ export class NodeSlackWebApiTransport implements SlackTransport {
   call(request: SlackTransportRequest): Promise<unknown> {
     const client = this.#createClient(request.token, CLIENT_OPTIONS);
     return client.apiCall(request.method, { ...request.arguments });
+  }
+
+  authTest(token: string): Promise<unknown> {
+    const client = this.#createClient(token, CLIENT_OPTIONS);
+    return client.apiCall("auth.test", {});
   }
 }
 

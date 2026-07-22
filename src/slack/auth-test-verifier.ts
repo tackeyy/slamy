@@ -1,4 +1,3 @@
-import { LogLevel, WebClient } from "@slack/web-api";
 import { parseTeamId } from "../domain/team-id.js";
 import type {
   AuthIdentity,
@@ -6,6 +5,8 @@ import type {
   CredentialHandle,
 } from "../credentials/auth-verifier.js";
 import { CredentialError } from "../credentials/errors.js";
+import type { SlackAuthTestTransport } from "./transport.js";
+import { NodeSlackWebApiTransport } from "./web-api-transport.js";
 
 type AuthTestResponse = {
   ok?: boolean;
@@ -15,29 +16,17 @@ type AuthTestResponse = {
   enterprise_id?: string;
 };
 
-type AuthTestClient = {
-  auth: {
-    test(): Promise<AuthTestResponse>;
-  };
-};
-
-type AuthTestClientFactory = (token: string) => AuthTestClient;
-
 export class SlackAuthTestVerifier implements AuthVerifier {
-  readonly #createClient: AuthTestClientFactory;
+  readonly #transport: SlackAuthTestTransport;
 
-  constructor(
-    createClient: AuthTestClientFactory = (token) =>
-      new WebClient(token, { logLevel: LogLevel.WARN }) as AuthTestClient,
-  ) {
-    this.#createClient = createClient;
+  constructor(transport: SlackAuthTestTransport = new NodeSlackWebApiTransport()) {
+    this.#transport = transport;
   }
 
   async verify(secret: CredentialHandle): Promise<AuthIdentity> {
     let response: AuthTestResponse;
     try {
-      const client = secret.use((token) => this.#createClient(token));
-      response = await client.auth.test();
+      response = (await secret.use((token) => this.#transport.authTest(token))) as AuthTestResponse;
     } catch {
       throw new CredentialError(
         "AUTH_VERIFICATION_FAILED",

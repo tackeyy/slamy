@@ -12,3 +12,7 @@ export type SlackTransportRequest = {
 export interface SlackTransport {
   call(request: SlackTransportRequest): Promise<unknown>;
 }
+
+export interface SlackAuthTestTransport {
+  authTest(token: string): Promise<unknown>;
+}

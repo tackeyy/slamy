@@ -19,6 +19,7 @@ describe("NodeSlackWebApiTransport", () => {
       requestId: "req-1",
       teamId: parseTeamId("T00000001"),
     });
+    await transport.authTest("xoxp-bootstrap");
     await transport.call({
       method: "chat.postMessage",
       token: "xoxb-second",
@@ -30,6 +31,10 @@ describe("NodeSlackWebApiTransport", () => {
     expect(created).toEqual([
       {
         token: "xoxp-first",
+        options: { rejectRateLimitedCalls: true, retries: 0, logLevel: "error" },
+      },
+      {
+        token: "xoxp-bootstrap",
         options: { rejectRateLimitedCalls: true, retries: 0, logLevel: "error" },
       },
       {
