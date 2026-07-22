@@ -388,6 +388,8 @@ UserまたはBotのcredential種別と必要scope metadataを固定します。�
 cursorは`response_metadata.next_cursor`だけを追跡し、反復・不正cursorを拒否して上限を設けます。
 diagnosticsにはlocal request ID、method、Team ID、credential種別、結果、正規化済みerror codeだけを含めます。
 local request IDはslamy内の相関IDであり、Slackの`x-slack-req-id`ではありません。
+organization-wide token対応methodでは、policyが明示contextのTeam IDをSlack仕様の`team`または
+`team_id`引数へ写像します。
 
 libraryから`createTargetResolver()`へ`WorkspaceCatalog`を注入すると、Slackの`archives`
 permalink（`thread_ts` / `cid`を含む）、`app.slack.com/client`のchannel URLと観測済みthread URL、

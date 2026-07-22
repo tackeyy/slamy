@@ -21,14 +21,14 @@ SDK errorを含めない。request IDはslamyが生成するlocal correlation ID
 
 ## 操作policy
 
-| slamy操作 | Slack method | credential | 宣言scope | pagination |
-|---|---|---|---|---|
-| `verifyWorkspace(context, "user")` | `auth.test` | User | なし | なし |
-| `verifyWorkspace(context, "bot")` | `auth.test` | Bot | なし | なし |
-| `getTeamInfo` | `team.info` | User | `team:read` | なし |
-| `listPublicConversations` | `conversations.list` | User | `channels:read` | cursor |
-| `searchMessages` | `search.messages` | User | `search:read` | なし |
-| `postMessage` | `chat.postMessage` | Bot | `chat:write` | なし |
+| slamy操作 | Slack method | credential | 宣言scope | workspace引数 | pagination |
+|---|---|---|---|---|---|
+| `verifyWorkspace(context, "user")` | `auth.test` | User | なし | なし | なし |
+| `verifyWorkspace(context, "bot")` | `auth.test` | Bot | なし | なし | なし |
+| `getTeamInfo` | `team.info` | User | `team:read` | `team` | なし |
+| `listPublicConversations` | `conversations.list` | User | `channels:read` | `team_id` | cursor |
+| `searchMessages` | `search.messages` | User | `search:read` | `team_id` | なし |
+| `postMessage` | `chat.postMessage` | Bot | `chat:write` | なし | なし |
 
 scopeはcredential resolverへ渡した要求の宣言値であり、Slackが実際に付与したscopeの証明ではない。
 Slackの`missing_scope`はplatform errorとして正規化する。
@@ -48,6 +48,14 @@ Slackの`missing_scope`はplatform errorとして正規化する。
 `SlamyClient`のconstructorと既存methodはv2互換facadeとして残す。Issue #92では暗黙に新adapterへ接続せず、
 Issue #89・#91でCLIとlibraryを同じcommand use caseへ一つずつ移行する。全移行とdistribution切替が完了するまで、
 Go実装と旧TypeScript経路は削除しない。
+
+## Mission iteration 1 finding対応
+
+- Slack公式`search.messages` responseの`match.channel.id`を読むよう修正した。
+- pagination中のsafe typed errorを保持し、2ページ目以降のrate limitでも`retryAfterSeconds`を失わない。
+- organization-wide token対応methodへ明示Team IDを`team` / `team_id`として渡す。
+- hostile context getter、`maxPages` getter、外部由来の偽装`SlackAdapterError`を固定errorへ正規化する。
+- paginationの明示initial cursorを初回requestへ渡し、同一cursor再返却を即時に拒否する。
 
 ## 検証記録
 

@@ -397,7 +397,8 @@ with automatic retries disabled; rate limits surface as `SlackAdapterError` with
 `retryAfterSeconds`. Cursor traversal follows `response_metadata.next_cursor`, rejects repeated or
 malformed cursors, and is bounded. Diagnostics contain only a local request ID, method, Team ID,
 credential kind, outcome, and normalized error code. The local request ID is a slamy correlation ID,
-not Slack's `x-slack-req-id`.
+not Slack's `x-slack-req-id`. For methods that support organization-wide tokens, the method policy
+maps the explicit context Team ID to Slack's documented `team` or `team_id` argument.
 
 Library integrations can also use `createTargetResolver()` with an injected `WorkspaceCatalog`.
 The resolver accepts Slack `archives` permalinks (including `thread_ts` and `cid`),
