@@ -10,8 +10,15 @@ class QueueTransport implements SlackTransport {
 
   call(request: SlackTransportRequest): Promise<unknown> {
     this.requests.push(request);
-    return Promise.resolve(this.responses.shift());
+    const response = this.responses.shift();
+    return response instanceof TransportFailure
+      ? Promise.reject(response.cause)
+      : Promise.resolve(response);
   }
+}
+
+class TransportFailure {
+  constructor(readonly cause: unknown) {}
 }
 
 describe("WorkspaceSlackAdapter named operations", () => {
@@ -100,6 +107,30 @@ describe("WorkspaceSlackAdapter named operations", () => {
       },
     ]);
     expect(transport.requests.every((request) => request.teamId === PRIMARY_TEAM_ID)).toBe(true);
+  });
+
+  it("preserves a normalized rate limit from a later conversation page", async () => {
+    const transport = new QueueTransport([
+      { ok: true, channels: [], response_metadata: { next_cursor: "cursor-2" } },
+      new TransportFailure({
+        code: "slack_webapi_rate_limited_error",
+        retryAfter: 17,
+        message: "xoxp-page-rate-limit-canary",
+      }),
+    ]);
+    const adapter = new WorkspaceSlackAdapter({ transport, requestIdFactory: idFactory() });
+
+    await expect(
+      adapter.listAllPublicConversations(
+        contextWith({ userToken: "xoxp-user", userScopes: ["channels:read"] }),
+      ),
+    ).rejects.toMatchObject({
+      code: "SLACK_RATE_LIMITED",
+      retryAfterSeconds: 17,
+      requestId: "req-2",
+      method: "conversations.list",
+      teamId: PRIMARY_TEAM_ID,
+    });
   });
 
   it("maps message search through the User-only search policy", async () => {

@@ -145,6 +145,33 @@ describe("WorkspaceSlackAdapter", () => {
     expect(transport.requests).toHaveLength(0);
   });
 
+  it("normalizes a hostile listAll maxPages getter before transport", async () => {
+    const canary = "xoxp-max-pages-getter-canary";
+    const transport = new FakeTransport();
+    const adapter = new WorkspaceSlackAdapter({ transport });
+    const input = Object.create(null) as { maxPages?: number };
+    Object.defineProperty(input, "maxPages", {
+      get(): never {
+        throw new Error(canary);
+      },
+    });
+
+    let caught: unknown;
+    try {
+      await adapter.listAllPublicConversations(
+        contextWith({ userToken: "xoxp-user", userScopes: ["channels:read"] }),
+        input,
+      );
+    } catch (error) {
+      caught = error;
+    }
+    expect(caught).toMatchObject({ code: "PAGINATION_INVALID" });
+    expect(String(caught)).not.toContain(canary);
+    expect(JSON.stringify(caught)).not.toContain(canary);
+    expect(caught instanceof Error ? caught.stack : "").not.toContain(canary);
+    expect(transport.requests).toHaveLength(0);
+  });
+
   it("emits frozen local-correlation diagnostics and isolates sink failures", async () => {
     const transport = new FakeTransport();
     transport.response = { ok: true, team: { id: PRIMARY_TEAM_ID, name: "Primary" } };

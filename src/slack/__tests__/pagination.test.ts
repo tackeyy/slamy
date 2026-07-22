@@ -80,4 +80,15 @@ describe("collectCursorPages", () => {
       expect(caught instanceof Error ? caught.stack : "").not.toContain(canary);
     }
   });
+
+  it("preserves only fetch errors explicitly approved by the caller", async () => {
+    const approved = Object.freeze({ code: "SAFE_TYPED_ERROR" });
+    await expect(
+      collectCursorPages({
+        fetchPage: () => Promise.reject(approved),
+        getNextCursor: () => undefined,
+        preserveFetchError: (error) => error === approved,
+      }),
+    ).rejects.toBe(approved);
+  });
 });
