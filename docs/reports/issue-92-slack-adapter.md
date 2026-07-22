@@ -57,6 +57,12 @@ Go実装と旧TypeScript経路は削除しない。
 - hostile context getter、`maxPages` getter、外部由来の偽装`SlackAdapterError`を固定errorへ正規化する。
 - paginationの明示initial cursorを初回requestへ渡し、同一cursor再返却を即時に拒否する。
 
+## Mission iteration 2 finding対応
+
+- 未信頼throwableへ`instanceof`を実行せず、WeakSetで内部生成済みresponse mapping errorだけを識別する。
+- paginationがfetch由来errorを保持するのは、callerのsecret-safe predicateが明示承認した場合だけに限定する。
+- adapter内で正規化済みのtyped errorをWeakSetで識別し、Proxy trapや改ざんerrorを上位へ再送出しない。
+
 ## 検証記録
 
 最終HEADに対して、typecheck、build、architecture check、Markdown lint、全test、coverage、package consumer
