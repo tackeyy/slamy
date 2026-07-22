@@ -16,11 +16,13 @@ import {
   type SlackMethodPolicy,
   type SlackOperation,
 } from "./method-policy.js";
-import { collectCursorPages, CursorPaginationError } from "./pagination.js";
+import { collectCursorPages } from "./pagination.js";
 import type { SlackTransport } from "./transport.js";
 import type { SlackWorkspaceContext } from "./workspace-context.js";
 
 const UNKNOWN_TEAM_ID = parseTeamId("TUNKNOWN");
+const RESPONSE_MAPPING_ERRORS = new WeakSet<object>();
+const TRUSTED_ADAPTER_ERRORS = new WeakSet<object>();
 
 type SlackExecutionContext = {
   readonly teamId: TeamId;
@@ -195,12 +197,11 @@ export class WorkspaceSlackAdapter implements WorkspaceSlackOperations {
             ...(cursor === undefined ? {} : { cursor }),
           }),
         getNextCursor: (page) => page.nextCursor,
-        preserveFetchError: (error) => error instanceof SlackAdapterError,
+        preserveFetchError: isTrustedSlackAdapterError,
       });
       return Object.freeze(pages.flatMap((page) => page.conversations));
     } catch (error) {
-      if (error instanceof SlackAdapterError) throw error;
-      if (error instanceof CursorPaginationError) throw this.#paginationError(context);
+      if (isTrustedSlackAdapterError(error)) throw error;
       throw this.#paginationError(context);
     }
   }
@@ -590,7 +591,7 @@ function normalizeFailure(
   teamId: TeamId,
   requestId: string,
 ): SlackAdapterError {
-  if (cause instanceof ResponseMappingError) {
+  if (isResponseMappingError(cause)) {
     if (cause.kind === "team-mismatch") {
       return adapterError(
         "WORKSPACE_CONTEXT_MISMATCH",
@@ -601,7 +602,7 @@ function normalizeFailure(
       );
     }
     if (cause.kind === "platform") {
-      return new SlackAdapterError({
+      return trustedAdapterError({
         code: "SLACK_PLATFORM_ERROR",
         message: "Slack rejected the operation",
         requestId,
@@ -625,7 +626,7 @@ function normalizeFailure(
     if (code === "slack_webapi_rate_limited_error") {
       const retryAfter = input.retryAfter;
       if (typeof retryAfter === "number" && Number.isFinite(retryAfter) && retryAfter >= 0) {
-        return new SlackAdapterError({
+        return trustedAdapterError({
           code: "SLACK_RATE_LIMITED",
           message: "Slack rate limit requires a delayed retry",
           requestId,
@@ -639,7 +640,7 @@ function normalizeFailure(
     if (code === "slack_webapi_platform_error") {
       const data = safeObject(input.data);
       const platformCode = safePlatformCode(data.error);
-      return new SlackAdapterError({
+      return trustedAdapterError({
         code: "SLACK_PLATFORM_ERROR",
         message: "Slack rejected the operation",
         requestId,
@@ -784,7 +785,24 @@ class ResponseMappingError extends Error {
     this.name = "ResponseMappingError";
     this.kind = kind;
     if (platformCode !== undefined) this.platformCode = platformCode;
+    RESPONSE_MAPPING_ERRORS.add(this);
   }
+}
+
+function isResponseMappingError(value: unknown): value is ResponseMappingError {
+  return value !== null && typeof value === "object" && RESPONSE_MAPPING_ERRORS.has(value);
+}
+
+function isTrustedSlackAdapterError(value: unknown): value is SlackAdapterError {
+  return value !== null && typeof value === "object" && TRUSTED_ADAPTER_ERRORS.has(value);
+}
+
+function trustedAdapterError(
+  details: ConstructorParameters<typeof SlackAdapterError>[0],
+): SlackAdapterError {
+  const error = new SlackAdapterError(details);
+  TRUSTED_ADAPTER_ERRORS.add(error);
+  return error;
 }
 
 function adapterError(
@@ -794,7 +812,7 @@ function adapterError(
   teamId: TeamId,
   requestId: string,
 ): SlackAdapterError {
-  return new SlackAdapterError({
+  return trustedAdapterError({
     code,
     message,
     requestId,

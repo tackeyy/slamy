@@ -50,7 +50,6 @@ export async function collectCursorPages<Page>(
     try {
       page = await options.fetchPage(cursor);
     } catch (error) {
-      if (error instanceof CursorPaginationError) throw error;
       let preserve = false;
       try {
         preserve = preserveFetchError?.(error) === true;
