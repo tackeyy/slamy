@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { collectCursorPages } from "../pagination.js";
+import { collectCursorPages, CursorPaginationError } from "../pagination.js";
 
 describe("collectCursorPages", () => {
   it("continues only from next_cursor even when a page is empty or smaller than its limit", async () => {
@@ -105,5 +105,33 @@ describe("collectCursorPages", () => {
       }),
     ).rejects.toMatchObject({ code: "PAGINATION_INVALID" });
     expect(seen).toEqual(["cursor-1"]);
+  });
+
+  it("does not trust Proxy or forged pagination errors from fetchPage", async () => {
+    const canary = "xoxp-pagination-proxy-canary";
+    const proxy = new Proxy(Object.create(null) as object, {
+      getPrototypeOf(): never {
+        throw new Error(canary);
+      },
+    });
+    const forged = new CursorPaginationError();
+    forged.message = canary;
+
+    for (const failure of [proxy, forged]) {
+      let caught: unknown;
+      try {
+        await collectCursorPages({
+          fetchPage: () => Promise.reject(failure),
+          getNextCursor: () => undefined,
+          preserveFetchError: () => false,
+        });
+      } catch (error) {
+        caught = error;
+      }
+      expect(caught).toMatchObject({ code: "PAGINATION_INVALID" });
+      expect(String(caught)).not.toContain(canary);
+      expect(JSON.stringify(caught)).not.toContain(canary);
+      expect(caught instanceof Error ? caught.stack : "").not.toContain(canary);
+    }
   });
 });

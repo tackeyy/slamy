@@ -317,4 +317,34 @@ describe("WorkspaceSlackAdapter", () => {
     expect(JSON.stringify(caught)).not.toContain(canary);
     expect(caught instanceof Error ? caught.stack : "").not.toContain(canary);
   });
+
+  it("normalizes a Proxy throwable without invoking its prototype trap", async () => {
+    const canary = "xoxp-proxy-throwable-canary";
+    const transport = new FakeTransport();
+    transport.failure = new Proxy(Object.create(null) as object, {
+      getPrototypeOf(): never {
+        throw new Error(canary);
+      },
+    });
+    const adapter = new WorkspaceSlackAdapter({
+      transport,
+      requestIdFactory: () => "safe-proxy-request",
+    });
+
+    let caught: unknown;
+    try {
+      await adapter.getTeamInfo(
+        contextWith({ userToken: "xoxp-user", userScopes: ["team:read"] }),
+      );
+    } catch (error) {
+      caught = error;
+    }
+    expect(caught).toMatchObject({
+      code: "INVALID_SLACK_RESPONSE",
+      requestId: "safe-proxy-request",
+    });
+    expect(String(caught)).not.toContain(canary);
+    expect(JSON.stringify(caught)).not.toContain(canary);
+    expect(caught instanceof Error ? caught.stack : "").not.toContain(canary);
+  });
 });
