@@ -185,6 +185,7 @@ export class WorkspaceSlackAdapter implements WorkspaceSlackOperations {
     try {
       const pages = await collectCursorPages({
         ...(safeInput.maxPages === undefined ? {} : { maxPages: safeInput.maxPages }),
+        ...(safeInput.cursor === undefined ? {} : { initialCursor: safeInput.cursor }),
         fetchPage: (cursor) =>
           this.listPublicConversations(context, {
             limit: safeInput.limit,
