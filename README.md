@@ -85,10 +85,14 @@ In **OAuth & Permissions** > **Scopes** > **User Token Scopes**, add:
 |---|---|
 | `channels:history` | View messages in public channels |
 | `channels:read` | View basic channel info |
+| `channels:write` | Create public channels |
+| `channels:write.topic` | Set public channel topics and descriptions |
 | `chat:write` | Send messages (as yourself) |
 | `files:read` | Download files shared in channels |
 | `groups:history` | View messages in private channels |
 | `groups:read` | View basic private channel info |
+| `groups:write` | Create private channels |
+| `groups:write.topic` | Set private channel topics and descriptions |
 | `reactions:write` | Add emoji reactions |
 | `search:read` | Search messages |
 | `users:read` | View users and their basic info |
@@ -153,6 +157,21 @@ slamy channels list [--limit <number>] [--include-archived] [--json] [--plain]
 | `--include-archived` | No | Include archived channels |
 | `--json` | No | Output as JSON |
 | `--plain` | No | Output as TSV |
+
+### `channels create` — Create or reconcile a channel
+
+```bash
+slamy channels create 01-engineering \
+  --workspace wedgeai \
+  --topic "AI development" \
+  --purpose "Discuss AI and software engineering decisions." \
+  --dry-run
+```
+
+The command requires an explicit workspace and verifies the User Token Team ID before writing.
+An existing channel is reused instead of duplicated, then its topic and purpose are reconciled.
+Use `--private` for a private channel. `--dry-run` does not resolve credentials or call Slack.
+After a real write, `conversations.info` verifies the name, visibility, topic, and purpose.
 
 ### Global options
 
