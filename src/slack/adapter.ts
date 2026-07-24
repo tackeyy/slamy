@@ -16,7 +16,7 @@ import {
   type SlackMethodPolicy,
   type SlackOperation,
 } from "./method-policy.js";
-import { collectCursorPages } from "./pagination.js";
+import { collectCursorPages, PartialPaginationError } from "./pagination.js";
 import { type Clock, realClock, withRateLimitRetry } from "./retry.js";
 import type { SlackTransport } from "./transport.js";
 import type { SlackWorkspaceContext } from "./workspace-context.js";
@@ -234,6 +234,7 @@ export class WorkspaceSlackAdapter implements WorkspaceSlackOperations {
     context: SlackWorkspaceContext,
     input: SlackListPublicConversationsInput = {},
   ): Promise<readonly SlackPublicConversation[]> {
+    const explicitLimit = input.limit;
     let safeInput: ConversationListInputSnapshot;
     try {
       safeInput = snapshotConversationListInput(input, true);
@@ -241,7 +242,7 @@ export class WorkspaceSlackAdapter implements WorkspaceSlackOperations {
       throw this.#paginationError(context);
     }
     try {
-      const pages = await collectCursorPages({
+      const pages = await collectCursorPages<SlackConversationPage>({
         ...(safeInput.maxPages === undefined ? {} : { maxPages: safeInput.maxPages }),
         ...(safeInput.cursor === undefined ? {} : { initialCursor: safeInput.cursor }),
         fetchPage: (cursor) =>
@@ -254,9 +255,13 @@ export class WorkspaceSlackAdapter implements WorkspaceSlackOperations {
           }),
         getNextCursor: (page) => page.nextCursor,
         preserveFetchError: isTrustedSlackAdapterError,
+        ...(explicitLimit !== undefined
+          ? { getItems: (page) => page.conversations, limit: explicitLimit }
+          : {}),
       });
       return Object.freeze(pages.flatMap((page) => page.conversations));
     } catch (error) {
+      if (error instanceof PartialPaginationError) throw error;
       if (isTrustedSlackAdapterError(error)) throw error;
       throw this.#paginationError(context);
     }
@@ -266,6 +271,7 @@ export class WorkspaceSlackAdapter implements WorkspaceSlackOperations {
     context: SlackWorkspaceContext,
     input: SlackListPublicConversationsInput = {},
   ): Promise<readonly SlackPublicConversation[]> {
+    const explicitLimit = input.limit;
     let safeInput: ConversationListInputSnapshot;
     try {
       safeInput = snapshotConversationListInput(input, true);
@@ -292,9 +298,12 @@ export class WorkspaceSlackAdapter implements WorkspaceSlackOperations {
           ),
         getNextCursor: (page) => page.nextCursor,
         preserveFetchError: isTrustedSlackAdapterError,
+        getItems: (page) => page.conversations,
+        ...(explicitLimit !== undefined ? { limit: explicitLimit } : {}),
       });
       return Object.freeze(pages.flatMap((page) => page.conversations));
     } catch (error) {
+      if (error instanceof PartialPaginationError) throw error;
       if (isTrustedSlackAdapterError(error)) throw error;
       throw this.#paginationError(context, "list-private-conversations");
     }
