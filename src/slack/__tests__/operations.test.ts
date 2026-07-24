@@ -447,6 +447,105 @@ describe("WorkspaceSlackAdapter named operations", () => {
   });
 });
 
+describe("listAll* item-level limit and PartialPaginationError", () => {
+  function channel(id: string, name: string) {
+    return { id, name, is_archived: false, is_private: false };
+  }
+
+  function pageResponse(channels: ReturnType<typeof channel>[], nextCursor: string) {
+    return {
+      ok: true,
+      channels,
+      response_metadata: { next_cursor: nextCursor },
+    };
+  }
+
+  it("stops fetching after the item limit is reached across pages", async () => {
+    const transport = new QueueTransport([
+      pageResponse([channel("C001", "alpha"), channel("C002", "beta"), channel("C003", "gamma")], "cursor-2"),
+      pageResponse([channel("C004", "delta"), channel("C005", "epsilon")], "cursor-3"),
+      pageResponse([channel("C006", "zeta")], ""),
+    ]);
+    const adapter = new WorkspaceSlackAdapter({ transport, clock: instantClock });
+
+    const conversations = await adapter.listAllPublicConversations(
+      contextWith({ userToken: "xoxp-user", userScopes: ["channels:read"] }),
+      { limit: 5 },
+    );
+
+    // 3 + 2 = 5, should stop before calling page 3
+    expect(conversations).toHaveLength(5);
+    expect(transport.requests).toHaveLength(2);
+  });
+
+  it("returns all conversations when the limit is not reached", async () => {
+    const transport = new QueueTransport([
+      pageResponse([channel("C001", "a")], "cursor-2"),
+      pageResponse([channel("C002", "b")], ""),
+    ]);
+    const adapter = new WorkspaceSlackAdapter({ transport, clock: instantClock });
+
+    const conversations = await adapter.listAllPublicConversations(
+      contextWith({ userToken: "xoxp-user", userScopes: ["channels:read"] }),
+      { limit: 100 },
+    );
+
+    expect(conversations).toHaveLength(2);
+    expect(transport.requests).toHaveLength(2);
+  });
+
+  it("applies item limit to private conversations too", async () => {
+    const transport = new QueueTransport([
+      pageResponse([channel("C001", "priv-a"), channel("C002", "priv-b")], "cursor-2"),
+      pageResponse([channel("C003", "priv-c")], ""),
+    ]);
+    const adapter = new WorkspaceSlackAdapter({ transport, clock: instantClock });
+
+    const conversations = await adapter.listAllPrivateConversations(
+      contextWith({ userToken: "xoxp-user", userScopes: ["groups:read"] }),
+      { limit: 2 },
+    );
+
+    expect(conversations).toHaveLength(2);
+    expect(transport.requests).toHaveLength(1);
+  });
+
+  it("propagates PartialPaginationError with partial conversations when a later page fails after pages were collected", async () => {
+    const rateLimitFailure = new TransportFailure({
+      code: "slack_webapi_rate_limited_error",
+      retryAfter: 0,
+      message: "xoxp-partial-canary",
+    });
+    const transport = new QueueTransport([
+      pageResponse([channel("C001", "partial-1")], "cursor-2"),
+      // 4 rate-limit failures to exhaust retry
+      rateLimitFailure,
+      rateLimitFailure,
+      rateLimitFailure,
+      rateLimitFailure,
+    ]);
+    const adapter = new WorkspaceSlackAdapter({ transport, clock: instantClock });
+
+    let caught: unknown;
+    try {
+      await adapter.listAllPublicConversations(
+        contextWith({ userToken: "xoxp-user", userScopes: ["channels:read"] }),
+        { limit: 10 },
+      );
+    } catch (error) {
+      caught = error;
+    }
+
+    // With getItems + limit set, a later page failure after partial results => PartialPaginationError
+    // carrying the already-fetched conversations
+    expect(caught).toMatchObject({ code: "PAGINATION_PARTIAL" });
+    // The partial error should carry the pages collected so far
+    const partial = caught as { pages: Array<{ conversations: unknown[] }> };
+    expect(partial.pages).toHaveLength(1);
+    expect(partial.pages[0]).toMatchObject({ conversations: [{ channelId: "C001" }] });
+  });
+});
+
 function idFactory(): () => string {
   let value = 0;
   return () => `req-${++value}`;
