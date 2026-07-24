@@ -235,6 +235,7 @@ describe("PartialPaginationError", () => {
     expect(partial.code).toBe("PAGINATION_PARTIAL");
     expect(partial.pages).toHaveLength(1);
     expect(partial.pages[0]).toMatchObject({ items: ["a", "b"] });
+    expect(partial.cause).toBe(approved);
   });
 
   it("carries the collected pages on the error instance", async () => {

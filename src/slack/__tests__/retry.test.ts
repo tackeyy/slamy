@@ -156,4 +156,25 @@ describe("withRateLimitRetry", () => {
     );
     expect(clock.sleepMs).toEqual([0]);
   });
+
+  it.each([Number.NaN, Number.POSITIVE_INFINITY, -1])(
+    "rethrows invalid Retry-After value %s without retrying",
+    async (retryAfterSeconds) => {
+      const clock = new FakeClock();
+      let calls = 0;
+      const error = makeRateLimitedError(retryAfterSeconds);
+      await expect(
+        withRateLimitRetry(
+          () => {
+            calls += 1;
+            return Promise.reject(error);
+          },
+          "idempotent",
+          clock,
+        ),
+      ).rejects.toBe(error);
+      expect(calls).toBe(1);
+      expect(clock.sleepMs).toHaveLength(0);
+    },
+  );
 });

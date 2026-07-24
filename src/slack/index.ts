@@ -33,6 +33,7 @@ export type {
   SlackMethodPolicy,
   SlackOperation,
 } from "./method-policy.js";
+export { PartialPaginationError } from "./pagination.js";
 export { NodeSlackWebApiTransport } from "./web-api-transport.js";
 export {
   createSlackWorkspaceContext,

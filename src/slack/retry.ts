@@ -43,6 +43,8 @@ function isRateLimitedError(
   return (
     error instanceof SlackAdapterError &&
     error.code === "SLACK_RATE_LIMITED" &&
-    typeof error.retryAfterSeconds === "number"
+    typeof error.retryAfterSeconds === "number" &&
+    Number.isFinite(error.retryAfterSeconds) &&
+    error.retryAfterSeconds >= 0
   );
 }

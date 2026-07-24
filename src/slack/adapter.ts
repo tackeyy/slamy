@@ -255,11 +255,10 @@ export class WorkspaceSlackAdapter implements WorkspaceSlackOperations {
           }),
         getNextCursor: (page) => page.nextCursor,
         preserveFetchError: isTrustedSlackAdapterError,
-        ...(explicitLimit !== undefined
-          ? { getItems: (page) => page.conversations, limit: explicitLimit }
-          : {}),
+        getItems: (page) => page.conversations,
+        ...(explicitLimit !== undefined ? { limit: explicitLimit } : {}),
       });
-      return Object.freeze(pages.flatMap((page) => page.conversations));
+      return freezeLimited(pages.flatMap((page) => page.conversations), explicitLimit);
     } catch (error) {
       if (error instanceof PartialPaginationError) throw error;
       if (isTrustedSlackAdapterError(error)) throw error;
@@ -301,7 +300,7 @@ export class WorkspaceSlackAdapter implements WorkspaceSlackOperations {
         getItems: (page) => page.conversations,
         ...(explicitLimit !== undefined ? { limit: explicitLimit } : {}),
       });
-      return Object.freeze(pages.flatMap((page) => page.conversations));
+      return freezeLimited(pages.flatMap((page) => page.conversations), explicitLimit);
     } catch (error) {
       if (error instanceof PartialPaginationError) throw error;
       if (isTrustedSlackAdapterError(error)) throw error;
@@ -1080,6 +1079,10 @@ function isResponseMappingError(value: unknown): value is ResponseMappingError {
 
 function isTrustedSlackAdapterError(value: unknown): value is SlackAdapterError {
   return value !== null && typeof value === "object" && TRUSTED_ADAPTER_ERRORS.has(value);
+}
+
+function freezeLimited<Item>(items: readonly Item[], limit: number | undefined): readonly Item[] {
+  return Object.freeze(limit === undefined ? [...items] : [...items.slice(0, limit)]);
 }
 
 function trustedAdapterError(
