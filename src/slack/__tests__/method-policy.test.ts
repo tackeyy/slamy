@@ -10,6 +10,7 @@ describe("Slack method policy", () => {
         credentialKind: "user",
         requiredScopes: [],
         pagination: "none",
+        retryPolicy: "idempotent",
         workspaceArgument: null,
       },
       {
@@ -18,6 +19,7 @@ describe("Slack method policy", () => {
         credentialKind: "bot",
         requiredScopes: [],
         pagination: "none",
+        retryPolicy: "idempotent",
         workspaceArgument: null,
       },
       {
@@ -26,6 +28,7 @@ describe("Slack method policy", () => {
         credentialKind: "user",
         requiredScopes: ["team:read"],
         pagination: "none",
+        retryPolicy: "idempotent",
         workspaceArgument: "team",
       },
       {
@@ -34,6 +37,7 @@ describe("Slack method policy", () => {
         credentialKind: "user",
         requiredScopes: ["channels:read"],
         pagination: "cursor",
+        retryPolicy: "idempotent",
         workspaceArgument: "team_id",
       },
       {
@@ -42,6 +46,7 @@ describe("Slack method policy", () => {
         credentialKind: "user",
         requiredScopes: ["groups:read"],
         pagination: "cursor",
+        retryPolicy: "idempotent",
         workspaceArgument: "team_id",
       },
       {
@@ -50,6 +55,7 @@ describe("Slack method policy", () => {
         credentialKind: "user",
         requiredScopes: ["channels:read"],
         pagination: "none",
+        retryPolicy: "idempotent",
         workspaceArgument: null,
       },
       {
@@ -58,6 +64,7 @@ describe("Slack method policy", () => {
         credentialKind: "user",
         requiredScopes: ["groups:read"],
         pagination: "none",
+        retryPolicy: "idempotent",
         workspaceArgument: null,
       },
       {
@@ -66,6 +73,7 @@ describe("Slack method policy", () => {
         credentialKind: "user",
         requiredScopes: ["channels:write"],
         pagination: "none",
+        retryPolicy: "never",
         workspaceArgument: "team_id",
       },
       {
@@ -74,6 +82,7 @@ describe("Slack method policy", () => {
         credentialKind: "user",
         requiredScopes: ["groups:write"],
         pagination: "none",
+        retryPolicy: "never",
         workspaceArgument: "team_id",
       },
       {
@@ -82,6 +91,7 @@ describe("Slack method policy", () => {
         credentialKind: "user",
         requiredScopes: ["channels:write.topic"],
         pagination: "none",
+        retryPolicy: "never",
         workspaceArgument: null,
       },
       {
@@ -90,6 +100,7 @@ describe("Slack method policy", () => {
         credentialKind: "user",
         requiredScopes: ["groups:write.topic"],
         pagination: "none",
+        retryPolicy: "never",
         workspaceArgument: null,
       },
       {
@@ -98,6 +109,7 @@ describe("Slack method policy", () => {
         credentialKind: "user",
         requiredScopes: ["channels:write.topic"],
         pagination: "none",
+        retryPolicy: "never",
         workspaceArgument: null,
       },
       {
@@ -106,6 +118,7 @@ describe("Slack method policy", () => {
         credentialKind: "user",
         requiredScopes: ["groups:write.topic"],
         pagination: "none",
+        retryPolicy: "never",
         workspaceArgument: null,
       },
       {
@@ -114,6 +127,7 @@ describe("Slack method policy", () => {
         credentialKind: "user",
         requiredScopes: ["search:read"],
         pagination: "none",
+        retryPolicy: "idempotent",
         workspaceArgument: "team_id",
       },
       {
@@ -122,6 +136,7 @@ describe("Slack method policy", () => {
         credentialKind: "bot",
         requiredScopes: ["chat:write"],
         pagination: "none",
+        retryPolicy: "never",
         workspaceArgument: null,
       },
     ]);
