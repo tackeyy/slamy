@@ -17,6 +17,7 @@ import {
   type SlackOperation,
 } from "./method-policy.js";
 import { collectCursorPages } from "./pagination.js";
+import { type Clock, realClock, withRateLimitRetry } from "./retry.js";
 import type { SlackTransport } from "./transport.js";
 import type { SlackWorkspaceContext } from "./workspace-context.js";
 
@@ -44,6 +45,7 @@ export type WorkspaceSlackAdapterOptions = {
   requestIdFactory?: SlackRequestIdFactory;
   diagnosticSink?: SlackDiagnosticSink;
   verificationHook?: SlackVerificationHook;
+  clock?: Clock;
 };
 
 export type SlackTeamInfo = {
@@ -180,12 +182,14 @@ export class WorkspaceSlackAdapter implements WorkspaceSlackOperations {
   readonly #requestIdFactory: SlackRequestIdFactory;
   readonly #diagnosticSink?: SlackDiagnosticSink;
   readonly #verificationHook?: SlackVerificationHook;
+  readonly #clock: Clock;
 
   constructor(options: WorkspaceSlackAdapterOptions) {
     this.#transport = options.transport;
     this.#requestIdFactory = options.requestIdFactory ?? createLocalRequestId;
     this.#diagnosticSink = options.diagnosticSink;
     this.#verificationHook = options.verificationHook;
+    this.#clock = options.clock ?? realClock;
   }
 
   getTeamInfo(context: SlackWorkspaceContext): Promise<SlackTeamInfo> {
@@ -486,32 +490,40 @@ export class WorkspaceSlackAdapter implements WorkspaceSlackOperations {
       throw error;
     }
 
-    try {
-      const response = await credential.use((token) =>
-        this.#transport.call({
-          method: policy.method,
-          token,
-          arguments: Object.freeze({
-            ...args,
-            ...(policy.workspaceArgument === null
-              ? {}
-              : { [policy.workspaceArgument]: safeContext.teamId }),
+    const callAndMap = async (): Promise<Result> => {
+      try {
+        const response = await credential.use((token) =>
+          this.#transport.call({
+            method: policy.method,
+            token,
+            arguments: Object.freeze({
+              ...args,
+              ...(policy.workspaceArgument === null
+                ? {}
+                : { [policy.workspaceArgument]: safeContext.teamId }),
+            }),
+            requestId,
+            teamId: safeContext.teamId,
           }),
-          requestId,
-          teamId: safeContext.teamId,
-        }),
-      );
-      const result = map(response, safeContext.teamId);
+        );
+        return map(response, safeContext.teamId);
+      } catch (cause) {
+        throw normalizeFailure(cause, policy, safeContext.teamId, requestId);
+      }
+    };
+
+    try {
+      const result = await withRateLimitRetry(callAndMap, policy.retryPolicy, this.#clock);
       emitDiagnostic(
         this.#diagnosticSink,
         diagnostic(policy, safeContext.teamId, requestId, "succeeded"),
       );
       return result;
-    } catch (cause) {
-      const error = normalizeFailure(cause, policy, safeContext.teamId, requestId);
+    } catch (error) {
+      const adapterErr = error as SlackAdapterError;
       emitDiagnostic(
         this.#diagnosticSink,
-        failedDiagnostic(policy, safeContext.teamId, requestId, error.code),
+        failedDiagnostic(policy, safeContext.teamId, requestId, adapterErr.code),
       );
       throw error;
     }

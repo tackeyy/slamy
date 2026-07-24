@@ -3,6 +3,9 @@ import { WorkspaceSlackAdapter } from "../adapter.js";
 import type { SlackTransport, SlackTransportRequest } from "../transport.js";
 import { contextWith, PRIMARY_TEAM_ID } from "./helpers.js";
 
+/** Zero-sleep clock so retry tests complete instantly. */
+const instantClock = { sleep: () => Promise.resolve() };
+
 class QueueTransport implements SlackTransport {
   readonly requests: SlackTransportRequest[] = [];
 
@@ -334,15 +337,24 @@ describe("WorkspaceSlackAdapter named operations", () => {
   });
 
   it("preserves a normalized rate limit from a later conversation page", async () => {
+    const rateLimitFailure = new TransportFailure({
+      code: "slack_webapi_rate_limited_error",
+      retryAfter: 17,
+      message: "xoxp-page-rate-limit-canary",
+    });
     const transport = new QueueTransport([
       { ok: true, channels: [], response_metadata: { next_cursor: "cursor-2" } },
-      new TransportFailure({
-        code: "slack_webapi_rate_limited_error",
-        retryAfter: 17,
-        message: "xoxp-page-rate-limit-canary",
-      }),
+      // 1 initial attempt + 3 retries = 4 rate-limit failures needed to exhaust withRateLimitRetry
+      rateLimitFailure,
+      rateLimitFailure,
+      rateLimitFailure,
+      rateLimitFailure,
     ]);
-    const adapter = new WorkspaceSlackAdapter({ transport, requestIdFactory: idFactory() });
+    const adapter = new WorkspaceSlackAdapter({
+      transport,
+      requestIdFactory: idFactory(),
+      clock: instantClock,
+    });
 
     await expect(
       adapter.listAllPublicConversations(
