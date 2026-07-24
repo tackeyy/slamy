@@ -4,6 +4,7 @@ import {
   createWorkspaceSlackAdapter,
   getSlackMethodPolicy,
   listSlackMethodPolicies,
+  PartialPaginationError,
   SlackAdapterError,
 } from "../lib/index.js";
 import { contextWith } from "../slack/__tests__/helpers.js";
@@ -21,6 +22,7 @@ describe("workspace Slack adapter public API", () => {
       credentialKind: "bot",
     });
     expect(listSlackMethodPolicies()).toHaveLength(15);
+    expect(PartialPaginationError).toBeTypeOf("function");
     expect(SlackAdapterError).toBeTypeOf("function");
   });
 

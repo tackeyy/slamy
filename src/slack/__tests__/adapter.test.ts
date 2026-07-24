@@ -5,6 +5,9 @@ import { SlackAdapterError } from "../errors.js";
 import type { SlackTransport, SlackTransportRequest } from "../transport.js";
 import { contextWith, PRIMARY_TEAM_ID } from "./helpers.js";
 
+/** Zero-sleep clock for tests that do not want to exercise real retry waits. */
+const instantClock = { sleep: () => Promise.resolve() };
+
 class FakeTransport implements SlackTransport {
   readonly requests: SlackTransportRequest[] = [];
   response: unknown = { ok: true };
@@ -259,6 +262,7 @@ describe("WorkspaceSlackAdapter", () => {
       transport,
       requestIdFactory: () => "req-safe",
       diagnosticSink: (event) => events.push(event),
+      clock: instantClock,
     });
     let caught: unknown;
     try {
@@ -346,5 +350,99 @@ describe("WorkspaceSlackAdapter", () => {
     expect(String(caught)).not.toContain(canary);
     expect(JSON.stringify(caught)).not.toContain(canary);
     expect(caught instanceof Error ? caught.stack : "").not.toContain(canary);
+  });
+});
+
+describe("WorkspaceSlackAdapter rate-limit retry", () => {
+  class FakeClock {
+    readonly sleepMs: number[] = [];
+    sleep(ms: number): Promise<void> {
+      this.sleepMs.push(ms);
+      return Promise.resolve();
+    }
+  }
+
+  class ScriptedTransport implements SlackTransport {
+    readonly requests: SlackTransportRequest[] = [];
+    private readonly script: Array<() => unknown>;
+
+    constructor(script: Array<() => unknown>) {
+      this.script = script;
+    }
+
+    call(request: SlackTransportRequest): Promise<unknown> {
+      this.requests.push(request);
+      const next = this.script.shift();
+      if (!next) return Promise.reject(new Error("unexpected transport call"));
+      try {
+        return Promise.resolve(next());
+      } catch (error) {
+        return Promise.reject(error);
+      }
+    }
+  }
+
+  function rateLimitedSdkError(retryAfter: number): () => never {
+    return () => {
+      const err = Object.assign(new Error("rate limited"), {
+        code: "slack_webapi_rate_limited_error",
+        retryAfter,
+      });
+      throw err;
+    };
+  }
+
+  it("retries an idempotent operation after a 429 and returns the successful result", async () => {
+    const clock = new FakeClock();
+    const transport = new ScriptedTransport([
+      rateLimitedSdkError(2),
+      () => ({ ok: true, team: { id: PRIMARY_TEAM_ID, name: "Retried" } }),
+    ]);
+    const adapter = new WorkspaceSlackAdapter({ transport, clock });
+    const result = await adapter.getTeamInfo(
+      contextWith({ userToken: "xoxp-user", userScopes: ["team:read"] }),
+    );
+    expect(result.name).toBe("Retried");
+    expect(transport.requests).toHaveLength(2);
+    expect(clock.sleepMs).toEqual([2_000]);
+  });
+
+  it("immediately rethrows SLACK_RATE_LIMITED for non-idempotent operations (retryPolicy: never)", async () => {
+    const clock = new FakeClock();
+    const transport = new ScriptedTransport([rateLimitedSdkError(5)]);
+    const adapter = new WorkspaceSlackAdapter({ transport, clock });
+    await expect(
+      adapter.postMessage(
+        contextWith({ botToken: "xoxb-bot", botScopes: ["chat:write"] }),
+        { channelId: "C0123ABC", text: "hello" },
+      ),
+    ).rejects.toMatchObject({ code: "SLACK_RATE_LIMITED" });
+    expect(transport.requests).toHaveLength(1);
+    expect(clock.sleepMs).toHaveLength(0);
+  });
+
+  it("retries a paginated list operation per page when 429 is returned mid-pagination", async () => {
+    const clock = new FakeClock();
+    // Page 1 succeeds, page 2 returns 429 once, then succeeds
+    const transport = new ScriptedTransport([
+      () => ({
+        ok: true,
+        channels: [{ id: "C0000001", name: "general", is_archived: false, is_private: false }],
+        response_metadata: { next_cursor: "cursor-2" },
+      }),
+      rateLimitedSdkError(1),
+      () => ({
+        ok: true,
+        channels: [{ id: "C0000002", name: "random", is_archived: false, is_private: false }],
+        response_metadata: { next_cursor: "" },
+      }),
+    ]);
+    const adapter = new WorkspaceSlackAdapter({ transport, clock });
+    const conversations = await adapter.listAllPublicConversations(
+      contextWith({ userToken: "xoxp-user", userScopes: ["channels:read"] }),
+    );
+    expect(conversations).toHaveLength(2);
+    expect(transport.requests).toHaveLength(3);
+    expect(clock.sleepMs).toEqual([1_000]);
   });
 });

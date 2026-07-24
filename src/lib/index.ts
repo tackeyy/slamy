@@ -53,6 +53,7 @@ export type {
 export { createWorkspaceSlackAdapter } from "./slack.js";
 export type { CreateWorkspaceSlackAdapterOptions } from "./slack.js";
 export {
+  PartialPaginationError,
   SlackAdapterError,
   createSlackWorkspaceContext,
   getSlackMethodPolicy,
