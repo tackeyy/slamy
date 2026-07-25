@@ -32,6 +32,16 @@ export function resolveCliWorkspaceSelector(
   return explicitWorkspace ?? env.SLAMY_DEFAULT_WORKSPACE;
 }
 
+export function collectCliWorkspaceSelector(
+  selector: string,
+  previous: string | undefined,
+): string {
+  if (previous !== undefined && previous !== selector) {
+    throw new Error("Conflicting --workspace selectors");
+  }
+  return selector;
+}
+
 export async function createCliApiClient<Client = SlamyClient>(
   options: CreateCliApiClientOptions<Client> = {},
 ): Promise<CliApiClientLease<Client>> {

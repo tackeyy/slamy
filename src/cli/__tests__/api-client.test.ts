@@ -8,6 +8,7 @@ import { WorkspaceRegistry } from "../../workspace/registry.js";
 import type { WorkspaceStore } from "../../workspace/store.js";
 import type { WorkspaceRegistryDocument } from "../../workspace/types.js";
 import {
+  collectCliWorkspaceSelector,
   createCliApiClient,
   resolveCliWorkspaceSelector,
 } from "../api-client.js";
@@ -203,5 +204,13 @@ describe("resolveCliWorkspaceSelector", () => {
         SLAMY_DEFAULT_WORKSPACE: "manavi",
       }),
     ).toBe("wedgeai");
+  });
+});
+
+describe("collectCliWorkspaceSelector", () => {
+  it("fails closed when one invocation supplies conflicting root selectors", () => {
+    expect(() => collectCliWorkspaceSelector("manavi", "wedgeai")).toThrow(
+      "Conflicting --workspace selectors",
+    );
   });
 });

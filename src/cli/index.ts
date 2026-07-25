@@ -9,7 +9,10 @@ import { SlamyClient } from "../lib/client.js";
 import { formatTimestamp as libFormatTimestamp } from "../lib/tz.js";
 import { parseSlackTarget } from "../lib/parse-target.js";
 import { jsonOutput as formatJson } from "../lib/cli-format.js";
-import { createCliApiClient } from "./api-client.js";
+import {
+  collectCliWorkspaceSelector,
+  createCliApiClient,
+} from "./api-client.js";
 import { registerWorkspaceCommands } from "./workspace.js";
 import { registerChannelManagementCommands } from "./channels.js";
 
@@ -26,6 +29,7 @@ program
   .option(
     "--workspace <selector>",
     "Use workspace by alias, Team ID, or fully-qualified Slack domain",
+    collectCliWorkspaceSelector,
   )
   .option("--json", "Output in JSON format")
   .option("--plain", "Output in TSV format")
