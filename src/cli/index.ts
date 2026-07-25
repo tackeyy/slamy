@@ -7,12 +7,12 @@ import { basename, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { SlamyClient } from "../lib/client.js";
 import { formatTimestamp as libFormatTimestamp } from "../lib/tz.js";
-import { parseSlackTarget } from "../lib/parse-target.js";
 import { jsonOutput as formatJson } from "../lib/cli-format.js";
 import {
   collectCliWorkspaceSelector,
   createCliApiClient,
 } from "./api-client.js";
+import { createCliTargetClient } from "./target-client.js";
 import { registerWorkspaceCommands } from "./workspace.js";
 import { registerChannelManagementCommands } from "./channels.js";
 
@@ -64,6 +64,24 @@ async function createClient(): Promise<SlamyClient> {
   return lease.client;
 }
 
+async function createTargetClient(
+  input: string,
+  messageTs?: string,
+  threadTs?: string,
+): Promise<{
+  client: SlamyClient;
+  target: { channel: string; ts?: string; thread_ts?: string };
+}> {
+  const lease = await createCliTargetClient<SlamyClient>({
+    input,
+    ...(messageTs ? { messageTs } : {}),
+    ...(threadTs ? { threadTs } : {}),
+    explicitWorkspace: program.opts<{ workspace?: string }>().workspace,
+  });
+  lease.dispose();
+  return { client: lease.client, target: lease.target };
+}
+
 function jsonOutput(data: unknown): void {
   console.log(formatJson(data));
 }
@@ -73,21 +91,6 @@ function formatTimestamp(ts: string): string {
 }
 
 registerWorkspaceCommands(program);
-
-// channel_id or permalink URL + 補助 ts を受けて、最終的な channel / ts / thread_ts を解決する。
-// permalink URL の場合は URL 由来を優先、明示引数が空のときだけ URL の値を使う。
-function resolveTarget(
-  channelOrUrl: string,
-  argTs?: string,
-  argThreadTs?: string,
-): { channel: string; ts?: string; thread_ts?: string } {
-  const parsed = parseSlackTarget(channelOrUrl);
-  return {
-    channel: parsed.channel,
-    ts: argTs || parsed.ts,
-    thread_ts: argThreadTs || parsed.thread_ts || (argTs ? undefined : parsed.ts),
-  };
-}
 
 // "Name (U123)" 形式のラベラーを返す。id が解決できなければ id のみ。
 async function buildUserLabeler(
@@ -242,9 +245,8 @@ channels
   .option("--resolve-names", "Resolve user_id / bot_id to display names")
   .action(async (channelOrUrl, opts) => {
     try {
-      const client = await createClient();
+      const { client, target } = await createTargetClient(channelOrUrl);
       const mode = getOutputMode();
-      const target = resolveTarget(channelOrUrl);
       const messages = await client.getChannelHistory(target.channel, {
         limit: parseInt(opts.limit, 10),
         oldest: opts.oldest,
@@ -281,9 +283,8 @@ channels
   .option("--resolve-names", "Resolve user_id to display names")
   .action(async (channelOrUrl, opts) => {
     try {
-      const client = await createClient();
+      const { client, target } = await createTargetClient(channelOrUrl);
       const mode = getOutputMode();
-      const target = resolveTarget(channelOrUrl);
       const members = await client.getChannelMembers(target.channel);
 
       const labelFor = opts.resolveNames
@@ -383,9 +384,12 @@ messages
   .option("--broadcast", "Also post to the channel (reply_broadcast)")
   .action(async (channelOrUrl, threadTsArg, opts) => {
     try {
-      const client = await createClient();
+      const { client, target } = await createTargetClient(
+        channelOrUrl,
+        undefined,
+        threadTsArg,
+      );
       const mode = getOutputMode();
-      const target = resolveTarget(channelOrUrl, undefined, threadTsArg);
       if (!target.thread_ts) {
         console.error("Error: thread_ts is required (pass as 2nd arg or via permalink URL)");
         process.exit(1);
@@ -415,9 +419,8 @@ messages
   .requiredOption("--text <text>", "New message text")
   .action(async (channelOrUrl, tsArg, opts) => {
     try {
-      const client = await createClient();
+      const { client, target } = await createTargetClient(channelOrUrl, tsArg);
       const mode = getOutputMode();
-      const target = resolveTarget(channelOrUrl, tsArg);
       if (!target.ts) {
         console.error("Error: ts is required (pass as 2nd arg or via permalink URL)");
         process.exit(1);
@@ -442,9 +445,8 @@ messages
   .description("Delete a message (channel + ts, or Slack permalink URL)")
   .action(async (channelOrUrl, tsArg) => {
     try {
-      const client = await createClient();
+      const { client, target } = await createTargetClient(channelOrUrl, tsArg);
       const mode = getOutputMode();
-      const target = resolveTarget(channelOrUrl, tsArg);
       if (!target.ts) {
         console.error("Error: ts is required (pass as 2nd arg or via permalink URL)");
         process.exit(1);
@@ -606,9 +608,11 @@ reactions
   .option("--resolve-names", "Resolve user_id to display names")
   .action(async (channelOrUrl, timestampArg, opts) => {
     try {
-      const client = await createClient();
+      const { client, target } = await createTargetClient(
+        channelOrUrl,
+        timestampArg,
+      );
       const mode = getOutputMode();
-      const target = resolveTarget(channelOrUrl, timestampArg);
       if (!target.ts) {
         console.error("Error: timestamp is required (pass as 2nd arg or via permalink URL)");
         process.exit(1);
@@ -660,9 +664,11 @@ reactions
   .requiredOption("--name <emoji>", "Reaction emoji name (without colons)")
   .action(async (channelOrUrl, timestampArg, opts) => {
     try {
-      const client = await createClient();
+      const { client, target } = await createTargetClient(
+        channelOrUrl,
+        timestampArg,
+      );
       const mode = getOutputMode();
-      const target = resolveTarget(channelOrUrl, timestampArg);
       if (!target.ts) {
         console.error("Error: timestamp is required (pass as 2nd arg or via permalink URL)");
         process.exit(1);
@@ -690,9 +696,11 @@ reactions
   .requiredOption("--name <emoji>", "Reaction emoji name (without colons)")
   .action(async (channelOrUrl, timestampArg, opts) => {
     try {
-      const client = await createClient();
+      const { client, target } = await createTargetClient(
+        channelOrUrl,
+        timestampArg,
+      );
       const mode = getOutputMode();
-      const target = resolveTarget(channelOrUrl, timestampArg);
       if (!target.ts) {
         console.error("Error: timestamp is required (pass as 2nd arg or via permalink URL)");
         process.exit(1);
@@ -776,9 +784,12 @@ threads
   .option("--resolve-names", "Resolve user_id / bot_id to display names")
   .action(async (channelOrUrl, threadTsArg, opts) => {
     try {
-      const client = await createClient();
+      const { client, target } = await createTargetClient(
+        channelOrUrl,
+        undefined,
+        threadTsArg,
+      );
       const mode = getOutputMode();
-      const target = resolveTarget(channelOrUrl, undefined, threadTsArg);
       if (!target.thread_ts) {
         console.error("Error: thread_ts is required (pass as 2nd arg or via permalink URL)");
         process.exit(1);

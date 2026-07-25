@@ -461,6 +461,12 @@ registry選択はfail-closedです。選択したworkspaceに設定されたcred
 workspaceをまたぐUser/Bot credentialではAPI clientを作成しません。registry selectorがある場合、
 `SLACK_USER_TOKEN`、`SLACK_BOT_TOKEN`、別workspaceへはfallbackしません。
 
+`channel_or_url`を受け取るコマンドは、API client作成前に対応するSlack permalinkを解決します。
+permalinkのhostnameまたはTeam IDは、登録済みの過去domainを含め、選択workspaceと一致する必要が
+あります。競合、未登録、Slack以外のURLではAPIを呼ばず失敗します。明示/default selectorがない
+permalinkはlegacy global credentialではなく登録先workspaceを使用します。selectorなしの通常channel
+IDだけは従来の単一workspace動作を維持します。
+
 既存の単一ワークスペース設定には後方互換性があります。`SLACK_USER_TOKEN`または
 `SLACK_BOT_TOKEN`をそのまま設定し、`--workspace`と`SLAMY_DEFAULT_WORKSPACE`の両方を未設定にします。
 移行するには、token環境変数をregistry workspaceのcredential referenceへ追加し、

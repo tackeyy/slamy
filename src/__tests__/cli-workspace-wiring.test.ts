@@ -9,7 +9,12 @@ describe("CLI workspace wiring", () => {
     expect(cliSource).toContain("createCliApiClient");
     expect(cliSource).not.toContain("const client = createClient();");
 
-    const clientUses = cliSource.match(/const client = await createClient\(\);/g) ?? [];
-    expect(clientUses).toHaveLength(23);
+    const plainClientUses = cliSource.match(/const client = await createClient\(\);/g) ?? [];
+    const targetClientUses = cliSource.match(
+      /const \{ client, target \} = await createTargetClient\(/g,
+    ) ?? [];
+    expect(plainClientUses).toHaveLength(14);
+    expect(targetClientUses).toHaveLength(9);
+    expect(cliSource).not.toContain("function resolveTarget(");
   });
 });

@@ -473,6 +473,12 @@ client on missing credentials, identity mismatch, ambiguous/unknown selection, o
 User/Bot credentials. It never falls back to `SLACK_USER_TOKEN`, `SLACK_BOT_TOKEN`, or another
 workspace after a registry selector is present.
 
+Commands accepting `channel_or_url` resolve supported Slack permalinks before creating an API client.
+The permalink hostname or Team ID must identify the selected workspace, including registered
+previous domains; conflicting, unknown, or non-Slack URL evidence fails without an API call. With no
+explicit/default selector, a permalink uses its registered workspace rather than legacy global
+credentials. A plain channel ID with no selector retains legacy single-workspace behavior.
+
 Existing single-workspace setups remain compatible: keep `SLACK_USER_TOKEN` and/or
 `SLACK_BOT_TOKEN`, and leave both `--workspace` and `SLAMY_DEFAULT_WORKSPACE` unset. To migrate, add
 the token environment variable as a credential reference on a registry workspace, set
