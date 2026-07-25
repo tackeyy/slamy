@@ -9,7 +9,7 @@ import { SlamyClient } from "../lib/client.js";
 import { formatTimestamp as libFormatTimestamp } from "../lib/tz.js";
 import { parseSlackTarget } from "../lib/parse-target.js";
 import { jsonOutput as formatJson } from "../lib/cli-format.js";
-import { requireToken } from "../lib/cli-errors.js";
+import { createCliApiClient } from "./api-client.js";
 import { registerWorkspaceCommands } from "./workspace.js";
 import { registerChannelManagementCommands } from "./channels.js";
 
@@ -23,6 +23,10 @@ program
   .name("slamy")
   .description("Slack CLI tool")
   .version(pkg.version)
+  .option(
+    "--workspace <selector>",
+    "Use workspace by alias, Team ID, or fully-qualified Slack domain",
+  )
   .option("--json", "Output in JSON format")
   .option("--plain", "Output in TSV format")
   .option("--utc", "Display timestamps in UTC (default: local TZ)")
@@ -40,17 +44,12 @@ function getTzOptions(): { utc?: boolean; tz?: string } {
   return { utc: opts.utc, tz: opts.tz };
 }
 
-function createClient(): SlamyClient {
-  const tokens = requireToken(
-    process.env,
-    (code) => process.exit(code),
-    (msg) => console.error(msg),
-  );
-  if (!tokens) {
-    // requireToken already called process.exit(1); this branch keeps TS happy.
-    throw new Error("unreachable: requireToken should have exited");
-  }
-  return new SlamyClient(tokens);
+async function createClient(): Promise<SlamyClient> {
+  const lease = await createCliApiClient({
+    explicitWorkspace: program.opts<{ workspace?: string }>().workspace,
+  });
+  lease.dispose();
+  return lease.client;
 }
 
 function jsonOutput(data: unknown): void {
@@ -101,7 +100,7 @@ auth
   .description("Test authentication with Slack API")
   .action(async () => {
     try {
-      const client = createClient();
+      const client = await createClient();
       const info = await client.authTest();
       const mode = getOutputMode();
 
@@ -130,7 +129,7 @@ team
   )
   .action(async () => {
     try {
-      const client = createClient();
+      const client = await createClient();
       const mode = getOutputMode();
       const info = await client.getTeamInfo();
 
@@ -166,7 +165,7 @@ channels
   .option("--unread", "Only show channels with unread messages")
   .action(async (opts) => {
     try {
-      const client = createClient();
+      const client = await createClient();
       const mode = getOutputMode();
       const limit = parseInt(opts.limit, 10);
 
@@ -231,7 +230,7 @@ channels
   .option("--resolve-names", "Resolve user_id / bot_id to display names")
   .action(async (channelOrUrl, opts) => {
     try {
-      const client = createClient();
+      const client = await createClient();
       const mode = getOutputMode();
       const target = resolveTarget(channelOrUrl);
       const messages = await client.getChannelHistory(target.channel, {
@@ -270,7 +269,7 @@ channels
   .option("--resolve-names", "Resolve user_id to display names")
   .action(async (channelOrUrl, opts) => {
     try {
-      const client = createClient();
+      const client = await createClient();
       const mode = getOutputMode();
       const target = resolveTarget(channelOrUrl);
       const members = await client.getChannelMembers(target.channel);
@@ -307,7 +306,7 @@ messages
   .option("--as-user", "Post as the authenticated user (uses user token instead of bot token)")
   .action(async (channelId, opts) => {
     try {
-      const client = createClient();
+      const client = await createClient();
       const mode = getOutputMode();
       const result = await client.postMessage(channelId, opts.text, { asUser: opts.asUser === true });
 
@@ -331,7 +330,7 @@ messages
   .requiredOption("--at <datetime>", "Post time (Unix timestamp or ISO 8601 e.g. 2026-02-24T09:00+09:00)")
   .action(async (channelId, opts) => {
     try {
-      const client = createClient();
+      const client = await createClient();
       const mode = getOutputMode();
 
       let postAt: number;
@@ -372,7 +371,7 @@ messages
   .option("--broadcast", "Also post to the channel (reply_broadcast)")
   .action(async (channelOrUrl, threadTsArg, opts) => {
     try {
-      const client = createClient();
+      const client = await createClient();
       const mode = getOutputMode();
       const target = resolveTarget(channelOrUrl, undefined, threadTsArg);
       if (!target.thread_ts) {
@@ -404,7 +403,7 @@ messages
   .requiredOption("--text <text>", "New message text")
   .action(async (channelOrUrl, tsArg, opts) => {
     try {
-      const client = createClient();
+      const client = await createClient();
       const mode = getOutputMode();
       const target = resolveTarget(channelOrUrl, tsArg);
       if (!target.ts) {
@@ -431,7 +430,7 @@ messages
   .description("Delete a message (channel + ts, or Slack permalink URL)")
   .action(async (channelOrUrl, tsArg) => {
     try {
-      const client = createClient();
+      const client = await createClient();
       const mode = getOutputMode();
       const target = resolveTarget(channelOrUrl, tsArg);
       if (!target.ts) {
@@ -463,7 +462,7 @@ users
   .option("--include-bots", "Include bot users")
   .action(async (opts) => {
     try {
-      const client = createClient();
+      const client = await createClient();
       const mode = getOutputMode();
       const userList = await client.listUsers({
         includeDeactivated: opts.includeDeactivated,
@@ -495,7 +494,7 @@ users
   .description("Get user profile")
   .action(async (userId) => {
     try {
-      const client = createClient();
+      const client = await createClient();
       const mode = getOutputMode();
       const profile = await client.getUserProfile(userId);
 
@@ -533,7 +532,7 @@ reactions
   .option("--resolve-names", "Resolve channel_id to channel names")
   .action(async (opts) => {
     try {
-      const client = createClient();
+      const client = await createClient();
       const mode = getOutputMode();
       const limit = parseInt(opts.limit, 10);
       const result = await client.listReactions({
@@ -595,7 +594,7 @@ reactions
   .option("--resolve-names", "Resolve user_id to display names")
   .action(async (channelOrUrl, timestampArg, opts) => {
     try {
-      const client = createClient();
+      const client = await createClient();
       const mode = getOutputMode();
       const target = resolveTarget(channelOrUrl, timestampArg);
       if (!target.ts) {
@@ -649,7 +648,7 @@ reactions
   .requiredOption("--name <emoji>", "Reaction emoji name (without colons)")
   .action(async (channelOrUrl, timestampArg, opts) => {
     try {
-      const client = createClient();
+      const client = await createClient();
       const mode = getOutputMode();
       const target = resolveTarget(channelOrUrl, timestampArg);
       if (!target.ts) {
@@ -679,7 +678,7 @@ reactions
   .requiredOption("--name <emoji>", "Reaction emoji name (without colons)")
   .action(async (channelOrUrl, timestampArg, opts) => {
     try {
-      const client = createClient();
+      const client = await createClient();
       const mode = getOutputMode();
       const target = resolveTarget(channelOrUrl, timestampArg);
       if (!target.ts) {
@@ -716,7 +715,7 @@ search
   .option("--resolve-names", "Resolve user_id / bot_id to display names")
   .action(async (query, opts) => {
     try {
-      const client = createClient();
+      const client = await createClient();
       const mode = getOutputMode();
       const result = await client.searchMessages(query, {
         count: parseInt(opts.count, 10),
@@ -765,7 +764,7 @@ threads
   .option("--resolve-names", "Resolve user_id / bot_id to display names")
   .action(async (channelOrUrl, threadTsArg, opts) => {
     try {
-      const client = createClient();
+      const client = await createClient();
       const mode = getOutputMode();
       const target = resolveTarget(channelOrUrl, undefined, threadTsArg);
       if (!target.thread_ts) {
@@ -811,7 +810,7 @@ files
   .option("--initial-comment <text>", "Initial comment with the file")
   .action(async (channelId, filePath, opts) => {
     try {
-      const client = createClient();
+      const client = await createClient();
       const mode = getOutputMode();
       await client.uploadFile(channelId, filePath, {
         threadTs: opts.threadTs,
@@ -839,7 +838,7 @@ files
   .option("--output <path>", "Save path (default: original filename in current directory)")
   .action(async (fileIdOrUrl, opts) => {
     try {
-      const client = createClient();
+      const client = await createClient();
       const mode = getOutputMode();
 
       let downloadUrl: string;
@@ -885,7 +884,7 @@ engagement
   .option("--until <date>", "End date (YYYY-MM-DD, default: same as since)")
   .action(async (userId, opts) => {
     try {
-      const client = createClient();
+      const client = await createClient();
       const mode = getOutputMode();
       const result = await client.getUserEngagement(userId, {
         since: opts.since,
@@ -918,7 +917,7 @@ engagement
   .option("--delay <ms>", "Delay between API calls in ms (rate limit)", "3000")
   .action(async (opts) => {
     try {
-      const client = createClient();
+      const client = await createClient();
       const mode = getOutputMode();
       const delay = parseInt(opts.delay, 10);
       const users = await client.listUsers();
@@ -990,7 +989,7 @@ assistant
   .option("--loading-message <text...>", "Rotating loading messages")
   .action(async (opts: { channel: string; thread: string; status: string; loadingMessage?: string[] }) => {
     try {
-      const client = createClient();
+      const client = await createClient();
       const apiOpts = opts.loadingMessage && opts.loadingMessage.length > 0
         ? { loadingMessages: opts.loadingMessage }
         : undefined;
