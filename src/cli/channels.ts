@@ -4,11 +4,13 @@ import {
   type EnsureWorkspaceChannelRequest,
 } from "../lib/channel-management.js";
 import { formatEnsureChannelResult } from "../output/channel-management.js";
+import { resolveCliWorkspaceSelector } from "./api-client.js";
 
 export type ChannelManagementCommandDependencies = {
   ensureChannel: (request: EnsureWorkspaceChannelRequest) => ReturnType<typeof ensureWorkspaceChannel>;
   writeOut: (line: string) => void;
   writeErr: (line: string) => void;
+  env?: NodeJS.ProcessEnv;
 };
 
 const defaultDependencies: ChannelManagementCommandDependencies = {
@@ -18,7 +20,6 @@ const defaultDependencies: ChannelManagementCommandDependencies = {
 };
 
 type CreateOptions = {
-  workspace: string;
   topic: string;
   purpose: string;
   private?: boolean;
@@ -33,7 +34,6 @@ export function registerChannelManagementCommands(
   channels
     .command("create <name>")
     .description("Create or reconcile a channel in an explicit workspace")
-    .requiredOption("--workspace <selector>", "Workspace Team ID or alias")
     .requiredOption("--topic <text>", "Channel topic")
     .requiredOption("--purpose <text>", "Channel description")
     .option("--private", "Create a private channel")
@@ -41,9 +41,17 @@ export function registerChannelManagementCommands(
     .action(async (name: string, options: CreateOptions) => {
       try {
         validateInput(name, options.topic, options.purpose);
+        const rootWorkspace = program.opts<{ workspace?: string }>().workspace;
+        const workspace = resolveCliWorkspaceSelector(
+          rootWorkspace,
+          dependencies.env ?? process.env,
+        );
+        if (workspace === undefined) {
+          throw new Error("A workspace selector is required");
+        }
         const isPrivate = Boolean(options.private);
         const result = await dependencies.ensureChannel({
-          workspace: options.workspace,
+          workspace,
           name,
           isPrivate,
           topic: options.topic,
