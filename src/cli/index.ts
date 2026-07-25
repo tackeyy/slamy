@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { Command } from "commander";
+import { Command, InvalidArgumentError } from "commander";
 import { createWriteStream, readFileSync } from "node:fs";
 import { Readable } from "node:stream";
 import { pipeline } from "node:stream/promises";
@@ -29,7 +29,15 @@ program
   .option(
     "--workspace <selector>",
     "Use workspace by alias, Team ID, or fully-qualified Slack domain",
-    collectCliWorkspaceSelector,
+    (selector: string, previous: string | undefined) => {
+      try {
+        return collectCliWorkspaceSelector(selector, previous);
+      } catch (error) {
+        throw new InvalidArgumentError(
+          error instanceof Error ? error.message : "Invalid workspace selector",
+        );
+      }
+    },
   )
   .option("--json", "Output in JSON format")
   .option("--plain", "Output in TSV format")
