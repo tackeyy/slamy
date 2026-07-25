@@ -67,7 +67,9 @@ export async function createCliTargetClient<Client>(
     input: options.input,
     ...(options.messageTs ? { messageTs: options.messageTs } : {}),
     ...(options.threadTs ? { threadTs: options.threadTs } : {}),
-    ...(selectedWorkspace ? { explicitWorkspace: selectedWorkspace } : {}),
+    ...(selectedWorkspace !== undefined
+      ? { explicitWorkspace: selectedWorkspace }
+      : {}),
   });
   const lease = await clientLeaseFactory(resolved.workspaceAlias, registry);
 

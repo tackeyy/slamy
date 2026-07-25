@@ -90,6 +90,21 @@ describe("CLI permalink workspace routing", () => {
     },
   );
 
+  it("does not let an empty explicit selector defer to permalink evidence", async () => {
+    const clientLeaseFactory = vi.fn();
+
+    await expect(
+      createCliTargetClient({
+        input: "https://wedgeai.slack.com/archives/C0123ABC/p1700000000000001",
+        explicitWorkspace: "",
+        env: {},
+        registry: registry(),
+        clientLeaseFactory,
+      }),
+    ).rejects.toMatchObject({ code: "WORKSPACE_NOT_REGISTERED" });
+    expect(clientLeaseFactory).not.toHaveBeenCalled();
+  });
+
   it.each([
     "https://wedgeai.slack.com/archives/C0123ABC/p1700000000000001",
     "https://old-wedgeai.slack.com/archives/C0123ABC/p1700000000000001",
