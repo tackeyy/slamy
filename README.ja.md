@@ -22,9 +22,9 @@ Slack 公式の [`slack` CLI](https://docs.slack.dev/tools/slack-cli/) は、ア
 create/link/install/uninstall、Manifest、ローカル実行、デプロイ、activity、ログ、ドキュメント、
 任意の Web API 呼び出しなど、Slack アプリ開発を担当します。対応する公式コマンドでは、`--team`
 による明示的なワークスペース選択も行えます。slamy の目標範囲は、人やエージェントが使う
-タスク指向の操作です。default、明示指定、permalink 由来のワークスペースを一つの resolver で
-振り分け、ページネーション、名前解決、安定した出力を提供します。この目標設計は段階的に
-実装中であり、まだ全コマンドでは利用できません。
+タスク指向の操作です。TypeScript CLIのすべてのSlack APIコマンドは、明示・default選択に同じ
+workspace resolverとcredential検証経路を使用し、安定した出力を提供します。Slack URLを受け取る
+コマンドではpermalink由来のtargetも解決します。
 
 slamy は公式 CLI を子プロセスとして呼び出さず、その非公開 credential ファイルも読みません。
 公開 Slack API を直接利用するため、両ツールは独立して併用できます。責務分担表、機能追加の
@@ -167,7 +167,8 @@ slamy channels create 01-engineering \
   --dry-run
 ```
 
-`--workspace`を必須とし、Team IDとUser Tokenを照合してから実行します。同名チャンネルが存在する場合は
+`--workspace`または`SLAMY_DEFAULT_WORKSPACE`でworkspaceを選択し、設定済みcredentialのTeam IDを
+照合してから実行します。同名チャンネルが存在する場合は
 重複作成せず、topicとpurposeを指定値へ整えます。`--private`を付けるとprivate channelを対象とします。
 `--dry-run`はcredentialを読まず、Slack APIも呼ばずに予定操作だけを返します。通常実行では作成・設定後に
 `conversations.info`で再取得し、名前、公開範囲、topic、purposeが一致した場合だけ成功とします。
@@ -188,6 +189,7 @@ TypeScript CLI（`npm install`）:
 
 | フラグ | 説明 |
 |---|---|
+| `--workspace <selector>` | alias、Team ID、または登録済みの現在・過去の完全修飾Slack domainでworkspaceを選択 |
 | `--json` | JSON 形式で出力 |
 | `--plain` | TSV 形式で出力 |
 | `--utc` | タイムスタンプを UTC で表示（デフォルトはローカル TZ） |
@@ -206,10 +208,10 @@ slamy workspace default --clear
 slamy workspace remove primary
 ```
 
-これらのコマンドはSlackへ接続せず、token値を引数として受け取りません。TypeScript libraryでは、
-atomic credential-set resolver、厳格なpermalink Target resolver、名前付きworkspace-aware Slack操作を
-利用できます。既存CLIコマンドと`SlamyClient`互換facadeは、#89・#91のコマンド移行が完了するまで
-従来経路を維持します。adapter追加だけでtokenやroutingの挙動を暗黙に切り替えません。
+これらのコマンドはSlackへ接続せず、token値を引数として受け取りません。Slack APIを呼ぶすべての
+TypeScript CLIコマンドは、root selectorをこのregistryで解決し、API client作成前に設定済みの全
+credentialを`auth.test`で検証します。TypeScript libraryでは、atomic credential-set resolver、
+厳格なpermalink Target resolver、名前付きworkspace-aware Slack操作も利用できます。
 
 ### `channels history` — チャンネルのメッセージ履歴
 
@@ -347,8 +349,8 @@ slamy team info [--json] [--plain]
 |---|---|---|
 | `SLAMY_CONFIG_FILE` | No | TypeScript workspace registryのpathを上書き。既定は`$XDG_CONFIG_HOME/slamy/workspaces.json`または`~/.config/slamy/workspaces.json` |
 | `SLAMY_WORKSPACE_<ALIAS>_USER_TOKEN` | 対応するエイリアスの選択時 | ワークスペースエイリアス用の User OAuth Token。エイリアスを大文字化し、ハイフンをアンダースコアへ変換 |
-| `SLAMY_DEFAULT_WORKSPACE` | No | `--workspace` を省略した場合に使用するワークスペースエイリアス |
-| `SLACK_USER_TOKEN` | 従来の単一ワークスペース利用時 | 後方互換用 Slack User OAuth Token (`xoxp-...`)。明示・デフォルトのどちらのエイリアスも選択されない場合のみ使用 |
+| `SLAMY_DEFAULT_WORKSPACE` | No | `--workspace`を省略した場合に使用する登録済みworkspace selector（alias、Team ID、または現在・過去の完全修飾Slack domain） |
+| `SLACK_USER_TOKEN` | 従来の単一ワークスペース利用時 | 後方互換用 Slack User OAuth Token (`xoxp-...`)。明示・defaultのどちらのworkspace selectorも設定されない場合のみ使用 |
 | `SLACK_BOT_TOKEN` | いずれか | Slack Bot OAuth Token (`xoxb-...`) — 書き込み操作と `reactions get` で使用 |
 | `SLAMY_TZ` | No | `engagement` コマンド用の IANA タイムゾーン（デフォルト: `Asia/Tokyo`） |
 | `SLACK_TEAM_ID` | No | Slack Team ID（ワークスペース固有の操作用） |
@@ -437,11 +439,11 @@ export SLAMY_WORKSPACE_OPERATIONS_USER_TOKEN='<user-token>'
 export SLAMY_WORKSPACE_PROJECT_A_USER_TOKEN='<user-token>'
 ```
 
-接続先は次の順序で選択されます。
+Slack APIを呼ぶすべてのTypeScript CLIコマンドでは、接続先を次の順序で選択します。
 
-1. ルートの persistent flag `--workspace <alias>`
+1. ルートの`--workspace <selector>`（registryのalias、Team ID、または現在・過去の完全修飾Slack domain）
 2. `SLAMY_DEFAULT_WORKSPACE`
-3. 上記 2 つがどちらも未設定の場合のみ、後方互換用の `SLACK_USER_TOKEN`
+3. 上記2つがどちらも未設定の場合のみ、後方互換用の`SLACK_USER_TOKEN` / `SLACK_BOT_TOKEN`
 
 選択用の `SLAMY_WORKSPACE` 環境変数はありません。明示指定には `--workspace` を使用してください。
 
@@ -454,9 +456,16 @@ slamy --workspace operations channels list
 slamy --workspace project-a auth test
 ```
 
-エイリアス選択は fail-closed です。`--workspace` または `SLAMY_DEFAULT_WORKSPACE` で選択したエイリアスに対応する `SLAMY_WORKSPACE_<ALIAS>_USER_TOKEN` が未設定の場合、`SLACK_USER_TOKEN` や別エイリアスへフォールバックせずエラーを返します。
+registry選択はfail-closedです。選択したworkspaceに設定されたcredential referenceだけを解決し、
+`auth.test`のTeam IDをregistryと照合します。credential欠落、identity不一致、曖昧・未登録の選択、
+workspaceをまたぐUser/Bot credentialではAPI clientを作成しません。registry selectorがある場合、
+`SLACK_USER_TOKEN`、`SLACK_BOT_TOKEN`、別workspaceへはfallbackしません。
 
-既存の単一ワークスペース設定には後方互換性があります。`SLACK_USER_TOKEN` をそのまま設定し、`--workspace` と `SLAMY_DEFAULT_WORKSPACE` の両方を未設定にしてください。移行するには、既存トークンをエイリアス用環境変数へ移し、`SLAMY_DEFAULT_WORKSPACE` にそのエイリアスを設定します。新しい設定を確認した後で `SLACK_USER_TOKEN` を削除してください。
+既存の単一ワークスペース設定には後方互換性があります。`SLACK_USER_TOKEN`または
+`SLACK_BOT_TOKEN`をそのまま設定し、`--workspace`と`SLAMY_DEFAULT_WORKSPACE`の両方を未設定にします。
+移行するには、token環境変数をregistry workspaceのcredential referenceへ追加し、
+`SLAMY_DEFAULT_WORKSPACE`をそのworkspaceの有効なselectorに設定します。新しい設定を確認した後で
+legacy変数を削除してください。
 
 すべてのトークンを secret として扱ってください。リポジトリへコミットしたり、コマンドライン引数で渡したり、ログ・標準出力・標準エラー出力・JSON へ出力したりしないでください。保護された環境変数または secret 管理機能から渡してください。
 

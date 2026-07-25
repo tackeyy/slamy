@@ -21,10 +21,10 @@ A Slack API client and standalone CLI for reading, searching, and posting to Sla
 The official [`slack` CLI](https://docs.slack.dev/tools/slack-cli/) owns Slack app development:
 create/link/install/uninstall, manifests, local run, deployment, activity, logs, documentation, and
 ad hoc Web API calls. It can also select a team explicitly for its own commands with `--team` where
-supported. slamy's target scope is task-oriented operations for humans and agents, including a
-single resolver for default, explicit, or permalink-derived workspaces, plus pagination, name
-resolution, and stable output. This target design is being delivered incrementally and is not yet
-available in every slamy command.
+supported. slamy's target scope is task-oriented operations for humans and agents. Every Slack API
+command in the TypeScript CLI uses the same explicit/default workspace selector, credential
+verification path, and stable output conventions. Commands that accept Slack URLs also resolve
+their target from the permalink.
 
 slamy does not invoke the official CLI or read its private credential files. It uses documented
 Slack APIs directly, so both tools can be installed and used independently. See
@@ -168,7 +168,8 @@ slamy channels create 01-engineering \
   --dry-run
 ```
 
-The command requires an explicit workspace and verifies the User Token Team ID before writing.
+The command requires a workspace selected by `--workspace` or `SLAMY_DEFAULT_WORKSPACE` and verifies
+the configured credential Team ID before writing.
 An existing channel is reused instead of duplicated, then its topic and purpose are reconciled.
 Use `--private` for a private channel. `--dry-run` does not resolve credentials or call Slack.
 After a real write, `conversations.info` verifies the name, visibility, topic, and purpose.
@@ -190,6 +191,7 @@ TypeScript CLI (`npm install`):
 
 | Flag | Description |
 |---|---|
+| `--workspace <selector>` | Use a registered workspace by alias, Team ID, or fully-qualified current/previous Slack domain |
 | `--json` | Output as JSON |
 | `--plain` | Output as TSV |
 | `--utc` | Display timestamps in UTC (default: local TZ) |
@@ -208,11 +210,11 @@ slamy workspace default --clear
 slamy workspace remove primary
 ```
 
-These commands do not call Slack and never accept token values. The TypeScript library now includes
-an atomic credential-set resolver, strict permalink Target resolver, and named workspace-aware Slack
-operations. Existing CLI commands and the `SlamyClient` compatibility facade continue to use their
-legacy path until the command migrations in #89 and #91; adding the adapter does not silently change
-their token or routing behavior.
+These commands do not call Slack and never accept token values. All TypeScript CLI commands that call
+Slack resolve the root selector through this registry and verify every configured credential with
+`auth.test` before creating an API client. The TypeScript library also includes an atomic
+credential-set resolver, strict permalink Target resolver, and named workspace-aware Slack
+operations.
 
 ### `channels history` — Get channel message history
 
@@ -350,8 +352,8 @@ Returns the workspace domain, `email_domain`, and Enterprise info. The `email_do
 |---|---|---|
 | `SLAMY_CONFIG_FILE` | No | Override the TypeScript workspace registry path; defaults to `$XDG_CONFIG_HOME/slamy/workspaces.json` or `~/.config/slamy/workspaces.json` |
 | `SLAMY_WORKSPACE_<ALIAS>_USER_TOKEN` | When its alias is selected | User OAuth Token for a workspace alias; uppercase the alias and replace hyphens with underscores |
-| `SLAMY_DEFAULT_WORKSPACE` | No | Workspace alias to use when `--workspace` is omitted |
-| `SLACK_USER_TOKEN` | Yes for legacy single-workspace use | Legacy Slack User OAuth Token (`xoxp-...`) — used only when neither an explicit nor default alias is selected |
+| `SLAMY_DEFAULT_WORKSPACE` | No | Registered workspace selector (alias, Team ID, or fully-qualified current/previous Slack domain) to use when `--workspace` is omitted |
+| `SLACK_USER_TOKEN` | Yes for legacy single-workspace use | Legacy Slack User OAuth Token (`xoxp-...`) — used only when neither an explicit nor default workspace selector is set |
 | `SLACK_BOT_TOKEN` | Yes (either) | Slack Bot OAuth Token (`xoxb-...`) — used for write operations and `reactions get` |
 | `SLAMY_TZ` | No | IANA timezone used by `engagement` commands (default: `Asia/Tokyo`) |
 | `SLACK_TEAM_ID` | No | Slack Team ID (for workspace-specific operations) |
@@ -448,11 +450,11 @@ export SLAMY_WORKSPACE_OPERATIONS_USER_TOKEN='<user-token>'
 export SLAMY_WORKSPACE_PROJECT_A_USER_TOKEN='<user-token>'
 ```
 
-The workspace selection order is:
+For every TypeScript CLI command that calls Slack, the workspace selection order is:
 
-1. The root persistent flag `--workspace <alias>`
+1. The root flag `--workspace <selector>`, accepting a registry alias, Team ID, or fully-qualified current/previous Slack domain
 2. `SLAMY_DEFAULT_WORKSPACE`
-3. Legacy `SLACK_USER_TOKEN`, only when neither alias source is set
+3. Legacy `SLACK_USER_TOKEN` / `SLACK_BOT_TOKEN`, only when neither selector source is set
 
 There is no `SLAMY_WORKSPACE` selector environment variable; use `--workspace` for an explicit selection.
 
@@ -465,9 +467,17 @@ slamy --workspace operations channels list
 slamy --workspace project-a auth test
 ```
 
-Alias selection is fail-closed. If `--workspace` or `SLAMY_DEFAULT_WORKSPACE` selects an alias but its `SLAMY_WORKSPACE_<ALIAS>_USER_TOKEN` is missing, slamy returns an error instead of falling back to `SLACK_USER_TOKEN` or another alias.
+Registry selection is fail-closed. slamy resolves only the selected workspace's configured
+credential references, verifies their `auth.test` Team ID against the registry, and creates no API
+client on missing credentials, identity mismatch, ambiguous/unknown selection, or cross-workspace
+User/Bot credentials. It never falls back to `SLACK_USER_TOKEN`, `SLACK_BOT_TOKEN`, or another
+workspace after a registry selector is present.
 
-Existing single-workspace setups remain compatible: keep `SLACK_USER_TOKEN` and leave both `--workspace` and `SLAMY_DEFAULT_WORKSPACE` unset. To migrate, move that token to an alias-specific variable, set `SLAMY_DEFAULT_WORKSPACE` to the alias, then remove `SLACK_USER_TOKEN` after verifying the new setup.
+Existing single-workspace setups remain compatible: keep `SLACK_USER_TOKEN` and/or
+`SLACK_BOT_TOKEN`, and leave both `--workspace` and `SLAMY_DEFAULT_WORKSPACE` unset. To migrate, add
+the token environment variable as a credential reference on a registry workspace, set
+`SLAMY_DEFAULT_WORKSPACE` to one of its accepted selectors, then remove the legacy variables after
+verifying the new setup.
 
 Treat every token as a secret. Do not commit tokens to a repository, pass them as command-line arguments, or print them to logs, standard output, standard error, or JSON. Provide them through protected environment or secret-management facilities.
 
