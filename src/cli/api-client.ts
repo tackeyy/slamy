@@ -1,11 +1,15 @@
-import { CredentialResolver } from "../credentials/resolver.js";
-import type { CredentialKind, VerifiedCredentialSet } from "../credentials/types.js";
-import type { TeamId } from "../domain/team-id.js";
-import type { WorkspaceRecord } from "../domain/workspace.js";
-import { SlamyClient, type SlamyClientOptions } from "../lib/client.js";
-import { createCredentialResolver } from "../lib/credentials.js";
-import { createWorkspaceRegistry } from "../lib/workspace.js";
-import type { WorkspaceRegistry } from "../workspace/registry.js";
+import {
+  CredentialResolver,
+  SlamyClient,
+  createCredentialResolver,
+  createWorkspaceRegistry,
+  type CredentialKind,
+  type SlamyClientOptions,
+  type TeamId,
+  type VerifiedCredentialSet,
+  type WorkspaceRecord,
+  type WorkspaceRegistry,
+} from "../lib/index.js";
 
 export type CliApiClientLease<Client = SlamyClient> = {
   readonly client: Client;
