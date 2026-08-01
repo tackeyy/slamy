@@ -13,6 +13,7 @@ import type { WorkspaceRecord } from "../domain/workspace.js";
 import { SlackAuthTestVerifier } from "../slack/auth-test-verifier.js";
 import { readLocalSessionConnection, resolveLocalSessionPaths } from "./local-session-files.js";
 import { revokeLocalSessionBroker } from "./local-session-broker.js";
+import { runLocalSessionDaemon } from "./local-session-daemon.js";
 import { launchLocalSessionDaemon } from "./local-session-launcher.js";
 import type { LocalSessionConnection } from "./local-session-web-client.js";
 
@@ -36,6 +37,17 @@ const defaultDependencies: StartDependencies = {
   launch: launchLocalSessionDaemon,
   now: () => new Date(),
   capability: () => randomBytes(32).toString("base64url"),
+};
+
+type ForegroundDependencies = Pick<StartDependencies, "verify" | "now" | "capability"> & {
+  readonly runDaemon: typeof runLocalSessionDaemon;
+};
+
+const defaultForegroundDependencies: ForegroundDependencies = {
+  verify: defaultDependencies.verify,
+  now: defaultDependencies.now,
+  capability: defaultDependencies.capability,
+  runDaemon: runLocalSessionDaemon,
 };
 
 export async function startLocalSession(
@@ -103,6 +115,25 @@ export async function startLocalSession(
     connection,
   });
   return publicStatus(input.workspace, connection);
+}
+
+export async function startLocalSessionForeground(
+  input: Parameters<typeof startLocalSession>[0],
+  dependencies: ForegroundDependencies = defaultForegroundDependencies,
+): Promise<LocalSessionStatus> {
+  return startLocalSession(input, {
+    verify: dependencies.verify,
+    now: dependencies.now,
+    capability: dependencies.capability,
+    launch: async (launchInput) => {
+      await dependencies.runDaemon({
+        token: launchInput.token,
+        configHome: launchInput.configHome,
+        connection: launchInput.connection,
+      });
+      return Object.freeze({ pid: process.pid });
+    },
+  });
 }
 
 export async function getLocalSessionStatus(

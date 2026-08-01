@@ -8,6 +8,7 @@ import {
   publicStatus,
   revokeLocalSession,
   startLocalSession,
+  startLocalSessionForeground,
 } from "../local-session-service.js";
 
 const userWorkspace = {
@@ -236,6 +237,41 @@ describe("local session service", () => {
       now: () => new Date("2029-01-01T00:00:00.000Z"),
       capability: () => "local-capability-canary",
     })).rejects.toThrow("does not match");
+  });
+
+  it("starts the broker in the current process for supervisor-managed sessions", async () => {
+    const root = await mkdtemp(join(tmpdir(), "slamy-session-foreground-"));
+    tempPaths.push(root);
+    const runDaemon = vi.fn().mockResolvedValue(undefined);
+
+    const result = await startLocalSessionForeground({
+      workspace: userWorkspace,
+      token: "xoxp-user-secret-canary",
+      ttlMs: 86_400_000,
+      configHome: root,
+      cliPath: "/unused/in/foreground.js",
+      executablePath: "/unused/node",
+    }, {
+      verify: vi.fn().mockResolvedValue({
+        teamId: parseTeamId("T0BJ9SG2M0R"),
+        userId: "U1",
+      }),
+      now: () => new Date("2029-01-01T00:00:00.000Z"),
+      capability: () => "local-capability-canary",
+      runDaemon,
+    });
+
+    expect(result).toMatchObject({
+      workspace: "wedgeai",
+      teamId: "T0BJ9SG2M0R",
+      credentialKind: "user",
+      expiresAt: "2029-01-02T00:00:00.000Z",
+    });
+    expect(runDaemon).toHaveBeenCalledWith(expect.objectContaining({
+      token: "xoxp-user-secret-canary",
+      configHome: root,
+      connection: expect.objectContaining({ capability: "local-capability-canary" }),
+    }));
   });
 
   it("rejects mixed User and Bot credential workspaces instead of reusing one token for both", async () => {
