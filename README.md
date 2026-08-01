@@ -114,6 +114,30 @@ export SLACK_USER_TOKEN=xoxp-your-user-token
 ./slamy channels list
 ```
 
+### Optional: local authentication session
+
+To avoid repeated password-manager approval, start an in-memory local session by piping a token to
+standard input. Tokens are not accepted as command arguments.
+
+```bash
+op read 'op://<vault>/<item>/<field>' |
+  slamy --workspace wedgeai auth session start
+
+# Seven days is the explicit maximum; the default is 24 hours.
+op read 'op://<vault>/<item>/<field>' |
+  slamy --workspace wedgeai auth session start --ttl 7d
+
+slamy --workspace wedgeai auth session status
+slamy --workspace wedgeai auth session revoke
+```
+
+The detached broker keeps the Slack token in memory, verifies the canonical Team ID, and exposes
+only slamy's allowlisted Slack operations over an owner-only Unix socket. It does not return the
+Slack token to later CLI processes. A process already running as the same macOS user can still use
+the broker until expiry or revoke, so prefer the 24-hour default and use seven days only when the
+longer window is necessary. Local revoke does not rotate the Slack OAuth token. See the
+[security record](docs/reports/local-auth-session-security.md) for controls and residual risks.
+
 ## User Token vs Bot Token
 
 Slack Apps can issue two types of tokens. Which one to use depends on your use case.

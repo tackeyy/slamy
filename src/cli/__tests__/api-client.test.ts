@@ -158,6 +158,31 @@ describe("CLI workspace API client", () => {
     expect(clientFactory).not.toHaveBeenCalled();
   });
 
+  it("uses an active team-bound local session before reading environment credentials", async () => {
+    const clientFactory = vi.fn().mockReturnValue({ workspace: "wedgeai-session" });
+    const localSession = {
+      version: 1 as const,
+      teamId: WEDGE_TEAM,
+      credentialKind: "user" as const,
+      socketPath: "/private/session.sock",
+      capability: "local-capability-canary",
+      createdAt: "2029-01-01T00:00:00.000Z",
+      expiresAt: "2030-01-01T00:00:00.000Z",
+    };
+
+    const lease = await createCliApiClient({
+      explicitWorkspace: "wedgeai",
+      env: {},
+      registry: registry(),
+      credentialResolver: resolver({}, {}),
+      localSessionLookup: vi.fn().mockResolvedValue(localSession),
+      clientFactory,
+    });
+
+    expect(lease.teamId).toBe(WEDGE_TEAM);
+    expect(clientFactory).toHaveBeenCalledWith({ localSession });
+  });
+
   it("selected WedgeAI auth.test identity mismatch fails before an API client is created", async () => {
     const env = {
       WEDGE_USER_TOKEN: "xoxp-wedge-label-but-manavi-identity",
