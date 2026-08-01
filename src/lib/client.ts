@@ -7,6 +7,11 @@ import {
   CHAT_UPDATE_MAX_LENGTH,
 } from "./split.js";
 import { tzDateToEpochSec } from "./tz.js";
+import { callLocalSessionBroker } from "./local-session-broker.js";
+import {
+  createLocalSessionWebClient,
+  type LocalSessionConnection,
+} from "./local-session-web-client.js";
 import type {
   Channel,
   UnreadChannel,
@@ -25,6 +30,7 @@ import type {
 export interface SlamyClientOptions {
   userToken?: string;
   botToken?: string;
+  localSession?: LocalSessionConnection;
 }
 
 /**
@@ -61,6 +67,7 @@ export class SlamyClient {
   private userClient: WebClient;
   private botTokenStr: string;
   private userTokenStr: string;
+  private localSession?: LocalSessionConnection;
 
   // user_id -> display name (空文字 = 解決失敗、id 自体を返すと区別不能なので未解決のまま)
   private userNameCache = new Map<string, string>();
@@ -73,15 +80,24 @@ export class SlamyClient {
   private channelListPromise: Promise<void> | null = null;
 
   constructor(opts: SlamyClientOptions) {
-    if (!opts.botToken && !opts.userToken) {
+    if (opts.localSession && (opts.botToken || opts.userToken)) {
+      throw new Error("A local session cannot be combined with Slack tokens");
+    }
+    if (!opts.botToken && !opts.userToken && !opts.localSession) {
       throw new Error("Either userToken or botToken must be provided");
     }
     // Bot token for write operations (postMessage, reactions, file upload)
     // User token for read/search operations that require user-level access
-    this.botClient = new WebClient(opts.botToken || opts.userToken, { logLevel: LogLevel.WARN });
-    this.userClient = new WebClient(opts.userToken || opts.botToken, { logLevel: LogLevel.WARN });
+    const sessionClient = opts.localSession
+      ? createLocalSessionWebClient(opts.localSession, callLocalSessionBroker)
+      : undefined;
+    this.botClient =
+      sessionClient ?? new WebClient(opts.botToken || opts.userToken, { logLevel: LogLevel.WARN });
+    this.userClient =
+      sessionClient ?? new WebClient(opts.userToken || opts.botToken, { logLevel: LogLevel.WARN });
     this.botTokenStr = opts.botToken || opts.userToken || "";
     this.userTokenStr = opts.userToken || opts.botToken || "";
+    this.localSession = opts.localSession;
   }
 
   // --- User name resolver ---
@@ -647,6 +663,28 @@ export class SlamyClient {
   }
 
   async downloadFileStream(fileUrl: string): Promise<Response> {
+    if (this.localSession) {
+      const result = await callLocalSessionBroker(this.localSession, "files.download", {
+        url: fileUrl,
+      });
+      if (
+        result === null ||
+        typeof result !== "object" ||
+        typeof (result as { status?: unknown }).status !== "number" ||
+        !Buffer.isBuffer((result as { body?: unknown }).body)
+      ) {
+        throw new Error("Local session returned an invalid file response");
+      }
+      const fileResponse = result as {
+        status: number;
+        headers?: Record<string, string>;
+        body: Buffer;
+      };
+      return new Response(fileResponse.body, {
+        status: fileResponse.status,
+        headers: fileResponse.headers,
+      });
+    }
     // Slack file URLs may redirect; Authorization header is stripped on redirect.
     // Use manual redirect handling to re-attach auth header if needed.
     let response = await fetch(fileUrl, {

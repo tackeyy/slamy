@@ -15,6 +15,8 @@ import {
 import { createCliTargetClient } from "./target-client.js";
 import { registerWorkspaceCommands } from "./workspace.js";
 import { registerChannelManagementCommands } from "./channels.js";
+import { registerLocalSessionCommands } from "./session.js";
+import { runLocalSessionDaemonFromStdin } from "../lib/local-session-daemon.js";
 
 const pkg = JSON.parse(
   readFileSync(join(dirname(fileURLToPath(import.meta.url)), "../../package.json"), "utf-8"),
@@ -109,6 +111,18 @@ async function buildUserLabeler(
 
 // --- auth ---
 const auth = program.command("auth").description("Authentication commands");
+
+registerLocalSessionCommands(auth, program);
+
+program
+  .command("__session-daemon", { hidden: true })
+  .action(async () => {
+    try {
+      await runLocalSessionDaemonFromStdin();
+    } catch {
+      process.exitCode = 1;
+    }
+  });
 
 auth
   .command("test")

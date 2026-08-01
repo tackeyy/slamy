@@ -10,6 +10,8 @@ import {
   type WorkspaceRecord,
   type WorkspaceRegistry,
 } from "../lib/index.js";
+import type { LocalSessionConnection } from "../lib/local-session-web-client.js";
+import { findLocalSessionForWorkspace } from "../lib/local-session-files.js";
 
 export type CliApiClientLease<Client = SlamyClient> = {
   readonly client: Client;
@@ -23,6 +25,9 @@ export type CreateCliApiClientOptions<Client = SlamyClient> = {
   registry?: WorkspaceRegistry;
   credentialResolver?: CredentialResolver;
   clientFactory?: (tokens: SlamyClientOptions) => Client;
+  localSessionLookup?: (
+    workspace: WorkspaceRecord,
+  ) => Promise<LocalSessionConnection | undefined>;
 };
 
 export function resolveCliWorkspaceSelector(
@@ -61,6 +66,26 @@ export async function createCliApiClient<Client = SlamyClient>(
 
   const registry = options.registry ?? createWorkspaceRegistry({ env });
   const workspace = await registry.resolve(selector);
+  const localSessionLookup =
+    options.localSessionLookup ??
+    (env === process.env
+      ? (selected: WorkspaceRecord) => findLocalSessionForWorkspace(selected, env)
+      : noLocalSession);
+  const localSession = await localSessionLookup(workspace);
+  if (localSession !== undefined) {
+    const requirement = requirementFor(workspace);
+    if (
+      localSession.teamId !== workspace.teamId ||
+      !requirement.requiredKinds.includes(localSession.credentialKind)
+    ) {
+      throw new Error("Local session does not match the selected workspace");
+    }
+    return {
+      client: clientFactory({ localSession }),
+      teamId: workspace.teamId,
+      dispose() {},
+    };
+  }
   const resolver = options.credentialResolver ?? createCredentialResolver({ env });
   const credentials = await resolver.resolveForWorkspace(
     workspace,
@@ -77,6 +102,10 @@ export async function createCliApiClient<Client = SlamyClient>(
     credentials.destroy();
     throw error;
   }
+}
+
+function noLocalSession(): Promise<undefined> {
+  return Promise.resolve(undefined);
 }
 
 function requirementFor(workspace: WorkspaceRecord): {

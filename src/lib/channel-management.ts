@@ -1,8 +1,12 @@
 import { ensureChannel, type EnsureChannelResult } from "../commands/channel-management.js";
 import type { CredentialResolver } from "../credentials/index.js";
+import type { VerifiedCredentialSet } from "../credentials/types.js";
 import { createSlackWorkspaceContext, type WorkspaceSlackOperations } from "../slack/index.js";
 import type { WorkspaceRegistry } from "../workspace/registry.js";
 import { createCredentialResolver } from "./credentials.js";
+import { createLocalSessionChannelOperations } from "./local-session-channel-operations.js";
+import { findLocalSessionForWorkspace } from "./local-session-files.js";
+import type { LocalSessionConnection } from "./local-session-web-client.js";
 import { createWorkspaceSlackAdapter } from "./slack.js";
 import { createWorkspaceRegistry } from "./workspace.js";
 
@@ -19,6 +23,12 @@ export type EnsureWorkspaceChannelOptions = {
   readonly registry?: WorkspaceRegistry;
   readonly credentialResolver?: CredentialResolver;
   readonly slack?: WorkspaceSlackOperations;
+  readonly localSessionLookup?: (
+    workspace: Awaited<ReturnType<WorkspaceRegistry["resolve"]>>,
+  ) => Promise<LocalSessionConnection | undefined>;
+  readonly localSessionSlackFactory?: (
+    connection: LocalSessionConnection,
+  ) => WorkspaceSlackOperations;
 };
 
 export async function ensureWorkspaceChannel(
@@ -42,6 +52,24 @@ export async function ensureWorkspaceChannel(
       dryRun: request.dryRun,
     },
     async () => {
+      const localSessionLookup =
+        options.localSessionLookup ??
+        (options.credentialResolver || options.slack
+          ? () => Promise.resolve(undefined)
+          : (selected) => findLocalSessionForWorkspace(selected));
+      const localSession = await localSessionLookup(workspace);
+      if (localSession) {
+        if (localSession.teamId !== workspace.teamId || localSession.credentialKind !== "user") {
+          throw new Error("Local session does not match the selected workspace");
+        }
+        return {
+          context: sessionContext(workspace.teamId),
+          slack: (options.localSessionSlackFactory ?? createLocalSessionChannelOperations)(
+            localSession,
+          ),
+          dispose() {},
+        };
+      }
       const credentials = await (options.credentialResolver ?? createCredentialResolver())
         .resolveForWorkspace(workspace, {
           requiredKinds: ["user"],
@@ -55,6 +83,24 @@ export async function ensureWorkspaceChannel(
       };
     },
   );
+}
+
+function sessionContext(teamId: Awaited<ReturnType<WorkspaceRegistry["resolve"]>>["teamId"]) {
+  const credential = Object.freeze({
+    kind: "user" as const,
+    teamId,
+    use(): never {
+      throw new Error("Local session credentials are broker-only");
+    },
+    destroy() {},
+  });
+  const credentials: VerifiedCredentialSet = Object.freeze({
+    teamId,
+    user: credential,
+    requiredScopes: Object.freeze({}),
+    destroy() {},
+  });
+  return createSlackWorkspaceContext({ teamId, credentials });
 }
 
 function requiredUserScopes(isPrivate: boolean): readonly string[] {

@@ -13,6 +13,7 @@ export default defineConfig({
         "src/**/__tests__/**",
         "src/**/*.d.ts",
         "src/cli/index.ts",
+        "src/lib/local-session-daemon.ts",
         "src/lib/index.ts",
         "src/lib/types.ts",
       ],

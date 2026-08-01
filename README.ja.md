@@ -113,6 +113,30 @@ export SLACK_USER_TOKEN=xoxp-your-user-token
 ./slamy channels list
 ```
 
+### 任意: ローカル認証セッション
+
+パスワードマネージャーの承認回数を減らす場合は、標準入力からトークンを渡してメモリ内の
+ローカルセッションを開始できます。トークンをコマンドライン引数で渡すことはできません。
+
+```bash
+op read 'op://<vault>/<item>/<field>' |
+  slamy --workspace wedgeai auth session start
+
+# 既定は24時間。7日間は明示指定する上限値です。
+op read 'op://<vault>/<item>/<field>' |
+  slamy --workspace wedgeai auth session start --ttl 7d
+
+slamy --workspace wedgeai auth session status
+slamy --workspace wedgeai auth session revoke
+```
+
+バックグラウンドのbrokerはSlackトークンをメモリ内に保持し、canonical Team IDを検証して、
+owner限定のUnix socketからslamyが許可したSlack操作だけを受け付けます。後続のCLIプロセスへ
+Slackトークン自体は返しません。ただし、同じmacOSユーザーとして動く別プロセスは、期限切れ
+またはrevokeまでbrokerを利用できます。通常は既定の24時間を使用し、必要な場合だけ7日間を
+指定してください。ローカルrevokeはSlack OAuth token自体をrotationしません。制御と残余リスクは
+[security record](docs/reports/local-auth-session-security.md)を参照してください。
+
 ## User Token vs Bot Token
 
 Slack App は 2 種類のトークンを発行できます。用途に応じて使い分けます。

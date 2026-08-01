@@ -45,6 +45,19 @@ const exactExternalImports = new Map([
   ],
   ["cli/workspace.ts", new Set(["commander"])],
   ["cli/channels.ts", new Set(["commander"])],
+  ["cli/session.ts", new Set(["commander", "node:os", "node:path"])],
+  [
+    "lib/local-session-broker.ts",
+    new Set(["@slack/web-api", "node:crypto", "node:fs/promises", "node:net"]),
+  ],
+  ["lib/local-session-daemon.ts", new Set(["node:path"])],
+  [
+    "lib/local-session-files.ts",
+    new Set(["node:crypto", "node:fs/promises", "node:net", "node:os", "node:path"]),
+  ],
+  ["lib/local-session-launcher.ts", new Set(["node:child_process"])],
+  ["lib/local-session-service.ts", new Set(["node:crypto"])],
+  ["lib/local-session-web-client.ts", new Set(["@slack/web-api"])],
   [
     "workspace/node-file-workspace-store.ts",
     new Set(["node:crypto", "node:fs", "node:fs/promises", "node:path", "node:timers/promises"]),
