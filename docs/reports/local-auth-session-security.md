@@ -25,6 +25,10 @@ active, although it cannot retrieve the reusable Slack token through the broker 
    The broker performs the operation and returns only the Slack API result.
 6. Expiry or `revoke` stops new requests, removes the socket and metadata, and ends the daemon.
 
+When `--foreground` is selected, steps 3 and 4 run in the current supervisor-owned process instead
+of a detached child. Token input, identity verification, storage, IPC, expiry, and revoke controls
+remain unchanged.
+
 ## Security controls
 
 | Boundary | Control |

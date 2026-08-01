@@ -127,6 +127,10 @@ op read 'op://<vault>/<item>/<field>' |
 op read 'op://<vault>/<item>/<field>' |
   slamy --workspace wedgeai auth session start --ttl 7d
 
+# Use this under Terminal, launchd, or another supervisor that must own the broker process.
+op read 'op://<vault>/<item>/<field>' |
+  slamy --workspace wedgeai auth session start --ttl 7d --foreground
+
 slamy --workspace wedgeai auth session status
 slamy --workspace wedgeai auth session revoke
 ```
@@ -137,6 +141,8 @@ Slack token to later CLI processes. A process already running as the same macOS 
 the broker until expiry or revoke, so prefer the 24-hour default and use seven days only when the
 longer window is necessary. Local revoke does not rotate the Slack OAuth token. See the
 [security record](docs/reports/local-auth-session-security.md) for controls and residual risks.
+Foreground mode uses the same controls but keeps the broker attached to the current process; keep
+that Terminal or supervisor process running for the session lifetime.
 
 ## User Token vs Bot Token
 

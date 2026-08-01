@@ -10,7 +10,15 @@ import type { LocalSessionConnection } from "./local-session-web-client.js";
 const MAX_BOOTSTRAP_BYTES = 64 * 1024;
 
 export async function runLocalSessionDaemonFromStdin(): Promise<void> {
-  const bootstrap = parseBootstrap(await readBootstrap());
+  await runLocalSessionDaemon(parseBootstrap(await readBootstrap()));
+  process.stdout.write("READY\n");
+}
+
+export async function runLocalSessionDaemon(bootstrap: {
+  readonly token: string;
+  readonly configHome: string;
+  readonly connection: LocalSessionConnection;
+}): Promise<void> {
   if (bootstrap.token.startsWith("xoxe.")) {
     throw new Error("Enterprise org tokens are not supported by local sessions");
   }
@@ -48,7 +56,6 @@ export async function runLocalSessionDaemonFromStdin(): Promise<void> {
   const shutdown = () => void broker.close().finally(() => process.exit(0));
   process.once("SIGTERM", shutdown);
   process.once("SIGINT", shutdown);
-  process.stdout.write("READY\n");
 }
 
 function parseBootstrap(value: unknown): {

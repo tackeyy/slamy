@@ -112,6 +112,28 @@ describe("local session CLI", () => {
     expect(plain.writeErr).not.toHaveBeenCalled();
   });
 
+  it("uses the in-process broker when foreground mode is requested", async () => {
+    const start = vi.fn();
+    const startForeground = vi.fn().mockResolvedValue(status);
+    const foreground = commandHarness({ start, startForeground } as never);
+
+    await foreground.program.parseAsync([
+      "node",
+      "slamy",
+      "--json",
+      "auth",
+      "session",
+      "start",
+      "--ttl",
+      "7d",
+      "--foreground",
+    ]);
+
+    expect(startForeground).toHaveBeenCalledOnce();
+    expect(start).not.toHaveBeenCalled();
+    expect(foreground.writeOut).toHaveBeenCalledWith(expect.stringContaining('"active":true'));
+  });
+
   it("reports inactive and active status in JSON, human, and plain modes", async () => {
     const inactiveJson = commandHarness({ status: vi.fn().mockResolvedValue(undefined) });
     await inactiveJson.program.parseAsync(["node", "slamy", "--json", "auth", "session", "status"]);

@@ -11,6 +11,7 @@ import {
   parseLocalSessionTtl,
   revokeLocalSession,
   startLocalSession,
+  startLocalSessionForeground,
   type LocalSessionStatus,
 } from "../lib/local-session-service.js";
 
@@ -20,6 +21,7 @@ type SessionCommandDependencies = {
   readonly registryFactory: () => WorkspaceRegistry;
   readonly readToken: () => Promise<string>;
   readonly start: typeof startLocalSession;
+  readonly startForeground: typeof startLocalSessionForeground;
   readonly status: typeof getLocalSessionStatus;
   readonly revoke: typeof revokeLocalSession;
   readonly writeOut: (line: string) => void;
@@ -39,6 +41,7 @@ export function registerLocalSessionCommands(
     registryFactory: dependencies?.registryFactory ?? (() => createWorkspaceRegistry({ env })),
     readToken: dependencies?.readToken ?? readTokenFromStdin,
     start: dependencies?.start ?? startLocalSession,
+    startForeground: dependencies?.startForeground ?? startLocalSessionForeground,
     status: dependencies?.status ?? getLocalSessionStatus,
     revoke: dependencies?.revoke ?? revokeLocalSession,
     writeOut: dependencies?.writeOut ?? ((line) => console.log(line)),
@@ -53,11 +56,13 @@ export function registerLocalSessionCommands(
     .command("start")
     .description("Start a local session from a Slack token supplied on stdin")
     .option("--ttl <duration>", "Session lifetime such as 24h or 7d")
-    .action(async (options: { ttl?: string }) => {
+    .option("--foreground", "Keep the broker in the current process for a supervisor")
+    .action(async (options: { ttl?: string; foreground?: boolean }) => {
       await withErrors(deps, async () => {
         const workspace = await deps.registryFactory().resolve(selectedWorkspace(program));
         const ttlMs = parseLocalSessionTtl(options.ttl);
-        const result = await deps.start({
+        const starter = options.foreground ? deps.startForeground : deps.start;
+        const result = await starter({
           workspace,
           token: await deps.readToken(),
           ttlMs,

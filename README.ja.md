@@ -126,6 +126,10 @@ op read 'op://<vault>/<item>/<field>' |
 op read 'op://<vault>/<item>/<field>' |
   slamy --workspace wedgeai auth session start --ttl 7d
 
+# Terminal、launchd等のsupervisor自身にbrokerを保持させる場合
+op read 'op://<vault>/<item>/<field>' |
+  slamy --workspace wedgeai auth session start --ttl 7d --foreground
+
 slamy --workspace wedgeai auth session status
 slamy --workspace wedgeai auth session revoke
 ```
@@ -136,6 +140,8 @@ Slackトークン自体は返しません。ただし、同じmacOSユーザー�
 またはrevokeまでbrokerを利用できます。通常は既定の24時間を使用し、必要な場合だけ7日間を
 指定してください。ローカルrevokeはSlack OAuth token自体をrotationしません。制御と残余リスクは
 [security record](docs/reports/local-auth-session-security.md)を参照してください。
+foreground modeも同じ制御を使いますが、brokerは現在プロセスに接続されたままになります。
+セッション期間中は、そのTerminalまたはsupervisorプロセスを動かし続けてください。
 
 ## User Token vs Bot Token
 
