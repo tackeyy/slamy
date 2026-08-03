@@ -27,10 +27,28 @@ import type {
   ReactionsListResult,
 } from "./types.js";
 
+/**
+ * 内部の警告・診断情報の出力先。
+ *
+ * slamy は CLI としてだけでなくライブラリとしても import されるため、`console` へ直接書かず
+ * 呼び出し側のログ基盤へ流せるようにする。pino / bunyan と互換のシグネチャにしてあるので、
+ * それらのロガーインスタンスをそのまま渡せる。未指定なら何も出力しない。
+ */
+export interface SlamyLogger {
+  debug(obj: Record<string, unknown>, msg: string): void;
+  warn(obj: Record<string, unknown>, msg: string): void;
+}
+
+const NOOP_LOGGER: SlamyLogger = {
+  debug: () => {},
+  warn: () => {},
+};
+
 export interface SlamyClientOptions {
   userToken?: string;
   botToken?: string;
   localSession?: LocalSessionConnection;
+  logger?: SlamyLogger;
 }
 
 /**
@@ -77,6 +95,7 @@ function slackErrorCode(err: unknown): string | undefined {
 export class SlamyClient {
   private botClient: WebClient;
   private userClient: WebClient;
+  private logger: SlamyLogger;
   private botTokenStr: string;
   private userTokenStr: string;
   private localSession?: LocalSessionConnection;
@@ -110,6 +129,7 @@ export class SlamyClient {
     this.botTokenStr = opts.botToken || opts.userToken || "";
     this.userTokenStr = opts.userToken || opts.botToken || "";
     this.localSession = opts.localSession;
+    this.logger = opts.logger ?? NOOP_LOGGER;
   }
 
   /**
@@ -146,8 +166,17 @@ export class SlamyClient {
       }
 
       try {
-        return { result: await op(this.botClient), client: this.botClient };
+        const result = await op(this.botClient);
+        this.logger.warn(
+          { userError: userCode, fallback: "succeeded" },
+          "user token では読めなかったため bot token で再取得しました",
+        );
+        return { result, client: this.botClient };
       } catch (botErr) {
+        this.logger.warn(
+          { userError: userCode, botError: slackErrorCode(botErr), fallback: "failed" },
+          "user token / bot token のどちらでも読み取りに失敗しました",
+        );
         // bot 側の失敗を主エラーとしつつ、user token 側の失敗理由も残す。
         // どちらのトークンでも読めなかったことが呼び出し側で判別できるようにするため。
         if (botErr instanceof Error) {
@@ -990,8 +1019,14 @@ export class SlamyClient {
 
     const truncated = Boolean(cursor) && pages >= MAX_REACTION_PAGES;
     if (truncated) {
-      console.warn(
-        `[slamy] reactions.list truncated at ${MAX_REACTION_PAGES} pages for user=${userId} (since=${opts.since}, until=${untilStr}). reactionGivenCount may be under-counted.`,
+      this.logger.warn(
+        {
+          userId,
+          since: opts.since,
+          until: untilStr,
+          maxPages: MAX_REACTION_PAGES,
+        },
+        "reactions.list をページ上限で打ち切りました。reactionGivenCount が過小になる可能性があります",
       );
     }
 

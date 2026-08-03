@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { SlamyClient } from "../lib/client.js";
+import { SlamyClient, type SlamyLogger } from "../lib/client.js";
 import { createMockWebClient } from "./helpers/mock-slack.js";
 
 vi.mock("@slack/web-api", () => ({
@@ -7,11 +7,11 @@ vi.mock("@slack/web-api", () => ({
   LogLevel: { ERROR: "error", WARN: "warn", INFO: "info", DEBUG: "debug" },
 }));
 
-async function createClient(token = "xoxb-test") {
+async function createClient(token = "xoxb-test", logger?: SlamyLogger) {
   const mock = createMockWebClient();
   const { WebClient } = vi.mocked(await import("@slack/web-api"));
   (WebClient as any).mockImplementation(function () { return mock; });
-  const client = new SlamyClient({ botToken: token });
+  const client = new SlamyClient({ botToken: token, logger });
   return { client, mock };
 }
 
@@ -398,6 +398,38 @@ describe("getUserEngagement: truncation warning", () => {
 
     const result = await client.getUserEngagement("U1", { since: "2026-05-22" });
     expect(result.truncated).toBe(true);
+  });
+
+  it("打ち切り時は console ではなく注入された logger へ警告を出す (#118)", async () => {
+    const logger = { debug: vi.fn(), warn: vi.fn() };
+    const consoleWarn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const { client, mock } = await createClient("xoxb-test", logger);
+
+    mock.search.messages.mockResolvedValue({
+      ok: true,
+      messages: { matches: [], total: 0, paging: { page: 1 } },
+    } as any);
+    mock.reactions.list.mockResolvedValue({
+      ok: true,
+      items: [
+        {
+          type: "message",
+          message: {
+            ts: String(epoch("2026-05-22T03:00:00Z")),
+            reactions: [{ name: "ok", count: 1, users: ["U1"] }],
+          },
+          channel: "C1",
+        },
+      ],
+      response_metadata: { next_cursor: "infinite" },
+    } as any);
+
+    await client.getUserEngagement("U1", { since: "2026-05-22" });
+
+    expect(logger.warn).toHaveBeenCalledTimes(1);
+    expect(logger.warn.mock.calls[0][0]).toMatchObject({ userId: "U1", maxPages: 10 });
+    expect(consoleWarn).not.toHaveBeenCalled();
+    consoleWarn.mockRestore();
   });
 
   it("打ち切られなければ truncated=false", async () => {
