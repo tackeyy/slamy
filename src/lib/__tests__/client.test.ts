@@ -14,12 +14,15 @@ vi.mock("node:fs", () => ({
 }));
 
 let mockWebClient: ReturnType<typeof createMockWebClient>;
+/** モック化された WebClient コンストラクタ。トークン別モックを差し込むテストで使う。 */
+let mockWebClientCtor: any;
 
 beforeEach(async () => {
   vi.clearAllMocks();
   mockWebClient = createMockWebClient();
   const { WebClient } = await import("@slack/web-api");
-  (WebClient as any).mockImplementation(function () { return mockWebClient; });
+  mockWebClientCtor = WebClient as any;
+  mockWebClientCtor.mockImplementation(function () { return mockWebClient; });
 });
 
 describe("SlamyClient constructor", () => {
@@ -595,6 +598,237 @@ describe("getThreadReplies (read)", () => {
 
     expect(msgs).toHaveLength(2);
     expect(msgs[1].text).toBe("Reply");
+  });
+});
+
+describe("読み取りの bot token フォールバック (#117)", () => {
+  /** user token と bot token で別インスタンスを返すモックをセットアップする。 */
+  function setupSeparateClients() {
+    const botMock = createMockWebClient();
+    const userMock = createMockWebClient();
+    mockWebClientCtor.mockImplementation(function (token: string) {
+      if (token === "xoxb-bot") return botMock;
+      if (token === "xoxp-user") return userMock;
+      return createMockWebClient();
+    });
+    return { botMock, userMock };
+  }
+
+  /** Slack SDK の WebAPIPlatformError 相当のエラーを作る。 */
+  function slackError(code: string) {
+    const err: any = new Error(`An API error occurred: ${code}`);
+    err.data = { ok: false, error: code };
+    return err;
+  }
+
+  function newClient() {
+    return new SlamyClient({ botToken: "xoxb-bot", userToken: "xoxp-user" });
+  }
+
+  it("user token で成功した場合は bot token を使わない", async () => {
+    const { botMock, userMock } = setupSeparateClients();
+    userMock.conversations.replies.mockResolvedValue({
+      ok: true,
+      messages: [{ ts: "123.456", user: "U1", text: "Parent" }],
+    });
+
+    const msgs = await newClient().getThreadReplies("C123", "123.456");
+
+    expect(msgs).toHaveLength(1);
+    expect(userMock.conversations.replies).toHaveBeenCalledTimes(1);
+    expect(botMock.conversations.replies).not.toHaveBeenCalled();
+  });
+
+  it.each(["channel_not_found", "not_in_channel"])(
+    "getThreadReplies: user token が %s のとき bot token で再試行する",
+    async (code) => {
+      const { botMock, userMock } = setupSeparateClients();
+      userMock.conversations.replies.mockRejectedValue(slackError(code));
+      botMock.conversations.replies.mockResolvedValue({
+        ok: true,
+        messages: [
+          { ts: "123.456", user: "U1", text: "Parent" },
+          { ts: "123.457", user: "U2", text: "Reply" },
+        ],
+      });
+
+      const msgs = await newClient().getThreadReplies("C123", "123.456");
+
+      expect(msgs).toHaveLength(2);
+      expect(botMock.conversations.replies).toHaveBeenCalledTimes(1);
+    },
+  );
+
+  it.each(["channel_not_found", "not_in_channel"])(
+    "getChannelHistory: user token が %s のとき bot token で再試行する",
+    async (code) => {
+      const { botMock, userMock } = setupSeparateClients();
+      userMock.conversations.history.mockRejectedValue(slackError(code));
+      botMock.conversations.history.mockResolvedValue({
+        ok: true,
+        messages: [{ ts: "123.456", user: "U1", text: "Hello" }],
+      });
+
+      const msgs = await newClient().getChannelHistory("C123");
+
+      expect(msgs).toHaveLength(1);
+      expect(msgs[0].text).toBe("Hello");
+      expect(botMock.conversations.history).toHaveBeenCalledTimes(1);
+    },
+  );
+
+  it("getChannelHistory: フォールバック後のページングも bot token で継続する", async () => {
+    const { botMock, userMock } = setupSeparateClients();
+    userMock.conversations.history.mockRejectedValue(slackError("channel_not_found"));
+    botMock.conversations.history
+      .mockResolvedValueOnce({
+        ok: true,
+        messages: [{ ts: "1", user: "U1", text: "page1" }],
+        has_more: true,
+        response_metadata: { next_cursor: "cursor-1" },
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        messages: [{ ts: "2", user: "U1", text: "page2" }],
+        has_more: false,
+      });
+
+    const msgs = await newClient().getChannelHistory("C123", { limit: 10 });
+
+    expect(msgs.map((m) => m.text)).toEqual(["page1", "page2"]);
+    expect(botMock.conversations.history).toHaveBeenCalledTimes(2);
+    // 2 ページ目以降で user token を再試行しない（毎ページ失敗を繰り返さない）
+    expect(userMock.conversations.history).toHaveBeenCalledTimes(1);
+  });
+
+  it("参加状態と無関係なエラーではフォールバックしない", async () => {
+    const { botMock, userMock } = setupSeparateClients();
+    userMock.conversations.replies.mockRejectedValue(slackError("thread_not_found"));
+
+    await expect(newClient().getThreadReplies("C123", "123.456")).rejects.toThrow(
+      "thread_not_found",
+    );
+    expect(botMock.conversations.replies).not.toHaveBeenCalled();
+  });
+
+  it("bot token 未指定（両者が同一トークン）のときはフォールバックしない", async () => {
+    mockWebClient.conversations.replies.mockRejectedValue(slackError("channel_not_found"));
+
+    const client = new SlamyClient({ userToken: "xoxp-test" });
+
+    await expect(client.getThreadReplies("C123", "123.456")).rejects.toThrow(
+      "channel_not_found",
+    );
+    // 同一トークンでの無駄な再試行をしない
+    expect(mockWebClient.conversations.replies).toHaveBeenCalledTimes(1);
+  });
+
+  it("bot token でも失敗した場合は user token 側の失敗理由も残して throw する", async () => {
+    const { botMock, userMock } = setupSeparateClients();
+    userMock.conversations.replies.mockRejectedValue(slackError("channel_not_found"));
+    botMock.conversations.replies.mockRejectedValue(slackError("not_in_channel"));
+
+    const err: any = await newClient()
+      .getThreadReplies("C123", "123.456")
+      .catch((e: unknown) => e);
+
+    // bot 側の失敗理由を主エラーとして投げつつ、user 側の理由も辿れる
+    expect(err.data?.error).toBe("not_in_channel");
+    expect(err.message).toContain("channel_not_found");
+  });
+});
+
+describe("logger 注入 (#118)", () => {
+  function createLogger() {
+    return { debug: vi.fn(), warn: vi.fn() };
+  }
+
+  function slackError(code: string) {
+    const err: any = new Error(`An API error occurred: ${code}`);
+    err.data = { ok: false, error: code };
+    return err;
+  }
+
+  function setupSeparateClients() {
+    const botMock = createMockWebClient();
+    const userMock = createMockWebClient();
+    mockWebClientCtor.mockImplementation(function (token: string) {
+      if (token === "xoxb-bot") return botMock;
+      if (token === "xoxp-user") return userMock;
+      return createMockWebClient();
+    });
+    return { botMock, userMock };
+  }
+
+  it("logger 未指定でも動作する (no-op)", async () => {
+    const { botMock, userMock } = setupSeparateClients();
+    userMock.conversations.replies.mockRejectedValue(slackError("channel_not_found"));
+    botMock.conversations.replies.mockResolvedValue({
+      ok: true,
+      messages: [{ ts: "123.456", user: "U1", text: "Parent" }],
+    });
+
+    const client = new SlamyClient({ botToken: "xoxb-bot", userToken: "xoxp-user" });
+
+    // logger を渡していなくてもフォールバックは動き、ログ出力で落ちない
+    await expect(client.getThreadReplies("C123", "123.456")).resolves.toHaveLength(1);
+  });
+
+  it("bot token フォールバックが発生したら warn を出す", async () => {
+    const { botMock, userMock } = setupSeparateClients();
+    userMock.conversations.replies.mockRejectedValue(slackError("channel_not_found"));
+    botMock.conversations.replies.mockResolvedValue({
+      ok: true,
+      messages: [{ ts: "123.456", user: "U1", text: "Parent" }],
+    });
+    const logger = createLogger();
+
+    await new SlamyClient({
+      botToken: "xoxb-bot",
+      userToken: "xoxp-user",
+      logger,
+    }).getThreadReplies("C123", "123.456");
+
+    expect(logger.warn).toHaveBeenCalledTimes(1);
+    const [payload] = logger.warn.mock.calls[0];
+    expect(payload).toMatchObject({ userError: "channel_not_found", fallback: "succeeded" });
+  });
+
+  it("フォールバックも失敗したら失敗として warn を出す", async () => {
+    const { botMock, userMock } = setupSeparateClients();
+    userMock.conversations.replies.mockRejectedValue(slackError("channel_not_found"));
+    botMock.conversations.replies.mockRejectedValue(slackError("not_in_channel"));
+    const logger = createLogger();
+
+    await new SlamyClient({ botToken: "xoxb-bot", userToken: "xoxp-user", logger })
+      .getThreadReplies("C123", "123.456")
+      .catch(() => undefined);
+
+    const payloads = logger.warn.mock.calls.map((c: any[]) => c[0]);
+    expect(payloads).toContainEqual(
+      expect.objectContaining({
+        userError: "channel_not_found",
+        botError: "not_in_channel",
+        fallback: "failed",
+      }),
+    );
+  });
+
+  it("フォールバックが起きなければ warn を出さない", async () => {
+    const { userMock } = setupSeparateClients();
+    userMock.conversations.replies.mockResolvedValue({
+      ok: true,
+      messages: [{ ts: "123.456", user: "U1", text: "Parent" }],
+    });
+    const logger = createLogger();
+
+    await new SlamyClient({
+      botToken: "xoxb-bot",
+      userToken: "xoxp-user",
+      logger,
+    }).getThreadReplies("C123", "123.456");
+
+    expect(logger.warn).not.toHaveBeenCalled();
   });
 });
 

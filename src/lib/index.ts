@@ -1,5 +1,5 @@
 export { SlamyClient } from "./client.js";
-export type { SlamyClientOptions } from "./client.js";
+export type { SlamyClientOptions, SlamyLogger } from "./client.js";
 export { SlamyEvents } from "./events.js";
 export type { SlamyEventsOptions } from "./events.js";
 export { fixSlackMrkdwn } from "./mrkdwn.js";
