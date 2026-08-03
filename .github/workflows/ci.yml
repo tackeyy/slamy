@@ -28,7 +28,7 @@ jobs:
 
       - name: Detect changed file scopes
         id: changes
-        uses: actions/github-script@v8
+        uses: actions/github-script@v9
         with:
           script: |
             let files = [];
@@ -120,7 +120,7 @@ jobs:
 
       - name: Setup Go
         if: steps.changes.outputs.go == 'true'
-        uses: actions/setup-go@v6
+        uses: actions/setup-go@v7
         with:
           go-version-file: go-src/go.mod
           cache-dependency-path: go-src/go.sum
@@ -145,7 +145,7 @@ jobs:
 
       - name: Setup Python for yamllint
         if: steps.changes.outputs.yaml == 'true'
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@v7
         with:
           python-version: '3.x'
           cache: pip
