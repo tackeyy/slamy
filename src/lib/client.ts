@@ -27,10 +27,28 @@ import type {
   ReactionsListResult,
 } from "./types.js";
 
+/**
+ * 内部の警告・診断情報の出力先。
+ *
+ * slamy は CLI としてだけでなくライブラリとしても import されるため、`console` へ直接書かず
+ * 呼び出し側のログ基盤へ流せるようにする。pino / bunyan と互換のシグネチャにしてあるので、
+ * それらのロガーインスタンスをそのまま渡せる。未指定なら何も出力しない。
+ */
+export interface SlamyLogger {
+  debug(obj: Record<string, unknown>, msg: string): void;
+  warn(obj: Record<string, unknown>, msg: string): void;
+}
+
+const NOOP_LOGGER: SlamyLogger = {
+  debug: () => {},
+  warn: () => {},
+};
+
 export interface SlamyClientOptions {
   userToken?: string;
   botToken?: string;
   localSession?: LocalSessionConnection;
+  logger?: SlamyLogger;
 }
 
 /**
@@ -62,9 +80,22 @@ function mapMessage(msg: any): Message {
   return m;
 }
 
+/**
+ * user token の持ち主が非参加の private channel を読もうとしたときに Slack が返すコード。
+ * bot が参加済みなら bot token では読めるため、この 2 つだけフォールバック対象にする。
+ */
+const CHANNEL_ACCESS_ERROR_CODES = new Set(["channel_not_found", "not_in_channel"]);
+
+/** Slack SDK (WebAPIPlatformError) のエラーコードを取り出す。 */
+function slackErrorCode(err: unknown): string | undefined {
+  const code = (err as { data?: { error?: unknown } } | null)?.data?.error;
+  return typeof code === "string" ? code : undefined;
+}
+
 export class SlamyClient {
   private botClient: WebClient;
   private userClient: WebClient;
+  private logger: SlamyLogger;
   private botTokenStr: string;
   private userTokenStr: string;
   private localSession?: LocalSessionConnection;
@@ -98,6 +129,62 @@ export class SlamyClient {
     this.botTokenStr = opts.botToken || opts.userToken || "";
     this.userTokenStr = opts.userToken || opts.botToken || "";
     this.localSession = opts.localSession;
+    this.logger = opts.logger ?? NOOP_LOGGER;
+  }
+
+  /**
+   * bot token へのフォールバックが意味を持つか。
+   *
+   * botToken 未指定時や local session 利用時は botClient / userClient が同じ実体になるため、
+   * 再試行しても同じ結果にしかならない。無駄な API 呼び出しを避けて false を返す。
+   */
+  private canFallbackToBotToken(): boolean {
+    if (this.botClient === this.userClient) return false;
+    return this.botTokenStr !== "" && this.botTokenStr !== this.userTokenStr;
+  }
+
+  /**
+   * user token を優先しつつ、private channel の参加状態に起因するエラーのときだけ
+   * bot token で 1 回だけ再試行する (#117)。
+   *
+   * 「bot は参加済みだが user token の持ち主は非参加」という private channel の読み取りを救う。
+   * 成功した client も返すので、ページングでは 2 ページ目以降を同じ client で継続できる。
+   */
+  private async readWithBotFallback<T>(
+    op: (client: WebClient) => Promise<T>,
+  ): Promise<{ result: T; client: WebClient }> {
+    try {
+      return { result: await op(this.userClient), client: this.userClient };
+    } catch (userErr) {
+      const userCode = slackErrorCode(userErr);
+      if (
+        !userCode ||
+        !CHANNEL_ACCESS_ERROR_CODES.has(userCode) ||
+        !this.canFallbackToBotToken()
+      ) {
+        throw userErr;
+      }
+
+      try {
+        const result = await op(this.botClient);
+        this.logger.warn(
+          { userError: userCode, fallback: "succeeded" },
+          "user token では読めなかったため bot token で再取得しました",
+        );
+        return { result, client: this.botClient };
+      } catch (botErr) {
+        this.logger.warn(
+          { userError: userCode, botError: slackErrorCode(botErr), fallback: "failed" },
+          "user token / bot token のどちらでも読み取りに失敗しました",
+        );
+        // bot 側の失敗を主エラーとしつつ、user token 側の失敗理由も残す。
+        // どちらのトークンでも読めなかったことが呼び出し側で判別できるようにするため。
+        if (botErr instanceof Error) {
+          botErr.message = `${botErr.message} (bot token fallback after user token error: ${userCode})`;
+        }
+        throw botErr;
+      }
+    }
   }
 
   // --- User name resolver ---
@@ -610,6 +697,7 @@ export class SlamyClient {
     const maxMessages = opts?.limit ?? 20;
     const allMessages: Message[] = [];
     let cursor: string | undefined;
+    let readClient: WebClient | null = null;
 
     do {
       const remaining = maxMessages - allMessages.length;
@@ -623,7 +711,18 @@ export class SlamyClient {
       if (opts?.latest) params.latest = opts.latest;
       if (cursor) params.cursor = cursor;
 
-      const res = await this.userClient.conversations.history(params as any);
+      // 1 ページ目でどちらの token が読めるかを確定し、以降は同じ client で継続する
+      // (毎ページ user token で失敗を繰り返さないため)。
+      let res;
+      if (readClient) {
+        res = await readClient.conversations.history(params as any);
+      } else {
+        const fetched = await this.readWithBotFallback((client) =>
+          client.conversations.history(params as any),
+        );
+        res = fetched.result;
+        readClient = fetched.client;
+      }
 
       const batch = (res.messages || []).map((msg) => mapMessage(msg));
 
@@ -712,11 +811,13 @@ export class SlamyClient {
     opts?: { limit?: number },
   ): Promise<Message[]> {
     const resolvedChannel = await this.resolveChannelId(channel);
-    const res = await this.userClient.conversations.replies({
-      channel: resolvedChannel,
-      ts: threadTs,
-      limit: opts?.limit ?? 50,
-    });
+    const { result: res } = await this.readWithBotFallback((client) =>
+      client.conversations.replies({
+        channel: resolvedChannel,
+        ts: threadTs,
+        limit: opts?.limit ?? 50,
+      }),
+    );
 
     return (res.messages || []).map((msg) => mapMessage(msg));
   }
@@ -918,8 +1019,14 @@ export class SlamyClient {
 
     const truncated = Boolean(cursor) && pages >= MAX_REACTION_PAGES;
     if (truncated) {
-      console.warn(
-        `[slamy] reactions.list truncated at ${MAX_REACTION_PAGES} pages for user=${userId} (since=${opts.since}, until=${untilStr}). reactionGivenCount may be under-counted.`,
+      this.logger.warn(
+        {
+          userId,
+          since: opts.since,
+          until: untilStr,
+          maxPages: MAX_REACTION_PAGES,
+        },
+        "reactions.list をページ上限で打ち切りました。reactionGivenCount が過小になる可能性があります",
       );
     }
 
