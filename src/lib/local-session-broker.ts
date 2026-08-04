@@ -152,6 +152,17 @@ export async function startLocalSessionBroker(input: {
     sockets.add(socket);
     socket.setTimeout(REQUEST_TIMEOUT_MS, () => socket.destroy());
     socket.once("close", () => sockets.delete(socket));
+    // クライアントが応答前に切断すると writable 側が自動 end される。error リスナーが
+    // ないと後続の end() が ERR_STREAM_WRITE_AFTER_END で broker プロセスごと落ちる
+    socket.on("error", () => socket.destroy());
+    const respond = (payload: string, onDone?: () => void): void => {
+      if (socket.destroyed || socket.writableEnded) {
+        socket.destroy();
+        onDone?.();
+        return;
+      }
+      socket.end(payload, onDone);
+    };
     receiveLine(socket)
       .then((line) => handleRequest(line, input, now, () => revoking))
       .then(
@@ -168,7 +179,7 @@ export async function startLocalSessionBroker(input: {
               rm(input.paths.metadataPath, { force: true }),
             ]);
           }
-          socket.end(
+          respond(
             `${JSON.stringify({ ok: true, value: encodeLocalSessionValue(result.value) })}\n`,
             () => {
               if (result.revoke) {
@@ -178,7 +189,7 @@ export async function startLocalSessionBroker(input: {
             },
           );
         },
-        () => socket.end(`${JSON.stringify({ ok: false, error: "Local session request failed" })}\n`),
+        () => respond(`${JSON.stringify({ ok: false, error: "Local session request failed" })}\n`),
       );
   });
 
