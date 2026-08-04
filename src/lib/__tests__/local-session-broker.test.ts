@@ -65,6 +65,68 @@ describe("local session broker", () => {
     expect((await stat(paths.socketPath)).mode & 0o777).toBe(0o600);
   });
 
+  it("survives a client that disconnects before the response is written", async () => {
+    const root = await mkdtemp(join(tmpdir(), "slamy-session-abort-"));
+    const runtimeRoot = await mkdtemp("/tmp/slamy-sa-");
+    tempPaths.push(root, runtimeRoot);
+    const paths = await prepareLocalSessionPaths({
+      configHome: root,
+      runtimeRoot,
+      teamId: "T0BJ9SG2M0R",
+      credentialKind: "user",
+    });
+    const connection = {
+      version: 1 as const,
+      teamId: parseTeamId("T0BJ9SG2M0R"),
+      credentialKind: "user" as const,
+      socketPath: paths.socketPath,
+      capability: "local-capability-canary",
+      createdAt: "2029-01-01T00:00:00.000Z",
+      expiresAt: "2029-01-02T00:00:00.000Z",
+    };
+    const apiCall = vi.fn().mockResolvedValue({ ok: true, ts: "1.000001" });
+    const broker = await startLocalSessionBroker({
+      paths,
+      connection,
+      token: "xoxp-secret-canary",
+      now: () => new Date("2029-01-01T00:00:00.000Z"),
+      invokeSlack: apiCall,
+    });
+    brokers.push(broker);
+
+    // 改行を送らず write 側を閉じるクライアント: broker は readable 'end' 後に
+    // エラー応答を書こうとして ERR_STREAM_WRITE_AFTER_END で crash してはならない
+    const probe = createConnection(paths.socketPath);
+    await once(probe, "connect");
+    probe.end();
+    await once(probe, "close");
+    await new Promise((resolve) => setTimeout(resolve, 20));
+
+    // リクエスト送信後すぐ half-close するクライアントでも crash しない
+    const halfClose = createConnection(paths.socketPath);
+    await once(halfClose, "connect");
+    halfClose.resume();
+    halfClose.end(
+      `${JSON.stringify({
+        version: 1,
+        action: "call",
+        capability: connection.capability,
+        teamId: connection.teamId,
+        method: "chat.postMessage",
+        argumentsValue: { channel: "C1", text: "hello" },
+      })}\n`,
+    );
+    await once(halfClose, "close");
+    await new Promise((resolve) => setTimeout(resolve, 20));
+
+    // broker が生存していれば通常のリクエストは引き続き成功する
+    const response = await callLocalSessionBroker(connection, "chat.postMessage", {
+      channel: "C1",
+      text: "hello",
+    });
+    expect(response).toEqual({ ok: true, ts: "1.000001" });
+  });
+
   it("revokes access and removes the socket and metadata before returning", async () => {
     const root = await mkdtemp(join(tmpdir(), "slamy-session-revoke-"));
     const runtimeRoot = await mkdtemp("/tmp/slamy-sr-");
