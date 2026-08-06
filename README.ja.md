@@ -99,30 +99,50 @@ go build -o ../slamy .
 | `users.profile:read` | ユーザープロフィールの閲覧 |
 | `team:read` | ワークスペース（team）情報の取得 |
 
-### 3. インストールと環境変数の設定
+### 3. インストールと workspace の登録
 
-ワークスペースにアプリをインストールし、トークンを設定:
-
-```bash
-export SLACK_USER_TOKEN=xoxp-your-user-token
-```
-
-### 4. 実行
+ワークスペースにアプリをインストールし、slamy に workspace を登録する:
 
 ```bash
-./slamy channels list
+slamy workspace add --team-id T01234567 --alias myworkspace \
+  --domain myworkspace.slack.com --name "My Workspace" \
+  --user-token-env SLACK_USER_TOKEN
 ```
 
-### 任意: ローカル認証セッション
+オプションの詳細は `slamy workspace --help` を参照してください。
 
-パスワードマネージャーの承認回数を減らす場合は、標準入力からトークンを渡してメモリ内の
-ローカルセッションを開始できます。トークンをコマンドライン引数で渡すことはできません。
+### 4. 認証セッションの開始
+
+パスワードマネージャーから stdin にトークンを渡してメモリ内のローカルセッションを開始する:
 
 ```bash
 op read 'op://<vault>/<item>/<field>' |
-  slamy --workspace wedgeai auth session start
+  slamy --workspace myworkspace auth session start
+```
 
-# 既定は24時間。7日間は明示指定する上限値です。
+トークンをコマンドライン引数として渡すことはできません。
+
+### 5. 実行
+
+```bash
+slamy channels list
+```
+
+### レガシー: 環境変数による認証（非推奨）
+
+`SLACK_USER_TOKEN` または `SLACK_BOT_TOKEN` による直接認証は後方互換のためにサポートされていますが、**非推奨**です。workspace registry と `auth session start` の利用を推奨します。
+
+```bash
+# 非推奨 — 上記の workspace registry + auth session start を使用してください
+export SLACK_USER_TOKEN=xoxp-your-user-token
+```
+
+### 任意: セッション TTL とフォアグラウンドモード
+
+既定の TTL は 24 時間です。延長またはフォアグラウンドで動かす場合:
+
+```bash
+# 7日間が明示指定できる上限値
 op read 'op://<vault>/<item>/<field>' |
   slamy --workspace wedgeai auth session start --ttl 7d
 
