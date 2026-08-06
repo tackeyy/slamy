@@ -100,34 +100,56 @@ In **OAuth & Permissions** > **Scopes** > **User Token Scopes**, add:
 | `users.profile:read` | View user profiles |
 | `team:read` | View workspace (team) info |
 
-### 3. Install and Set Environment Variables
+### 3. Install and register the workspace
 
-Install the app to your workspace, then set your token:
+Install the app to your workspace, then register it with slamy:
 
 ```bash
+slamy workspace add --team-id T01234567 --alias myworkspace \
+  --domain myworkspace.slack.com --name "My Workspace" \
+  --user-token-env SLACK_USER_TOKEN
+```
+
+See `slamy workspace --help` for all options.
+
+### 4. Start an authentication session
+
+Pipe your token from a password manager to start an in-memory local session:
+
+```bash
+op read 'op://<vault>/<item>/<field>' |
+  slamy --workspace myworkspace auth session start
+```
+
+Tokens are not accepted as command arguments.
+
+### 5. Run
+
+```bash
+slamy channels list
+```
+
+### Legacy: environment variable authentication (deprecated)
+
+Setting `SLACK_USER_TOKEN` or `SLACK_BOT_TOKEN` directly is supported for single-workspace
+backwards compatibility but is **deprecated**. Use the workspace registry and
+`auth session start` instead.
+
+```bash
+# Deprecated — use workspace registry + auth session start above
 export SLACK_USER_TOKEN=xoxp-your-user-token
 ```
 
-### 4. Run
+### Optional: session TTL and foreground mode
+
+The default session TTL is 24 hours. To extend or keep the broker in the foreground:
 
 ```bash
-./slamy channels list
-```
-
-### Optional: local authentication session
-
-To avoid repeated password-manager approval, start an in-memory local session by piping a token to
-standard input. Tokens are not accepted as command arguments.
-
-```bash
-op read 'op://<vault>/<item>/<field>' |
-  slamy --workspace wedgeai auth session start
-
-# Seven days is the explicit maximum; the default is 24 hours.
+# Seven days is the explicit maximum.
 op read 'op://<vault>/<item>/<field>' |
   slamy --workspace wedgeai auth session start --ttl 7d
 
-# Use this under Terminal, launchd, or another supervisor that must own the broker process.
+# Keep the broker attached to the current process (Terminal, launchd, etc.).
 op read 'op://<vault>/<item>/<field>' |
   slamy --workspace wedgeai auth session start --ttl 7d --foreground
 

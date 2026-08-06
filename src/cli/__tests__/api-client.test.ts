@@ -239,3 +239,104 @@ describe("collectCliWorkspaceSelector", () => {
     );
   });
 });
+
+describe("createCliApiClient — self-documenting auth error (no selector, no legacy token)", () => {
+  it("throws with auth session start guidance when registry is empty", async () => {
+    const emptyRegistry = new WorkspaceRegistry(
+      new MemoryStore({ version: 1, workspaces: [] }),
+    );
+    await expect(
+      createCliApiClient({
+        env: {},
+        registry: emptyRegistry,
+        credentialResolver: resolver({}, {}),
+        clientFactory: vi.fn(),
+      }),
+    ).rejects.toThrow(/auth session start/);
+  });
+
+  it("throws with auth session start guidance when registry has entries and no legacy token", async () => {
+    const clientFactory = vi.fn();
+    await expect(
+      createCliApiClient({
+        env: {},
+        registry: registry(),
+        credentialResolver: resolver({}, {}),
+        clientFactory,
+      }),
+    ).rejects.toThrow(/auth session start/);
+  });
+
+  it("guidance includes registered workspace aliases when registry has entries", async () => {
+    const clientFactory = vi.fn();
+    let thrownError: Error | undefined;
+    try {
+      await createCliApiClient({
+        env: {},
+        registry: registry(),
+        credentialResolver: resolver({}, {}),
+        clientFactory,
+      });
+    } catch (err) {
+      thrownError = err as Error;
+    }
+    expect(thrownError).toBeDefined();
+    expect(thrownError!.message).toContain("wedgeai");
+    expect(thrownError!.message).toContain("manavi");
+  });
+
+  it("guidance mentions workspace add when registry is empty", async () => {
+    const emptyRegistry = new WorkspaceRegistry(
+      new MemoryStore({ version: 1, workspaces: [] }),
+    );
+    let thrownError: Error | undefined;
+    try {
+      await createCliApiClient({
+        env: {},
+        registry: emptyRegistry,
+        credentialResolver: resolver({}, {}),
+        clientFactory: vi.fn(),
+      });
+    } catch (err) {
+      thrownError = err as Error;
+    }
+    expect(thrownError).toBeDefined();
+    expect(thrownError!.message).toContain("workspace add");
+  });
+
+  it("does not throw when legacy tokens are present (legacy mode)", async () => {
+    let thrownError: Error | undefined;
+    try {
+      await createCliApiClient({
+        env: { SLACK_USER_TOKEN: "xoxp-secret-value", SLACK_BOT_TOKEN: "xoxb-secret-value" },
+        registry: registry(),
+        credentialResolver: resolver({}, {}),
+        clientFactory: vi.fn(),
+      });
+    } catch (err) {
+      thrownError = err as Error;
+    }
+    // selector が undefined かつ legacy token がある場合はエラーにならない（legacy mode）
+    // このテストではエラーが出ないことを確認する
+    expect(thrownError).toBeUndefined();
+  });
+
+  it("guidance mentions legacy env vars as deprecated (no selector, no legacy token)", async () => {
+    const emptyRegistry = new WorkspaceRegistry(
+      new MemoryStore({ version: 1, workspaces: [] }),
+    );
+    let thrownError: Error | undefined;
+    try {
+      await createCliApiClient({
+        env: {},
+        registry: emptyRegistry,
+        credentialResolver: resolver({}, {}),
+        clientFactory: vi.fn(),
+      });
+    } catch (err) {
+      thrownError = err as Error;
+    }
+    expect(thrownError).toBeDefined();
+    expect(thrownError!.message.toLowerCase()).toMatch(/deprecated/);
+  });
+});
