@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import type { Mock } from "vitest";
-import { handleCliError, requireToken } from "../lib/cli-errors.js";
+import { handleCliError, requireToken, buildAuthGuidanceMessage } from "../lib/cli-errors.js";
 import type { ExitFn, LogFn } from "../lib/cli-errors.js";
 
 // 実 CLI コードと結びついたテスト。
@@ -81,9 +81,9 @@ describe("requireToken", () => {
   it("exits with 1 and prints guidance when no token is set", () => {
     const tokens = requireToken({}, exit, log);
     expect(tokens).toBeUndefined();
-    expect(log).toHaveBeenCalledWith(
-      "Error: SLACK_USER_TOKEN or SLACK_BOT_TOKEN is not set",
-    );
+    const loggedMsg = (log.mock.calls[0]?.[0] as string) ?? "";
+    expect(loggedMsg).toContain("SLACK_USER_TOKEN");
+    expect(loggedMsg).toContain("auth session start");
     expect(exit).toHaveBeenCalledWith(1);
   });
 
@@ -114,5 +114,64 @@ describe("requireToken — integration with process.env style typing", () => {
     const tokens = requireToken(process.env, exit, log);
     expect(tokens?.botToken).toBe("xoxb-real-shape");
     expect(exit).not.toHaveBeenCalled();
+  });
+});
+
+describe("buildAuthGuidanceMessage", () => {
+  it("contains auth session start command", () => {
+    const msg = buildAuthGuidanceMessage({ workspaceAliases: [] });
+    expect(msg).toContain("auth session start");
+    expect(msg).toContain("workspace add");
+  });
+
+  it("does not include token values", () => {
+    const msg = buildAuthGuidanceMessage({
+      workspaceAliases: [],
+      hasLegacyUserToken: true,
+      hasLegacyBotToken: false,
+    });
+    // トークン値（xoxp- / xoxb- プレフィックス等）は含まれない
+    expect(msg).not.toMatch(/xox[pb]-/);
+  });
+
+  it("registry 未登録時は workspace add の具体手順を案内する", () => {
+    const msg = buildAuthGuidanceMessage({ workspaceAliases: [] });
+    expect(msg).toContain("workspace add");
+    expect(msg).toContain("--team-id");
+    expect(msg).toContain("--alias");
+  });
+
+  it("registry 登録済み時は alias 一覧を表示して auth session start を案内する", () => {
+    const msg = buildAuthGuidanceMessage({ workspaceAliases: ["wedgeai", "manavi"] });
+    expect(msg).toContain("wedgeai");
+    expect(msg).toContain("manavi");
+    expect(msg).toContain("auth session start");
+  });
+
+  it("legacy env 有無を有無のみで表示し値は出さない", () => {
+    const msg = buildAuthGuidanceMessage({
+      workspaceAliases: [],
+      hasLegacyUserToken: true,
+      hasLegacyBotToken: false,
+    });
+    expect(msg).toContain("SLACK_USER_TOKEN");
+    // 有無の文字を含む（"あり" or "設定済み" 等）
+    expect(msg.toLowerCase()).toMatch(/設定済み|あり|set/);
+  });
+
+  it("legacy env を deprecated と明示する", () => {
+    const msg = buildAuthGuidanceMessage({
+      workspaceAliases: [],
+      hasLegacyUserToken: true,
+    });
+    expect(msg.toLowerCase()).toMatch(/deprecated|非推奨/);
+  });
+
+  it("registry 登録済み時は workspace add 手順よりも session start を前面に出す", () => {
+    const msgWithAliases = buildAuthGuidanceMessage({ workspaceAliases: ["primary"] });
+    const sessionStartIdx = msgWithAliases.indexOf("auth session start");
+    const workspaceAddIdx = msgWithAliases.indexOf("workspace add");
+    // session start の案内が workspace add より先、または workspace add が省略される
+    expect(sessionStartIdx).toBeLessThan(workspaceAddIdx === -1 ? Infinity : workspaceAddIdx);
   });
 });

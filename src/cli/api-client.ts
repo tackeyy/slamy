@@ -12,6 +12,7 @@ import {
 } from "../lib/index.js";
 import type { LocalSessionConnection } from "../lib/local-session-web-client.js";
 import { findLocalSessionForWorkspace } from "../lib/local-session-files.js";
+import { buildAuthGuidanceMessage } from "../lib/cli-errors.js";
 
 export type CliApiClientLease<Client = SlamyClient> = {
   readonly client: Client;
@@ -57,9 +58,22 @@ export async function createCliApiClient<Client = SlamyClient>(
     ((tokens: SlamyClientOptions) => new SlamyClient(tokens) as Client);
 
   if (selector === undefined) {
-    const tokens = legacyTokens(env);
+    const userToken = env.SLACK_USER_TOKEN;
+    const botToken = env.SLACK_BOT_TOKEN;
+    if (!userToken && !botToken) {
+      // legacy token が無い場合は self-documenting な案内を出す
+      const reg = options.registry ?? createWorkspaceRegistry({ env });
+      const workspaces = await reg.list().catch(() => []);
+      const workspaceAliases = workspaces.map((w) => w.alias);
+      const guidance = buildAuthGuidanceMessage({
+        workspaceAliases,
+        hasLegacyUserToken: false,
+        hasLegacyBotToken: false,
+      });
+      throw new Error(guidance);
+    }
     return {
-      client: clientFactory(tokens),
+      client: clientFactory(legacyTokens(env)),
       dispose() {},
     };
   }
