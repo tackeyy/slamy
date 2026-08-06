@@ -304,7 +304,7 @@ describe("createCliApiClient — self-documenting auth error (no selector, no le
     expect(thrownError!.message).toContain("workspace add");
   });
 
-  it("guidance does not contain token values", async () => {
+  it("does not throw when legacy tokens are present (legacy mode)", async () => {
     let thrownError: Error | undefined;
     try {
       await createCliApiClient({
@@ -337,6 +337,6 @@ describe("createCliApiClient — self-documenting auth error (no selector, no le
       thrownError = err as Error;
     }
     expect(thrownError).toBeDefined();
-    expect(thrownError!.message.toLowerCase()).toMatch(/deprecated|非推奨/);
+    expect(thrownError!.message.toLowerCase()).toMatch(/deprecated/);
   });
 });

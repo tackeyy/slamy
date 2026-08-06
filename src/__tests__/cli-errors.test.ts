@@ -155,8 +155,8 @@ describe("buildAuthGuidanceMessage", () => {
       hasLegacyBotToken: false,
     });
     expect(msg).toContain("SLACK_USER_TOKEN");
-    // 有無の文字を含む（"あり" or "設定済み" 等）
-    expect(msg.toLowerCase()).toMatch(/設定済み|あり|set/);
+    // 有無の文字を含む（"set" 等）
+    expect(msg.toLowerCase()).toMatch(/set/);
   });
 
   it("legacy env を deprecated と明示する", () => {
@@ -164,7 +164,7 @@ describe("buildAuthGuidanceMessage", () => {
       workspaceAliases: [],
       hasLegacyUserToken: true,
     });
-    expect(msg.toLowerCase()).toMatch(/deprecated|非推奨/);
+    expect(msg.toLowerCase()).toMatch(/deprecated/);
   });
 
   it("registry 登録済み時は workspace add 手順よりも session start を前面に出す", () => {
