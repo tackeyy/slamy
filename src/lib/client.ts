@@ -86,6 +86,9 @@ function mapMessage(msg: any): Message {
  */
 const CHANNEL_ACCESS_ERROR_CODES = new Set(["channel_not_found", "not_in_channel"]);
 
+/** search.messages フォールバックで取得する最大ページ数。 */
+const THREAD_SEARCH_MAX_PAGES = 10;
+
 /** Slack SDK (WebAPIPlatformError) のエラーコードを取り出す。 */
 function slackErrorCode(err: unknown): string | undefined {
   const code = (err as { data?: { error?: unknown } } | null)?.data?.error;
@@ -870,16 +873,36 @@ export class SlamyClient {
     limit: number,
   ): Promise<Message[]> {
     const matches: any[] = [];
+    let channelQuery = resolvedChannel;
+    try {
+      const channelName = await this.resolveChannelName(resolvedChannel);
+      if (channelName && channelName !== resolvedChannel) {
+        channelQuery = channelName;
+      } else {
+        process.stderr.write(
+          `Warning: channel name resolution failed for ${resolvedChannel}; ` +
+            "search.messages is falling back to the channel ID.\n",
+        );
+      }
+    } catch {
+      process.stderr.write(
+        `Warning: channel name resolution failed for ${resolvedChannel}; ` +
+          "search.messages is falling back to the channel ID.\n",
+      );
+    }
+
     let page = 1;
+    let pagesFetched = 0;
 
     do {
       const res = await this.userClient.search.messages({
-        query: `in:${resolvedChannel}`,
+        query: `in:${channelQuery}`,
         sort: "timestamp",
         sort_dir: "asc",
         count: 100,
         page,
       });
+      pagesFetched += 1;
       matches.push(...((res.messages?.matches || []) as any[]));
 
       const paging = res.messages?.paging as
@@ -888,6 +911,13 @@ export class SlamyClient {
       const currentPage = paging?.page ?? page;
       const totalPages = paging?.pages ?? currentPage;
       if (currentPage >= totalPages) break;
+      if (pagesFetched >= THREAD_SEARCH_MAX_PAGES) {
+        process.stderr.write(
+          `Warning: search.messages reached the ${THREAD_SEARCH_MAX_PAGES} pages limit; ` +
+            "returning partial thread replies.\n",
+        );
+        break;
+      }
       page = currentPage + 1;
     } while (true);
 
@@ -904,6 +934,7 @@ export class SlamyClient {
     resolvedChannel: string,
     threadTs: string,
   ): boolean {
+    if (typeof match?.ts !== "string") return false;
     if (match?.channel?.id !== resolvedChannel) return false;
     if (match.ts === threadTs || match.thread_ts === threadTs) return true;
 

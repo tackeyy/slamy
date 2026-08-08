@@ -615,6 +615,10 @@ describe("getThreadReplies (read)", () => {
     mockWebClient.conversations.replies.mockRejectedValue(
       slackError("missing_scope", "channels:history"),
     );
+    mockWebClient.conversations.list.mockResolvedValue({
+      ok: true,
+      channels: [{ id: "C123", name: "target" }],
+    });
     mockWebClient.search.messages.mockResolvedValue({
       ok: true,
       messages: {
@@ -635,6 +639,20 @@ describe("getThreadReplies (read)", () => {
               "https://example.slack.com/archives/C123/p123457?thread_ts=123.456&cid=C123",
           },
           {
+            ts: "123.4575",
+            thread_ts: "123.456",
+            channel: { id: "C123", name: "target" },
+            user: "U5",
+            text: "Reply with top-level thread_ts",
+            permalink: "https://example.slack.com/archives/C123/p1234575",
+          },
+          {
+            thread_ts: "123.456",
+            channel: { id: "C123", name: "target" },
+            user: "U6",
+            text: "Malformed without ts",
+          },
+          {
             ts: "123.458",
             channel: { id: "C999", name: "other-channel" },
             user: "U3",
@@ -651,8 +669,8 @@ describe("getThreadReplies (read)", () => {
               "https://example.slack.com/archives/C123/p999002?thread_ts=999.001&cid=C123",
           },
         ],
-        total: 4,
-        paging: { page: 1, pages: 1, count: 100, total: 4 },
+        total: 6,
+        paging: { page: 1, pages: 1, count: 100, total: 6 },
       },
     } as any);
     const stderr = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
@@ -662,9 +680,13 @@ describe("getThreadReplies (read)", () => {
       "123.456",
     );
 
-    expect(msgs.map((msg) => msg.text)).toEqual(["Parent", "Reply"]);
+    expect(msgs.map((msg) => msg.text)).toEqual([
+      "Parent",
+      "Reply",
+      "Reply with top-level thread_ts",
+    ]);
     expect(mockWebClient.search.messages).toHaveBeenCalledWith({
-      query: "in:C123",
+      query: "in:target",
       sort: "timestamp",
       sort_dir: "asc",
       count: 100,
@@ -672,6 +694,26 @@ describe("getThreadReplies (read)", () => {
     });
     expect(stderr).toHaveBeenCalledTimes(1);
     expect(stderr.mock.calls[0]?.[0]).toContain("search.messages");
+  });
+
+  it("channel 名解決が例外なら ID query に戻し stderr で警告する", async () => {
+    mockWebClient.conversations.replies.mockRejectedValue(slackError("missing_scope"));
+    mockWebClient.search.messages.mockResolvedValue({
+      ok: true,
+      messages: { matches: [], paging: { page: 1, pages: 1 } },
+    });
+    const stderr = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
+    const client = new SlamyClient({ userToken: "xoxp-test" });
+    vi.spyOn(client, "resolveChannelName").mockRejectedValue(new Error("lookup failed"));
+
+    await client.getThreadReplies("C123", "123.456");
+
+    expect(mockWebClient.search.messages).toHaveBeenCalledWith(
+      expect.objectContaining({ query: "in:C123" }),
+    );
+    expect(stderr.mock.calls.map((call) => String(call[0]))).toContainEqual(
+      expect.stringContaining("channel name"),
+    );
   });
 
   it("search の全ページを取得し ts 昇順整列後に limit を適用する", async () => {
@@ -728,6 +770,93 @@ describe("getThreadReplies (read)", () => {
       expect.objectContaining({ page: 2 }),
     );
     expect(msgs.map((msg) => msg.ts)).toEqual(["123.457", "123.458"]);
+  });
+
+  it("search pagination は 10 ページで打ち切り partial result を返す", async () => {
+    mockWebClient.conversations.replies.mockRejectedValue(slackError("missing_scope"));
+    mockWebClient.search.messages.mockImplementation(async ({ page }: { page: number }) => ({
+      ok: true,
+      messages: {
+        matches: [
+          {
+            ts: `123.${String(456 + page).padStart(3, "0")}`,
+            channel: { id: "C123" },
+            user: `U${page}`,
+            text: `page-${page}`,
+            thread_ts: "123.456",
+          },
+        ],
+        paging: { page, pages: 11 },
+      },
+    }));
+    const stderr = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
+    const client = new SlamyClient({ userToken: "xoxp-test" });
+    vi.spyOn(client, "resolveChannelName").mockResolvedValue("target");
+
+    const msgs = await client.getThreadReplies("C123", "123.456", { limit: 100 });
+
+    expect(mockWebClient.search.messages).toHaveBeenCalledTimes(10);
+    expect(msgs).toHaveLength(10);
+    expect(stderr.mock.calls.map((call) => String(call[0]))).toContainEqual(
+      expect.stringContaining("10 pages"),
+    );
+  });
+
+  it("search フォールバックの default limit は 50", async () => {
+    mockWebClient.conversations.replies.mockRejectedValue(slackError("missing_scope"));
+    mockWebClient.search.messages.mockResolvedValue({
+      ok: true,
+      messages: {
+        matches: Array.from({ length: 60 }, (_, index) => ({
+          ts: `123.${String(457 + index).padStart(3, "0")}`,
+          channel: { id: "C123" },
+          user: `U${index}`,
+          text: `reply-${index}`,
+          thread_ts: "123.456",
+        })),
+        paging: { page: 1, pages: 1 },
+      },
+    });
+    vi.spyOn(process.stderr, "write").mockImplementation(() => true);
+    const client = new SlamyClient({ userToken: "xoxp-test" });
+    vi.spyOn(client, "resolveChannelName").mockResolvedValue("target");
+
+    const msgs = await client.getThreadReplies("C123", "123.456");
+
+    expect(msgs).toHaveLength(50);
+  });
+
+  it("数値として同値の ts はlocaleCompare でタイブレークする", async () => {
+    mockWebClient.conversations.replies.mockRejectedValue(slackError("missing_scope"));
+    mockWebClient.search.messages.mockResolvedValue({
+      ok: true,
+      messages: {
+        matches: [
+          {
+            ts: "123.4570",
+            channel: { id: "C123" },
+            user: "U2",
+            text: "long form",
+            thread_ts: "123.456",
+          },
+          {
+            ts: "123.457",
+            channel: { id: "C123" },
+            user: "U1",
+            text: "short form",
+            thread_ts: "123.456",
+          },
+        ],
+        paging: { page: 1, pages: 1 },
+      },
+    });
+    vi.spyOn(process.stderr, "write").mockImplementation(() => true);
+    const client = new SlamyClient({ userToken: "xoxp-test" });
+    vi.spyOn(client, "resolveChannelName").mockResolvedValue("target");
+
+    const msgs = await client.getThreadReplies("C123", "123.456");
+
+    expect(msgs.map((msg) => msg.ts)).toEqual(["123.457", "123.4570"]);
   });
 
   it("missing_scope 以外の API エラーは search せず伝播する", async () => {
