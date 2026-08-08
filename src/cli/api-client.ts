@@ -3,6 +3,7 @@ import {
   SlamyClient,
   createCredentialResolver,
   createWorkspaceRegistry,
+  WorkspaceRegistryError,
   type CredentialKind,
   type SlamyClientOptions,
   type TeamId,
@@ -56,14 +57,18 @@ export async function createCliApiClient<Client = SlamyClient>(
   const clientFactory =
     options.clientFactory ??
     ((tokens: SlamyClientOptions) => new SlamyClient(tokens) as Client);
+  const registry = options.registry ?? createWorkspaceRegistry({ env });
+  const workspace =
+    selector === undefined
+      ? await resolveDefaultWorkspace(registry)
+      : await registry.resolve(selector);
 
-  if (selector === undefined) {
+  if (workspace === undefined) {
     const userToken = env.SLACK_USER_TOKEN;
     const botToken = env.SLACK_BOT_TOKEN;
     if (!userToken && !botToken) {
       // legacy token が無い場合は self-documenting な案内を出す
-      const reg = options.registry ?? createWorkspaceRegistry({ env });
-      const workspaces = await reg.list().catch(() => []);
+      const workspaces = await registry.list().catch(() => []);
       const workspaceAliases = workspaces.map((w) => w.alias);
       const guidance = buildAuthGuidanceMessage({
         workspaceAliases,
@@ -78,8 +83,6 @@ export async function createCliApiClient<Client = SlamyClient>(
     };
   }
 
-  const registry = options.registry ?? createWorkspaceRegistry({ env });
-  const workspace = await registry.resolve(selector);
   const localSessionLookup =
     options.localSessionLookup ??
     (env === process.env
@@ -114,6 +117,22 @@ export async function createCliApiClient<Client = SlamyClient>(
     };
   } catch (error) {
     credentials.destroy();
+    throw error;
+  }
+}
+
+async function resolveDefaultWorkspace(
+  registry: WorkspaceRegistry,
+): Promise<WorkspaceRecord | undefined> {
+  try {
+    return await registry.resolve();
+  } catch (error) {
+    if (
+      error instanceof WorkspaceRegistryError &&
+      (error.code === "DEFAULT_NOT_FOUND" || error.code === "WORKSPACE_NOT_FOUND")
+    ) {
+      return undefined;
+    }
     throw error;
   }
 }
