@@ -46,11 +46,11 @@ class TokenIdentityVerifier implements AuthVerifier {
   }
 }
 
-function registry(): WorkspaceRegistry {
+function registry(withDefault = true): WorkspaceRegistry {
   return new WorkspaceRegistry(
     new MemoryStore({
       version: 1,
-      defaultTeamId: MANAVI_TEAM,
+      ...(withDefault ? { defaultTeamId: MANAVI_TEAM } : {}),
       workspaces: [
         {
           teamId: WEDGE_TEAM,
@@ -71,6 +71,31 @@ function registry(): WorkspaceRegistry {
           credentialRefs: {
             user: { provider: "environment", name: "MANAVI_USER_TOKEN" },
           },
+        },
+      ],
+    }),
+  );
+}
+
+function corruptRegistry(): WorkspaceRegistry {
+  return new WorkspaceRegistry(
+    new MemoryStore({
+      version: 1,
+      defaultTeamId: MANAVI_TEAM,
+      workspaces: [
+        {
+          teamId: WEDGE_TEAM,
+          alias: "duplicate",
+          domain: "wedgeai.slack.com",
+          previousDomains: [],
+          displayName: "WedgeAI",
+        },
+        {
+          teamId: MANAVI_TEAM,
+          alias: "duplicate",
+          domain: "ma-navi.slack.com",
+          previousDomains: [],
+          displayName: "M&A Navi",
         },
       ],
     }),
@@ -137,6 +162,42 @@ describe("CLI workspace API client", () => {
     expect(lease.teamId).toBe(WEDGE_TEAM);
     expect(clientFactory).toHaveBeenCalledWith({ userToken: "xoxp-wedge-test" });
     lease.dispose();
+  });
+
+  it("uses the registry default when no selector is provided", async () => {
+    const env = {
+      MANAVI_USER_TOKEN: "xoxp-manavi-test",
+      SLACK_USER_TOKEN: "xoxp-legacy-test",
+    };
+    const clientFactory = vi.fn().mockReturnValue({ workspace: "manavi" });
+
+    const lease = await createCliApiClient({
+      env,
+      registry: registry(),
+      credentialResolver: resolver(env, {
+        "xoxp-manavi-test": { teamId: MANAVI_TEAM, userId: "UMANAVI" },
+      }),
+      clientFactory,
+    });
+
+    expect(lease.teamId).toBe(MANAVI_TEAM);
+    expect(clientFactory).toHaveBeenCalledWith({ userToken: "xoxp-manavi-test" });
+    expect(JSON.stringify(clientFactory.mock.calls)).not.toContain("legacy");
+    lease.dispose();
+  });
+
+  it("propagates registry corruption without falling back to legacy credentials", async () => {
+    const clientFactory = vi.fn();
+
+    await expect(
+      createCliApiClient({
+        env: { SLACK_USER_TOKEN: "xoxp-legacy-test" },
+        registry: corruptRegistry(),
+        credentialResolver: resolver({}, {}),
+        clientFactory,
+      }),
+    ).rejects.toMatchObject({ code: "DUPLICATE_ALIAS" });
+    expect(clientFactory).not.toHaveBeenCalled();
   });
 
   it("selected workspace missing credential fails without legacy fallback", async () => {
@@ -211,7 +272,7 @@ describe("CLI workspace API client", () => {
     const clientFactory = vi.fn().mockReturnValue({});
     const lease = await createCliApiClient({
       env: { SLACK_USER_TOKEN: "xoxp-legacy-test" },
-      registry: registry(),
+      registry: registry(false),
       credentialResolver: resolver({}, {}),
       clientFactory,
     });
@@ -260,7 +321,7 @@ describe("createCliApiClient — self-documenting auth error (no selector, no le
     await expect(
       createCliApiClient({
         env: {},
-        registry: registry(),
+        registry: registry(false),
         credentialResolver: resolver({}, {}),
         clientFactory,
       }),
@@ -273,7 +334,7 @@ describe("createCliApiClient — self-documenting auth error (no selector, no le
     try {
       await createCliApiClient({
         env: {},
-        registry: registry(),
+        registry: registry(false),
         credentialResolver: resolver({}, {}),
         clientFactory,
       });
@@ -309,7 +370,7 @@ describe("createCliApiClient — self-documenting auth error (no selector, no le
     try {
       await createCliApiClient({
         env: { SLACK_USER_TOKEN: "xoxp-secret-value", SLACK_BOT_TOKEN: "xoxb-secret-value" },
-        registry: registry(),
+        registry: registry(false),
         credentialResolver: resolver({}, {}),
         clientFactory: vi.fn(),
       });

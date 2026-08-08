@@ -262,6 +262,9 @@ slamy workspace default --clear
 slamy workspace remove primary
 ```
 
+Setting a registry default makes that workspace the selection when neither `--workspace` nor
+`SLAMY_DEFAULT_WORKSPACE` is provided.
+
 These commands do not call Slack and never accept token values. All TypeScript CLI commands that call
 Slack resolve the root selector through this registry and verify every configured credential with
 `auth.test` before creating an API client. The TypeScript library also includes an atomic
@@ -506,7 +509,8 @@ For every TypeScript CLI command that calls Slack, the workspace selection order
 
 1. The root flag `--workspace <selector>`, accepting a registry alias, Team ID, or fully-qualified current/previous Slack domain
 2. `SLAMY_DEFAULT_WORKSPACE`
-3. Legacy `SLACK_USER_TOKEN` / `SLACK_BOT_TOKEN`, only when neither selector source is set
+3. The registry default set by `slamy workspace default <selector>`
+4. Legacy `SLACK_USER_TOKEN` / `SLACK_BOT_TOKEN`, only when neither selector source nor a registry default is set
 
 There is no `SLAMY_WORKSPACE` selector environment variable; use `--workspace` for an explicit selection.
 
