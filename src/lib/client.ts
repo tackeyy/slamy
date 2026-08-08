@@ -92,12 +92,19 @@ function slackErrorCode(err: unknown): string | undefined {
   return typeof code === "string" ? code : undefined;
 }
 
+/** Slack SDK error が報告した不足 scope を取り出す。 */
+function slackNeededScopes(err: unknown): string | undefined {
+  const needed = (err as { data?: { needed?: unknown } } | null)?.data?.needed;
+  return typeof needed === "string" && needed !== "" ? needed : undefined;
+}
+
 export class SlamyClient {
   private botClient: WebClient;
   private userClient: WebClient;
   private logger: SlamyLogger;
   private botTokenStr: string;
   private userTokenStr: string;
+  private searchTokenKind: string;
   private localSession?: LocalSessionConnection;
 
   // user_id -> display name (空文字 = 解決失敗、id 自体を返すと区別不能なので未解決のまま)
@@ -128,6 +135,11 @@ export class SlamyClient {
       sessionClient ?? new WebClient(opts.userToken || opts.botToken, { logLevel: LogLevel.WARN });
     this.botTokenStr = opts.botToken || opts.userToken || "";
     this.userTokenStr = opts.userToken || opts.botToken || "";
+    this.searchTokenKind = opts.localSession
+      ? `${opts.localSession.credentialKind} token (local session)`
+      : opts.userToken
+        ? "user token"
+        : "bot token";
     this.localSession = opts.localSession;
     this.logger = opts.logger ?? NOOP_LOGGER;
   }
@@ -811,15 +823,96 @@ export class SlamyClient {
     opts?: { limit?: number },
   ): Promise<Message[]> {
     const resolvedChannel = await this.resolveChannelId(channel);
-    const { result: res } = await this.readWithBotFallback((client) =>
-      client.conversations.replies({
-        channel: resolvedChannel,
-        ts: threadTs,
-        limit: opts?.limit ?? 50,
-      }),
-    );
+    const limit = opts?.limit ?? 50;
 
-    return (res.messages || []).map((msg) => mapMessage(msg));
+    try {
+      const { result: res } = await this.readWithBotFallback((client) =>
+        client.conversations.replies({
+          channel: resolvedChannel,
+          ts: threadTs,
+          limit,
+        }),
+      );
+
+      return (res.messages || []).map((msg) => mapMessage(msg));
+    } catch (repliesError) {
+      if (slackErrorCode(repliesError) !== "missing_scope") {
+        throw repliesError;
+      }
+
+      process.stderr.write(
+        "Warning: conversations.replies lacks scope; falling back to search.messages.\n",
+      );
+
+      try {
+        return await this.getThreadRepliesViaSearch(resolvedChannel, threadTs, limit);
+      } catch (searchError) {
+        const repliesScope = slackNeededScopes(repliesError) ?? "channel history scope";
+        const searchScope = slackNeededScopes(searchError) ?? "search:read";
+        const searchCode = slackErrorCode(searchError) ?? "unknown_error";
+        throw new Error(
+          `Thread replies fallback failed (required scopes: ${repliesScope}, ${searchScope}; ` +
+            `token type: ${this.searchTokenKind}; attempted path: ` +
+            `conversations.replies -> search.messages; search error: ${searchCode})`,
+          { cause: searchError },
+        );
+      }
+    }
+  }
+
+  /**
+   * conversations.replies の scope が無い場合に search.messages だけでスレッドを復元する。
+   * search のクエリは候補の絞り込みに過ぎないため、channel / thread は応答で再検証する。
+   */
+  private async getThreadRepliesViaSearch(
+    resolvedChannel: string,
+    threadTs: string,
+    limit: number,
+  ): Promise<Message[]> {
+    const matches: any[] = [];
+    let page = 1;
+
+    do {
+      const res = await this.userClient.search.messages({
+        query: `in:${resolvedChannel}`,
+        sort: "timestamp",
+        sort_dir: "asc",
+        count: 100,
+        page,
+      });
+      matches.push(...((res.messages?.matches || []) as any[]));
+
+      const paging = res.messages?.paging as
+        | { page?: number; pages?: number }
+        | undefined;
+      const currentPage = paging?.page ?? page;
+      const totalPages = paging?.pages ?? currentPage;
+      if (currentPage >= totalPages) break;
+      page = currentPage + 1;
+    } while (true);
+
+    return matches
+      .filter((match) => this.isExactThreadSearchMatch(match, resolvedChannel, threadTs))
+      .map((match) => mapMessage(match))
+      .sort((a, b) => Number(a.ts) - Number(b.ts) || a.ts.localeCompare(b.ts))
+      .slice(0, Math.max(0, limit));
+  }
+
+  /** search 結果が指定 channel / thread の親または返信かを完全一致で判定する。 */
+  private isExactThreadSearchMatch(
+    match: any,
+    resolvedChannel: string,
+    threadTs: string,
+  ): boolean {
+    if (match?.channel?.id !== resolvedChannel) return false;
+    if (match.ts === threadTs || match.thread_ts === threadTs) return true;
+
+    if (typeof match.permalink !== "string") return false;
+    try {
+      return new URL(match.permalink).searchParams.get("thread_ts") === threadTs;
+    } catch {
+      return false;
+    }
   }
 
   async listUsers(opts?: {
