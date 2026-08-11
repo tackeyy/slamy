@@ -24,7 +24,7 @@ nfpms:
     vendor: tackeyy
     homepage: https://github.com/tackeyy/slamy
     maintainer: tackeyy
-    description: A CLI tool and MCP server for Slack operations
+    description: A CLI tool for Slack API operations
     license: MIT
     formats:
       - deb
@@ -36,4 +36,4 @@ brews:
       name: homebrew-tap
       token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
     homepage: https://github.com/tackeyy/slamy
-    description: A CLI tool and MCP server for Slack operations
+    description: A CLI tool for Slack API operations

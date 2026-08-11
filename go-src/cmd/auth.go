@@ -5,8 +5,6 @@ import (
 	"fmt"
 	"os"
 
-	slackutil "github.com/tackeyy/slamy/internal/slack"
-
 	"github.com/spf13/cobra"
 )
 
@@ -17,9 +15,7 @@ var authCmd = &cobra.Command{
 
 // authClientFunc は auth コマンドが使う Slack クライアントを返す。
 // テストで差し替えるための DI ポイント (Issue #51 PR-1)。
-var authClientFunc = func() (*slackutil.Client, error) {
-	return slackutil.NewClient()
-}
+var authClientFunc = newCommandClient
 
 var authTestCmd = &cobra.Command{
 	Use:   "test",

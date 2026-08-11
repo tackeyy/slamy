@@ -4,7 +4,7 @@ import { parseSlackTarget } from "../parse-target.js";
 describe("parseSlackTarget", () => {
   describe("permalink URL", () => {
     it("スレッド親メッセージの URL から channel と ts を抽出", () => {
-      const url = "https://ma-navi-inc.slack.com/archives/C0123ABC/p1779626841429219";
+      const url = "https://example-workspace.slack.com/archives/C0123ABC/p1779626841429219";
       const result = parseSlackTarget(url);
       expect(result.channel).toBe("C0123ABC");
       expect(result.ts).toBe("1779626841.429219");
@@ -13,7 +13,7 @@ describe("parseSlackTarget", () => {
 
     it("スレッド返信の URL から channel / ts / thread_ts を抽出", () => {
       const url =
-        "https://ma-navi-inc.slack.com/archives/D0B4ALQ1A73/p1779627961670119?thread_ts=1779626841.429219&cid=D0B4ALQ1A73";
+        "https://example-workspace.slack.com/archives/D0B4ALQ1A73/p1779627961670119?thread_ts=1779626841.429219&cid=D0B4ALQ1A73";
       const result = parseSlackTarget(url);
       expect(result.channel).toBe("D0B4ALQ1A73");
       expect(result.ts).toBe("1779627961.670119");

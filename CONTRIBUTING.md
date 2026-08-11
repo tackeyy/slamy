@@ -5,15 +5,16 @@ instructions for contributing to the project.
 
 ## 🙏 Welcome!
 
-slamy is a **Node.js / TypeScript** project that ships both an MCP (Model Context Protocol) server
-and a standalone CLI for Slack. A separate Go implementation lives under `go-src/` and is released
-independently via `goreleaser`. Contributions to either side are welcome — bug fixes, features,
-tests, or documentation.
+slamy is a **Node.js / TypeScript** project that ships a Slack API client library and standalone
+CLI. A separate Go CLI implementation lives under `go-src/` and is released independently via
+`goreleaser`. Contributions to either side are welcome — bug fixes, features, tests, or
+documentation.
 
 ## 📖 Table of Contents
 
 - [Ways to Contribute](#ways-to-contribute)
 - [Before You Start](#before-you-start)
+- [Project Scope: Official Slack CLI vs slamy](#project-scope-official-slack-cli-vs-slamy)
 - [Development Setup](#development-setup)
 - [Coding Standards](#coding-standards)
 - [Testing Requirements](#testing-requirements)
@@ -39,13 +40,37 @@ tests, or documentation.
 4. Make sure you agree with our **[Code of Conduct](CODE_OF_CONDUCT.md)**
 5. For security-sensitive issues, follow **[SECURITY.md](SECURITY.md)** instead of opening a public issue
 
+## Project Scope: Official Slack CLI vs slamy
+
+Before proposing a feature, check the project's responsibility boundary in
+[ADR 001](docs/adr/001-official-slack-cli-boundary.md).
+
+Use the official [`slack` CLI](https://docs.slack.dev/tools/slack-cli/) for Slack app development,
+including app create/link/install/uninstall, manifests, local run, deployment, activity, logs,
+documentation, and ad hoc calls to arbitrary Web API methods. The official CLI also owns explicit
+`--team` selection for its own commands where supported.
+
+A slamy feature proposal must satisfy every item in this checklist:
+
+- [ ] The official CLI does not already provide the complete task-oriented workflow; the proposal
+  is not a generic wrapper around an official command or arbitrary Web API method.
+- [ ] The feature adds reusable high-level behavior for humans or agents, such as unified default,
+  explicit, or permalink-derived workspace resolution, automatic pagination, Slack ID name
+  resolution, stable machine-readable output, or safe message handling.
+- [ ] The implementation uses documented public Slack APIs without invoking the official CLI as a
+  subprocess or reading its CLI-owned credential store.
+- [ ] The behavior and failure modes have a stable, testable CLI or TypeScript contract.
+
+If any item is unchecked, use or improve the official CLI, or revise the proposal before adding it
+to slamy. Record the boundary review in the feature issue or pull request.
+
 ## 💻 Development Setup
 
 ### Prerequisites
 
-- **Node.js 22+** and **npm 10+** (the project targets Node 22 LTS)
+- **Node.js 25+** and **npm 10+**
 - **Git**
-- A Slack workspace with a Slack app + bot token if you want to run end-to-end CLI / MCP smoke tests
+- A Slack workspace with a Slack app + token if you want to run end-to-end API / CLI smoke tests
 
 ### Setup steps
 
@@ -118,7 +143,7 @@ Format: `<type>(<scope>): <subject>`
 ```text
 feat(reactions): add reactions get command
 fix(cli): default timestamp output to local TZ
-docs(readme): document MCP server installation
+docs(readme): document API client installation
 chore(deps): bump @slack/web-api to 7.10.0
 ```
 

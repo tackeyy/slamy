@@ -1,0 +1,136 @@
+export class CursorPaginationError extends Error {
+  readonly code = "PAGINATION_INVALID" as const;
+
+  constructor() {
+    super("Slack cursor pagination could not continue safely");
+    this.name = "CursorPaginationError";
+  }
+
+  toJSON(): { name: string; code: "PAGINATION_INVALID"; message: string } {
+    return { name: this.name, code: this.code, message: this.message };
+  }
+}
+
+export class PartialPaginationError<Page> extends Error {
+  readonly code = "PAGINATION_PARTIAL" as const;
+  readonly pages: readonly Page[];
+  override readonly cause: unknown;
+
+  constructor(pages: readonly Page[], cause?: unknown) {
+    super("Slack cursor pagination succeeded partially before a fetch error");
+    this.name = "PartialPaginationError";
+    this.pages = Object.freeze([...pages]);
+    this.cause = cause;
+  }
+
+  toJSON(): { name: string; code: "PAGINATION_PARTIAL"; message: string; pageCount: number } {
+    return { name: this.name, code: this.code, message: this.message, pageCount: this.pages.length };
+  }
+}
+
+export type CollectCursorPagesOptions<Page> = {
+  fetchPage(cursor: string | undefined): Promise<Page>;
+  getNextCursor(page: Page): unknown;
+  initialCursor?: string;
+  preserveFetchError?(error: unknown): boolean;
+  maxPages?: number;
+  getItems?: (page: Page) => readonly unknown[];
+  limit?: number;
+};
+
+export async function collectCursorPages<Page>(
+  options: CollectCursorPagesOptions<Page>,
+): Promise<readonly Page[]> {
+  let maxPages: number;
+  let cursor: string | undefined;
+  let preserveFetchError: ((error: unknown) => boolean) | undefined;
+  let getItems: ((page: Page) => readonly unknown[]) | undefined;
+  let limit: number | undefined;
+  try {
+    maxPages = options.maxPages ?? 1_000;
+    cursor = options.initialCursor;
+    preserveFetchError = options.preserveFetchError;
+    getItems = options.getItems;
+    limit = options.limit;
+    if (
+      !Number.isInteger(maxPages) ||
+      maxPages < 1 ||
+      maxPages > 1_000 ||
+      (preserveFetchError !== undefined && typeof preserveFetchError !== "function") ||
+      (cursor !== undefined && !isValidCursor(cursor)) ||
+      (getItems !== undefined && typeof getItems !== "function") ||
+      (limit !== undefined && (!Number.isInteger(limit) || limit < 1))
+    ) {
+      throw new TypeError();
+    }
+  } catch {
+    throw invalid();
+  }
+
+  const pages: Page[] = [];
+  const seenCursors = new Set<string>(cursor === undefined ? [] : [cursor]);
+  let totalItems = 0;
+
+  for (;;) {
+    let page: Page;
+    try {
+      page = await options.fetchPage(cursor);
+    } catch (error) {
+      let preserve = false;
+      try {
+        preserve = preserveFetchError?.(error) === true;
+      } catch {
+        // A hostile predicate cannot make an untrusted error observable.
+      }
+      if (preserve) {
+        if (pages.length > 0) throw new PartialPaginationError(pages, error);
+        throw error;
+      }
+      throw invalid();
+    }
+    pages.push(page);
+
+    if (getItems !== undefined && limit !== undefined) {
+      totalItems += getItems(page).length;
+      if (totalItems >= limit) {
+        return Object.freeze([...pages]);
+      }
+    }
+
+    let rawNext: unknown;
+    try {
+      rawNext = options.getNextCursor(page);
+    } catch {
+      throw invalid();
+    }
+
+    if (rawNext === undefined || rawNext === null || rawNext === "") {
+      return Object.freeze([...pages]);
+    }
+    if (pages.length >= maxPages) {
+      // When a limit is also specified, reaching maxPages stops silently (whichever fires first).
+      // Without a limit, maxPages is a hard safety cap that rejects unexpected continuation.
+      if (limit !== undefined) return Object.freeze([...pages]);
+      throw invalid();
+    }
+    if (!isValidCursor(rawNext) || seenCursors.has(rawNext)) {
+      throw invalid();
+    }
+    seenCursors.add(rawNext);
+    cursor = rawNext;
+  }
+}
+
+function isValidCursor(value: unknown): value is string {
+  return (
+    typeof value === "string" &&
+    value.length > 0 &&
+    value.length <= 2_048 &&
+    value.trim() === value &&
+    !/[\x00-\x1F\x7F]/.test(value)
+  );
+}
+
+function invalid(): CursorPaginationError {
+  return new CursorPaginationError();
+}

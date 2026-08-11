@@ -108,6 +108,25 @@ export interface AuthInfo {
   url: string;
 }
 
+/** Workspace (team) info returned by team.info. */
+export interface TeamInfo {
+  id: string;
+  name: string;
+  /** Slack subdomain, e.g. "example-workspace". */
+  domain: string;
+  /**
+   * Email domain restriction for the workspace, e.g. "example.com".
+   * Empty when no domain is configured. Useful for diagnosing SSO domain mismatches.
+   */
+  email_domain: string;
+  /** Enterprise Grid org id (empty for standalone workspaces). */
+  enterprise_id: string;
+  /** Enterprise Grid org name (empty for standalone workspaces). */
+  enterprise_name: string;
+  /** Workspace icon URL (132px), empty when unset. */
+  icon: string;
+}
+
 /** A reaction item returned by reactions.list. */
 export interface ReactionItem {
   name: string;

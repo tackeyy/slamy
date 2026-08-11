@@ -8,6 +8,16 @@ updates:
       time: "09:00"
       timezone: "Asia/Tokyo"
     open-pull-requests-limit: 5
+    cooldown:
+      default-days: 7
+    rebase-strategy: disabled
+    groups:
+      npm-minor-and-patch:
+        patterns:
+          - "*"
+        update-types:
+          - "minor"
+          - "patch"
     reviewers:
       - "tackeyy"
     labels:
@@ -24,6 +34,13 @@ updates:
       time: "09:00"
       timezone: "Asia/Tokyo"
     open-pull-requests-limit: 5
+    cooldown:
+      default-days: 7
+    rebase-strategy: disabled
+    groups:
+      github-actions:
+        patterns:
+          - "*"
     reviewers:
       - "tackeyy"
     labels:
@@ -41,6 +58,13 @@ updates:
       time: "09:00"
       timezone: "Asia/Tokyo"
     open-pull-requests-limit: 3
+    cooldown:
+      default-days: 7
+    rebase-strategy: disabled
+    groups:
+      go-modules:
+        patterns:
+          - "*"
     reviewers:
       - "tackeyy"
     labels:

@@ -18,9 +18,7 @@ var messagesCmd = &cobra.Command{
 
 // messagesClientFunc は messages コマンドが使う Slack クライアントを返す。
 // テストで差し替えるための DI ポイント (Issue #51 PR-2)。
-var messagesClientFunc = func() (*slackutil.Client, error) {
-	return slackutil.NewClient()
-}
+var messagesClientFunc = newCommandClient
 
 var messagesPostCmd = &cobra.Command{
 	Use:   "post <channel_id>",

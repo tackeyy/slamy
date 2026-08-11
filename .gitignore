@@ -10,6 +10,8 @@ vitest.config.d.ts.map
 .claude/
 .DS_Store
 .playwright-cli/
+.worktrees/
 .goal-state/
+.mission-state/
 go-src/coverage.out
 coverage.out

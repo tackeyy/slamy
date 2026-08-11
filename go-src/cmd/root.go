@@ -5,6 +5,8 @@ import (
 	"os"
 
 	"github.com/spf13/cobra"
+
+	slackutil "github.com/tackeyy/slamy/internal/slack"
 )
 
 var (
@@ -14,6 +16,7 @@ var (
 var (
 	outputJSON  bool
 	outputPlain bool
+	workspace   string
 )
 
 var rootCmd = &cobra.Command{
@@ -33,4 +36,12 @@ func Execute() {
 func init() {
 	rootCmd.PersistentFlags().BoolVar(&outputJSON, "json", false, "Output in JSON format")
 	rootCmd.PersistentFlags().BoolVar(&outputPlain, "plain", false, "Output in TSV format")
+	rootCmd.PersistentFlags().StringVar(&workspace, "workspace", "", "Slack workspace alias")
+}
+
+func newCommandClient() (*slackutil.Client, error) {
+	if rootCmd.PersistentFlags().Changed("workspace") {
+		return slackutil.NewClientForWorkspace(workspace)
+	}
+	return slackutil.NewClient()
 }

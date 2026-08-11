@@ -1,13 +1,14 @@
-# slamy — Slack MCP server & CLI
+# slamy — Slack API client & CLI
 
 **English** | [日本語](README.ja.md)
 
-A Slack [MCP (Model Context Protocol)](https://modelcontextprotocol.io/) server that also works as a standalone CLI. Connect AI agents like Claude to your Slack workspace, or use it directly from the terminal.
+A Slack API client and standalone CLI for reading, searching, and posting to Slack.
 
 ## Features
 
-- **MCP Server** — expose Slack operations as MCP tools for AI agents (Claude Code, Claude Desktop, etc.)
-- **CLI** — use the same operations directly from the terminal
+- **CLI** — run Slack operations directly from the terminal
+- **TypeScript API client** — use `SlamyClient` from Node.js applications
+- **Socket Mode events** — subscribe to Slack events with `SlamyEvents`
 - **Channels** — list channels, retrieve message history
 - **Messages** — post messages, reply to threads
 - **Users** — list workspace members, view profiles
@@ -15,7 +16,38 @@ A Slack [MCP (Model Context Protocol)](https://modelcontextprotocol.io/) server 
 - **Search** — search messages across channels with Slack query syntax
 - **Multiple output formats** — human-readable text, JSON, and TSV
 
+## Official Slack CLI and slamy
+
+The official [`slack` CLI](https://docs.slack.dev/tools/slack-cli/) owns Slack app development:
+create/link/install/uninstall, manifests, local run, deployment, activity, logs, documentation, and
+ad hoc Web API calls. It can also select a team explicitly for its own commands with `--team` where
+supported. slamy's target scope is task-oriented operations for humans and agents. Every Slack API
+command in the TypeScript CLI uses the same explicit/default workspace selector, credential
+verification path, and stable output conventions. Commands that accept Slack URLs also resolve
+their target from the permalink.
+
+slamy does not invoke the official CLI or read its private credential files. It uses documented
+Slack APIs directly, so both tools can be installed and used independently. See
+[ADR 001](docs/adr/001-official-slack-cli-boundary.md) for the responsibility matrix, feature
+acceptance rules, and deprecation criteria.
+
+## Architecture
+
+TypeScript is the target single implementation for both the slamy CLI and library. The repository
+is migrating incrementally from the current Go/TypeScript implementations to a single-package
+modular architecture with explicit workspace, credential, target, Slack adapter, command, output,
+event, CLI, and library boundaries. This target structure is not yet fully implemented.
+
+See [ADR 002](docs/adr/002-typescript-module-architecture.md) for the component and data-flow
+diagrams, import rules, public API compatibility policy, and Go removal gates.
+
 ## Installation
+
+### npm (TypeScript API and CLI)
+
+```bash
+npm install slamy
+```
 
 ### Homebrew
 
@@ -29,12 +61,12 @@ brew install tackeyy/tap/slamy
 go install github.com/tackeyy/slamy@latest
 ```
 
-### Build from source
+### Build the Go CLI from source
 
 ```bash
 git clone https://github.com/tackeyy/slamy.git
-cd slamy
-go build -o slamy .
+cd slamy/go-src
+go build -o ../slamy .
 ```
 
 ## Quick Start
@@ -53,29 +85,86 @@ In **OAuth & Permissions** > **Scopes** > **User Token Scopes**, add:
 |---|---|
 | `channels:history` | View messages in public channels |
 | `channels:read` | View basic channel info |
+| `channels:write` | Create public channels |
+| `channels:write.topic` | Set public channel topics and descriptions |
 | `chat:write` | Send messages (as yourself) |
 | `files:read` | Download files shared in channels |
 | `groups:history` | View messages in private channels |
 | `groups:read` | View basic private channel info |
+| `groups:write` | Create private channels |
+| `groups:write.topic` | Set private channel topics and descriptions |
 | `reactions:write` | Add emoji reactions |
 | `search:read` | Search messages |
 | `users:read` | View users and their basic info |
 | `users:read.email` | View email addresses |
 | `users.profile:read` | View user profiles |
+| `team:read` | View workspace (team) info |
 
-### 3. Install and Set Environment Variables
+### 3. Install and register the workspace
 
-Install the app to your workspace, then set your token:
+Install the app to your workspace, then register it with slamy:
 
 ```bash
+slamy workspace add --team-id T01234567 --alias myworkspace \
+  --domain myworkspace.slack.com --name "My Workspace" \
+  --user-token-env SLACK_USER_TOKEN
+```
+
+See `slamy workspace --help` for all options.
+
+### 4. Start an authentication session
+
+Pipe your token from a password manager to start an in-memory local session:
+
+```bash
+op read 'op://<vault>/<item>/<field>' |
+  slamy --workspace myworkspace auth session start
+```
+
+Tokens are not accepted as command arguments.
+
+### 5. Run
+
+```bash
+slamy channels list
+```
+
+### Legacy: environment variable authentication (deprecated)
+
+Setting `SLACK_USER_TOKEN` or `SLACK_BOT_TOKEN` directly is supported for single-workspace
+backwards compatibility but is **deprecated**. Use the workspace registry and
+`auth session start` instead.
+
+```bash
+# Deprecated — use workspace registry + auth session start above
 export SLACK_USER_TOKEN=xoxp-your-user-token
 ```
 
-### 4. Run
+### Optional: session TTL and foreground mode
+
+The default session TTL is 24 hours. To extend or keep the broker in the foreground:
 
 ```bash
-./slamy channels list
+# Seven days is the explicit maximum.
+op read 'op://<vault>/<item>/<field>' |
+  slamy --workspace wedgeai auth session start --ttl 7d
+
+# Keep the broker attached to the current process (Terminal, launchd, etc.).
+op read 'op://<vault>/<item>/<field>' |
+  slamy --workspace wedgeai auth session start --ttl 7d --foreground
+
+slamy --workspace wedgeai auth session status
+slamy --workspace wedgeai auth session revoke
 ```
+
+The detached broker keeps the Slack token in memory, verifies the canonical Team ID, and exposes
+only slamy's allowlisted Slack operations over an owner-only Unix socket. It does not return the
+Slack token to later CLI processes. A process already running as the same macOS user can still use
+the broker until expiry or revoke, so prefer the 24-hour default and use seven days only when the
+longer window is necessary. Local revoke does not rotate the Slack OAuth token. See the
+[security record](docs/reports/local-auth-session-security.md) for controls and residual risks.
+Foreground mode uses the same controls but keeps the broker attached to the current process; keep
+that Terminal or supervisor process running for the session lifetime.
 
 ## User Token vs Bot Token
 
@@ -90,7 +179,7 @@ Slack Apps can issue two types of tokens. Which one to use depends on your use c
 
 ### Use User Token when: acting on behalf of a user
 
-slamy was built as part of an **AI secretary / personal assistant** (Claude Code + MCP) that reads, searches, and posts to Slack on behalf of a specific user. In this use case, User Token is the natural choice:
+slamy supports applications that read, search, and post to Slack on behalf of a specific user. In this use case, User Token is the natural choice:
 
 1. **Search requires it** — `search:read` is a User Token-only scope. Bot Tokens simply cannot search messages
 2. **Single token** — no need to manage two tokens and worry about which operation uses which
@@ -121,16 +210,66 @@ slamy channels list [--limit <number>] [--include-archived] [--json] [--plain]
 | `--json` | No | Output as JSON |
 | `--plain` | No | Output as TSV |
 
+### `channels create` — Create or reconcile a channel
+
+```bash
+slamy channels create 01-engineering \
+  --workspace wedgeai \
+  --topic "AI development" \
+  --purpose "Discuss AI and software engineering decisions." \
+  --dry-run
+```
+
+The command requires a workspace selected by `--workspace` or `SLAMY_DEFAULT_WORKSPACE` and verifies
+the configured credential Team ID before writing.
+An existing channel is reused instead of duplicated, then its topic and purpose are reconciled.
+Use `--private` for a private channel. `--dry-run` does not resolve credentials or call Slack.
+After a real write, `conversations.info` verifies the name, visibility, topic, and purpose.
+
 ### Global options
 
-These flags work with any command:
+slamy provides separate Go and TypeScript CLI implementations. The available
+root options depend on which CLI you installed.
+
+Go CLI (`go install` or a source build):
 
 | Flag | Description |
 |---|---|
+| `--workspace <alias>` | Use the configured Slack workspace alias for this invocation |
+| `--json` | Output as JSON |
+| `--plain` | Output as TSV |
+
+TypeScript CLI (`npm install`):
+
+| Flag | Description |
+|---|---|
+| `--workspace <selector>` | Use a registered workspace by alias, Team ID, or fully-qualified current/previous Slack domain |
 | `--json` | Output as JSON |
 | `--plain` | Output as TSV |
 | `--utc` | Display timestamps in UTC (default: local TZ) |
 | `--tz <iana>` | Display timestamps in the specified IANA timezone (e.g. `Asia/Tokyo`) |
+
+The TypeScript CLI also provides offline workspace registry management:
+
+```bash
+slamy workspace list
+slamy workspace add --team-id T01234567 --alias primary \
+  --domain primary.slack.com --name "Primary" \
+  --user-token-env SLAMY_WORKSPACE_PRIMARY_USER_TOKEN --default
+slamy workspace show primary
+slamy workspace default primary
+slamy workspace default --clear
+slamy workspace remove primary
+```
+
+Setting a registry default makes that workspace the selection when neither `--workspace` nor
+`SLAMY_DEFAULT_WORKSPACE` is provided.
+
+These commands do not call Slack and never accept token values. All TypeScript CLI commands that call
+Slack resolve the root selector through this registry and verify every configured credential with
+`auth.test` before creating an API client. The TypeScript library also includes an atomic
+credential-set resolver, strict permalink Target resolver, and named workspace-aware Slack
+operations.
 
 ### `channels history` — Get channel message history
 
@@ -246,19 +385,32 @@ slamy search messages <query> [--count <n>] [--page <n>] [--sort <field>] [--sor
 | `--sort-dir <dir>` | No | `asc` or `desc` (default: desc) |
 | `--resolve-names` | No | Resolve `user_id` to display names |
 
+#### Channel filters in `in:`
+
+Slack accepts a channel **name** (`in:general`, `in:#general`) or a channel **mention** (`in:<#C0123456789>`) for the `in:` modifier. A bare channel ID is **not** a valid filter:
+
+```bash
+slamy search messages 'in:general'            # OK
+slamy search messages 'in:#general'           # OK
+slamy search messages 'in:<#C0123456789>'     # OK — a channel ID works in mention form
+slamy search messages 'in:C0123456789'        # returns 0 matches, without an error
+```
+
+Prefer the mention form when you only have a channel ID: it filters correctly and needs no name lookup. The bare-ID form fails silently, which is easy to misread as "this channel has no matching messages".
+
 ### `auth test` — Test authentication
 
 ```bash
 slamy auth test [--json] [--plain]
 ```
 
-### `mcp` — Start MCP server
+### `team info` — Get workspace info
 
 ```bash
-slamy mcp
+slamy team info [--json] [--plain]
 ```
 
-Starts an MCP server over stdio, exposing all operations as tools for AI agents (e.g., Claude Code).
+Returns the workspace domain, `email_domain`, and Enterprise info. The `email_domain` is useful for diagnosing SSO domain mismatches. Requires the `team:read` scope. Note: SSO enforcement settings are **not** exposed by the Slack API.
 
 ## Configuration
 
@@ -266,12 +418,143 @@ Starts an MCP server over stdio, exposing all operations as tools for AI agents 
 
 | Variable | Required | Description |
 |---|---|---|
-| `SLACK_USER_TOKEN` | Yes (either) | Slack User OAuth Token (`xoxp-...`) — required for `search messages` and most read operations |
+| `SLAMY_CONFIG_FILE` | No | Override the TypeScript workspace registry path; defaults to `$XDG_CONFIG_HOME/slamy/workspaces.json` or `~/.config/slamy/workspaces.json` |
+| `SLAMY_WORKSPACE_<ALIAS>_USER_TOKEN` | When its alias is selected | User OAuth Token for a workspace alias; uppercase the alias and replace hyphens with underscores |
+| `SLAMY_DEFAULT_WORKSPACE` | No | Registered workspace selector (alias, Team ID, or fully-qualified current/previous Slack domain) to use when `--workspace` is omitted |
+| `SLACK_USER_TOKEN` | Yes for legacy single-workspace use | Legacy Slack User OAuth Token (`xoxp-...`) — used only when neither an explicit nor default workspace selector is set |
 | `SLACK_BOT_TOKEN` | Yes (either) | Slack Bot OAuth Token (`xoxb-...`) — used for write operations and `reactions get` |
 | `SLAMY_TZ` | No | IANA timezone used by `engagement` commands (default: `Asia/Tokyo`) |
 | `SLACK_TEAM_ID` | No | Slack Team ID (for workspace-specific operations) |
 
-At least one of `SLACK_USER_TOKEN` / `SLACK_BOT_TOKEN` must be set. When both are set, slamy uses each token for the operations it best fits.
+When both `SLACK_USER_TOKEN` and `SLACK_BOT_TOKEN` are set in legacy mode, slamy uses each token for the operations it best fits.
+
+### Multiple Workspaces
+
+The TypeScript workspace registry uses Slack Team ID as the canonical identifier. Alias, current
+domain, previous domains, display name, default state, and credential references are mutable
+attributes. A reference contains a validated provider ID and an opaque reference name. The built-in
+provider resolves environment-variable names; custom providers can resolve Keychain or OAuth
+references without changing workspace records. The registry stores reference names only, never
+token values. It rejects corrupt JSON, unknown fields, duplicate Team IDs, aliases or domains,
+dangling defaults, symlinks, and group/other-readable files. Updates replace the complete document
+atomically.
+
+Use `workspace list/add/remove/show/default` as shown above. `--json` and `--plain` are supported.
+The dedicated config directory is created with mode `0700` and the registry file with mode `0600`
+on POSIX systems.
+
+Library integrations can use `createCredentialResolver()` to resolve every configured User/Bot
+reference for one `WorkspaceRecord` as a single verified set. The resolver never substitutes one
+token kind for another, verifies all configured credentials before returning any of them, rejects
+cross-workspace User/Bot combinations, and never falls back from a registry workspace to legacy
+global token variables. Raw token values are redacted from string, JSON, inspection, provider-error,
+and verification-error paths. Call `destroy()` on the returned set when the operation finishes; it
+idempotently destroys every credential in the set. Custom providers and verifiers are trusted
+components because their interfaces necessarily receive raw token material. Validate and isolate
+their implementations accordingly.
+
+Slack `auth.test` proves identity and Team ID but does not attest operation scopes. A requirement may
+carry scope metadata such as User `search:read`. The workspace-aware adapter checks this declared
+contract before transport and normalizes Slack's eventual `missing_scope` response as a secret-safe
+platform error; the declaration is not proof of the token's grants.
+
+Library callers create one explicit context from a verified credential set and pass it to every
+named operation:
+
+```ts
+import {
+  createSlackWorkspaceContext,
+  createWorkspaceSlackAdapter,
+} from "slamy";
+
+const context = createSlackWorkspaceContext({
+  teamId: workspace.teamId,
+  credentials,
+});
+const slack = createWorkspaceSlackAdapter();
+
+try {
+  await slack.postMessage(context, { channelId: "C0123ABC", text: "hello" });
+} finally {
+  credentials.destroy();
+}
+```
+
+The package exposes named slamy-owned DTOs only, not a generic `apiCall`. Policies pin each operation
+to one User or Bot credential kind and its required scope metadata. Calls use a non-cached SDK client
+with automatic retries disabled; rate limits surface as `SlackAdapterError` with
+`retryAfterSeconds`. Cursor traversal follows `response_metadata.next_cursor`, rejects repeated or
+malformed cursors, and is bounded. Diagnostics contain only a local request ID, method, Team ID,
+credential kind, outcome, and normalized error code. The local request ID is a slamy correlation ID,
+not Slack's `x-slack-req-id`. For methods that support organization-wide tokens, the method policy
+maps the explicit context Team ID to Slack's documented `team` or `team_id` argument.
+
+Library integrations can also use `createTargetResolver()` with an injected `WorkspaceCatalog`.
+The resolver accepts Slack `archives` permalinks (including `thread_ts` and `cid`),
+`app.slack.com/client` channel or observed thread URLs, and strict legacy channel IDs with optional
+message/thread timestamps. It returns one immutable Target containing the selected workspace,
+channel, message, and thread evidence. Selection is fail-closed in this order: explicit workspace,
+Target Team ID, registered current or previous hostname, then the registry default only for inputs
+without a URL. Conflicting or unregistered URL evidence never falls back to the default.
+
+Slack Connect channel ownership is deliberately reported as `unknown`. A single execution workspace
+may be selected from unambiguous evidence, but slamy does not infer which connected workspace owns
+the channel. Multiple candidate Team IDs and Enterprise-only `app.slack.com` URLs require explicit
+workspace disambiguation. Parsing and workspace selection do not access credentials or call Slack.
+
+The environment-variable alias behavior below is the legacy Go CLI contract. It remains read-only
+compatible throughout v2 and may be removed no earlier than v3.0.0. The variables cannot be safely
+auto-imported because they do not prove a Slack Team ID. See the
+[workspace registry migration guide](docs/migrations/workspace-registry-v2.md).
+
+A workspace alias is a local identifier. It is independent of the workspace name, domain, and Team ID in Slack, and slamy does not discover or match aliases automatically. An alias must be 1–63 characters and match `^[a-z0-9]+(?:-[a-z0-9]+)*$` (for example, `primary`, `operations`, or `project-a`).
+
+Configure one User OAuth Token for each alias. The environment variable name is formed by uppercasing the alias and replacing hyphens with underscores:
+
+```bash
+export SLAMY_DEFAULT_WORKSPACE=primary
+export SLAMY_WORKSPACE_PRIMARY_USER_TOKEN='<user-token>'
+export SLAMY_WORKSPACE_OPERATIONS_USER_TOKEN='<user-token>'
+export SLAMY_WORKSPACE_PROJECT_A_USER_TOKEN='<user-token>'
+```
+
+For every TypeScript CLI command that calls Slack, the workspace selection order is:
+
+1. The root flag `--workspace <selector>`, accepting a registry alias, Team ID, or fully-qualified current/previous Slack domain
+2. `SLAMY_DEFAULT_WORKSPACE`
+3. The registry default set by `slamy workspace default <selector>`
+4. Legacy `SLACK_USER_TOKEN` / `SLACK_BOT_TOKEN`, only when neither selector source nor a registry default is set
+
+There is no `SLAMY_WORKSPACE` selector environment variable; use `--workspace` for an explicit selection.
+
+```bash
+# Uses the default alias, primary
+slamy channels list
+
+# Explicit selection takes precedence over the default
+slamy --workspace operations channels list
+slamy --workspace project-a auth test
+```
+
+Registry selection is fail-closed. slamy resolves only the selected workspace's configured
+credential references, verifies their `auth.test` Team ID against the registry, and creates no API
+client on missing credentials, identity mismatch, ambiguous/unknown selection, or cross-workspace
+User/Bot credentials. It never falls back to `SLACK_USER_TOKEN`, `SLACK_BOT_TOKEN`, or another
+workspace after a registry selector is present.
+
+Commands accepting `channel_or_url` resolve supported Slack permalinks before creating an API client.
+The permalink hostname or Team ID must identify the selected workspace, including registered
+previous domains; conflicting, unknown, or non-Slack URL evidence fails without an API call. With no
+explicit/default selector, a permalink uses its registered workspace rather than legacy global
+credentials. A plain channel ID with no selector retains legacy single-workspace behavior.
+
+Existing single-workspace setups remain compatible: keep `SLACK_USER_TOKEN` and/or
+`SLACK_BOT_TOKEN`, and leave both `--workspace` and `SLAMY_DEFAULT_WORKSPACE` unset. To migrate, add
+the token environment variable as a credential reference on a registry workspace, set
+`SLAMY_DEFAULT_WORKSPACE` to one of its accepted selectors, then remove the legacy variables after
+verifying the new setup.
+
+Treat every token as a secret. Do not commit tokens to a repository, pass them as command-line arguments, or print them to logs, standard output, standard error, or JSON. Provide them through protected environment or secret-management facilities.
 
 ## Output Formats
 
@@ -302,57 +585,32 @@ C01234ABCDE	general	42	public
 C01234FGHIJ	random	15	private
 ```
 
-## MCP Server
+## TypeScript API
 
-### Usage with Claude Code
+The npm package exports `SlamyClient` for Slack Web API operations and `SlamyEvents` for Socket Mode events. Node.js 25 or later is required.
 
-```bash
-claude mcp add slamy /path/to/slamy mcp
+```ts
+import { SlamyClient } from "slamy";
+
+const client = new SlamyClient({ userToken: process.env.SLACK_USER_TOKEN });
+const channels = await client.listChannels();
 ```
 
-### Usage with Claude Desktop
-
-Add to your `claude_desktop_config.json`:
-
-```json
-{
-  "mcpServers": {
-    "slamy": {
-      "command": "/path/to/slamy",
-      "args": ["mcp"],
-      "env": {
-        "SLACK_USER_TOKEN": "xoxp-your-user-token"
-      }
-    }
-  }
-}
-```
-
-### Available Tools
-
-| Tool | Description |
-|---|---|
-| `slack_list_channels` | List all channels |
-| `slack_get_channel_history` | Get channel message history |
-| `slack_get_thread_replies` | Get thread replies |
-| `slack_post_message` | Post a message to a channel |
-| `slack_reply_to_thread` | Reply to a thread |
-| `slack_add_reaction` | Add emoji reaction |
-| `slack_get_users` | List workspace users |
-| `slack_get_user_profile` | Get user profile |
-| `slack_search_messages` | Search messages |
+Pass tokens through protected environment or secret-management facilities. See the exported TypeScript types for the complete API surface.
 
 ## Development
 
 ```bash
-# Build
-go build -o slamy .
-
-# Run all tests with race detector
+# Build and test the Go CLI
+cd go-src
+go build -o ../slamy .
 go test -race ./...
-
-# Run tests with coverage
 go test -cover ./...
+
+# Build and test the TypeScript API and CLI
+cd ..
+npm run build
+npm test
 ```
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for development setup and coding standards.
@@ -372,4 +630,3 @@ MIT
 
 - [GitHub Repository](https://github.com/tackeyy/slamy)
 - [Slack API Documentation](https://api.slack.com/docs)
-- [Model Context Protocol](https://modelcontextprotocol.io/)

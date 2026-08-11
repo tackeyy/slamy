@@ -1,21 +1,46 @@
 #!/usr/bin/env node
-import { Command } from "commander";
-import { createWriteStream } from "node:fs";
+import { Command, InvalidArgumentError } from "commander";
+import { createWriteStream, readFileSync } from "node:fs";
 import { Readable } from "node:stream";
 import { pipeline } from "node:stream/promises";
-import { basename } from "node:path";
+import { basename, dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { SlamyClient } from "../lib/client.js";
 import { formatTimestamp as libFormatTimestamp } from "../lib/tz.js";
-import { parseSlackTarget } from "../lib/parse-target.js";
 import { jsonOutput as formatJson } from "../lib/cli-format.js";
-import { requireToken } from "../lib/cli-errors.js";
+import {
+  collectCliWorkspaceSelector,
+  createCliApiClient,
+} from "./api-client.js";
+import { createCliTargetClient } from "./target-client.js";
+import { registerWorkspaceCommands } from "./workspace.js";
+import { registerChannelManagementCommands } from "./channels.js";
+import { registerLocalSessionCommands } from "./session.js";
+import { runLocalSessionDaemonFromStdin } from "../lib/local-session-daemon.js";
+
+const pkg = JSON.parse(
+  readFileSync(join(dirname(fileURLToPath(import.meta.url)), "../../package.json"), "utf-8"),
+) as { version: string };
 
 const program = new Command();
 
 program
   .name("slamy")
   .description("Slack CLI tool")
-  .version("2.0.0")
+  .version(pkg.version)
+  .option(
+    "--workspace <selector>",
+    "Use workspace by alias, Team ID, or fully-qualified Slack domain",
+    (selector: string, previous: string | undefined) => {
+      try {
+        return collectCliWorkspaceSelector(selector, previous);
+      } catch (error) {
+        throw new InvalidArgumentError(
+          error instanceof Error ? error.message : "Invalid workspace selector",
+        );
+      }
+    },
+  )
   .option("--json", "Output in JSON format")
   .option("--plain", "Output in TSV format")
   .option("--utc", "Display timestamps in UTC (default: local TZ)")
@@ -33,17 +58,30 @@ function getTzOptions(): { utc?: boolean; tz?: string } {
   return { utc: opts.utc, tz: opts.tz };
 }
 
-function createClient(): SlamyClient {
-  const tokens = requireToken(
-    process.env,
-    (code) => process.exit(code),
-    (msg) => console.error(msg),
-  );
-  if (!tokens) {
-    // requireToken already called process.exit(1); this branch keeps TS happy.
-    throw new Error("unreachable: requireToken should have exited");
-  }
-  return new SlamyClient(tokens);
+async function createClient(): Promise<SlamyClient> {
+  const lease = await createCliApiClient({
+    explicitWorkspace: program.opts<{ workspace?: string }>().workspace,
+  });
+  lease.dispose();
+  return lease.client;
+}
+
+async function createTargetClient(
+  input: string,
+  messageTs?: string,
+  threadTs?: string,
+): Promise<{
+  client: SlamyClient;
+  target: { channel: string; ts?: string; thread_ts?: string };
+}> {
+  const lease = await createCliTargetClient<SlamyClient>({
+    input,
+    ...(messageTs ? { messageTs } : {}),
+    ...(threadTs ? { threadTs } : {}),
+    explicitWorkspace: program.opts<{ workspace?: string }>().workspace,
+  });
+  lease.dispose();
+  return { client: lease.client, target: lease.target };
 }
 
 function jsonOutput(data: unknown): void {
@@ -54,20 +92,7 @@ function formatTimestamp(ts: string): string {
   return libFormatTimestamp(ts, getTzOptions());
 }
 
-// channel_id or permalink URL + 補助 ts を受けて、最終的な channel / ts / thread_ts を解決する。
-// permalink URL の場合は URL 由来を優先、明示引数が空のときだけ URL の値を使う。
-function resolveTarget(
-  channelOrUrl: string,
-  argTs?: string,
-  argThreadTs?: string,
-): { channel: string; ts?: string; thread_ts?: string } {
-  const parsed = parseSlackTarget(channelOrUrl);
-  return {
-    channel: parsed.channel,
-    ts: argTs || parsed.ts,
-    thread_ts: argThreadTs || parsed.thread_ts || (argTs ? undefined : parsed.ts),
-  };
-}
+registerWorkspaceCommands(program);
 
 // "Name (U123)" 形式のラベラーを返す。id が解決できなければ id のみ。
 async function buildUserLabeler(
@@ -87,12 +112,24 @@ async function buildUserLabeler(
 // --- auth ---
 const auth = program.command("auth").description("Authentication commands");
 
+registerLocalSessionCommands(auth, program);
+
+program
+  .command("__session-daemon", { hidden: true })
+  .action(async () => {
+    try {
+      await runLocalSessionDaemonFromStdin();
+    } catch {
+      process.exitCode = 1;
+    }
+  });
+
 auth
   .command("test")
   .description("Test authentication with Slack API")
   .action(async () => {
     try {
-      const client = createClient();
+      const client = await createClient();
       const info = await client.authTest();
       const mode = getOutputMode();
 
@@ -111,8 +148,43 @@ auth
     }
   });
 
+// --- team ---
+const team = program.command("team").description("Workspace (team) operations");
+
+team
+  .command("info")
+  .description(
+    "Get workspace info (domain, email_domain, enterprise). Note: SSO enforcement settings are not exposed by the Slack API.",
+  )
+  .action(async () => {
+    try {
+      const client = await createClient();
+      const mode = getOutputMode();
+      const info = await client.getTeamInfo();
+
+      if (mode === "json") {
+        jsonOutput(info);
+      } else if (mode === "plain") {
+        console.log(
+          `${info.id}\t${info.name}\t${info.domain}\t${info.email_domain}\t${info.enterprise_id}\t${info.enterprise_name}`,
+        );
+      } else {
+        console.log(`Team: ${info.name} (${info.id})`);
+        console.log(`Domain: ${info.domain}.slack.com`);
+        if (info.email_domain) console.log(`Email domain: ${info.email_domain}`);
+        if (info.enterprise_name)
+          console.log(`Enterprise: ${info.enterprise_name} (${info.enterprise_id})`);
+      }
+    } catch (err: any) {
+      console.error(`Error: ${err.message}`);
+      process.exit(1);
+    }
+  });
+
 // --- channels ---
 const channels = program.command("channels").description("Channel operations");
+
+registerChannelManagementCommands(channels, program);
 
 channels
   .command("list")
@@ -122,7 +194,7 @@ channels
   .option("--unread", "Only show channels with unread messages")
   .action(async (opts) => {
     try {
-      const client = createClient();
+      const client = await createClient();
       const mode = getOutputMode();
       const limit = parseInt(opts.limit, 10);
 
@@ -187,9 +259,8 @@ channels
   .option("--resolve-names", "Resolve user_id / bot_id to display names")
   .action(async (channelOrUrl, opts) => {
     try {
-      const client = createClient();
+      const { client, target } = await createTargetClient(channelOrUrl);
       const mode = getOutputMode();
-      const target = resolveTarget(channelOrUrl);
       const messages = await client.getChannelHistory(target.channel, {
         limit: parseInt(opts.limit, 10),
         oldest: opts.oldest,
@@ -226,9 +297,8 @@ channels
   .option("--resolve-names", "Resolve user_id to display names")
   .action(async (channelOrUrl, opts) => {
     try {
-      const client = createClient();
+      const { client, target } = await createTargetClient(channelOrUrl);
       const mode = getOutputMode();
-      const target = resolveTarget(channelOrUrl);
       const members = await client.getChannelMembers(target.channel);
 
       const labelFor = opts.resolveNames
@@ -263,7 +333,7 @@ messages
   .option("--as-user", "Post as the authenticated user (uses user token instead of bot token)")
   .action(async (channelId, opts) => {
     try {
-      const client = createClient();
+      const client = await createClient();
       const mode = getOutputMode();
       const result = await client.postMessage(channelId, opts.text, { asUser: opts.asUser === true });
 
@@ -287,7 +357,7 @@ messages
   .requiredOption("--at <datetime>", "Post time (Unix timestamp or ISO 8601 e.g. 2026-02-24T09:00+09:00)")
   .action(async (channelId, opts) => {
     try {
-      const client = createClient();
+      const client = await createClient();
       const mode = getOutputMode();
 
       let postAt: number;
@@ -328,9 +398,12 @@ messages
   .option("--broadcast", "Also post to the channel (reply_broadcast)")
   .action(async (channelOrUrl, threadTsArg, opts) => {
     try {
-      const client = createClient();
+      const { client, target } = await createTargetClient(
+        channelOrUrl,
+        undefined,
+        threadTsArg,
+      );
       const mode = getOutputMode();
-      const target = resolveTarget(channelOrUrl, undefined, threadTsArg);
       if (!target.thread_ts) {
         console.error("Error: thread_ts is required (pass as 2nd arg or via permalink URL)");
         process.exit(1);
@@ -360,9 +433,8 @@ messages
   .requiredOption("--text <text>", "New message text")
   .action(async (channelOrUrl, tsArg, opts) => {
     try {
-      const client = createClient();
+      const { client, target } = await createTargetClient(channelOrUrl, tsArg);
       const mode = getOutputMode();
-      const target = resolveTarget(channelOrUrl, tsArg);
       if (!target.ts) {
         console.error("Error: ts is required (pass as 2nd arg or via permalink URL)");
         process.exit(1);
@@ -387,9 +459,8 @@ messages
   .description("Delete a message (channel + ts, or Slack permalink URL)")
   .action(async (channelOrUrl, tsArg) => {
     try {
-      const client = createClient();
+      const { client, target } = await createTargetClient(channelOrUrl, tsArg);
       const mode = getOutputMode();
-      const target = resolveTarget(channelOrUrl, tsArg);
       if (!target.ts) {
         console.error("Error: ts is required (pass as 2nd arg or via permalink URL)");
         process.exit(1);
@@ -419,7 +490,7 @@ users
   .option("--include-bots", "Include bot users")
   .action(async (opts) => {
     try {
-      const client = createClient();
+      const client = await createClient();
       const mode = getOutputMode();
       const userList = await client.listUsers({
         includeDeactivated: opts.includeDeactivated,
@@ -451,7 +522,7 @@ users
   .description("Get user profile")
   .action(async (userId) => {
     try {
-      const client = createClient();
+      const client = await createClient();
       const mode = getOutputMode();
       const profile = await client.getUserProfile(userId);
 
@@ -489,7 +560,7 @@ reactions
   .option("--resolve-names", "Resolve channel_id to channel names")
   .action(async (opts) => {
     try {
-      const client = createClient();
+      const client = await createClient();
       const mode = getOutputMode();
       const limit = parseInt(opts.limit, 10);
       const result = await client.listReactions({
@@ -551,9 +622,11 @@ reactions
   .option("--resolve-names", "Resolve user_id to display names")
   .action(async (channelOrUrl, timestampArg, opts) => {
     try {
-      const client = createClient();
+      const { client, target } = await createTargetClient(
+        channelOrUrl,
+        timestampArg,
+      );
       const mode = getOutputMode();
-      const target = resolveTarget(channelOrUrl, timestampArg);
       if (!target.ts) {
         console.error("Error: timestamp is required (pass as 2nd arg or via permalink URL)");
         process.exit(1);
@@ -605,9 +678,11 @@ reactions
   .requiredOption("--name <emoji>", "Reaction emoji name (without colons)")
   .action(async (channelOrUrl, timestampArg, opts) => {
     try {
-      const client = createClient();
+      const { client, target } = await createTargetClient(
+        channelOrUrl,
+        timestampArg,
+      );
       const mode = getOutputMode();
-      const target = resolveTarget(channelOrUrl, timestampArg);
       if (!target.ts) {
         console.error("Error: timestamp is required (pass as 2nd arg or via permalink URL)");
         process.exit(1);
@@ -635,9 +710,11 @@ reactions
   .requiredOption("--name <emoji>", "Reaction emoji name (without colons)")
   .action(async (channelOrUrl, timestampArg, opts) => {
     try {
-      const client = createClient();
+      const { client, target } = await createTargetClient(
+        channelOrUrl,
+        timestampArg,
+      );
       const mode = getOutputMode();
-      const target = resolveTarget(channelOrUrl, timestampArg);
       if (!target.ts) {
         console.error("Error: timestamp is required (pass as 2nd arg or via permalink URL)");
         process.exit(1);
@@ -672,7 +749,7 @@ search
   .option("--resolve-names", "Resolve user_id / bot_id to display names")
   .action(async (query, opts) => {
     try {
-      const client = createClient();
+      const client = await createClient();
       const mode = getOutputMode();
       const result = await client.searchMessages(query, {
         count: parseInt(opts.count, 10),
@@ -721,9 +798,12 @@ threads
   .option("--resolve-names", "Resolve user_id / bot_id to display names")
   .action(async (channelOrUrl, threadTsArg, opts) => {
     try {
-      const client = createClient();
+      const { client, target } = await createTargetClient(
+        channelOrUrl,
+        undefined,
+        threadTsArg,
+      );
       const mode = getOutputMode();
-      const target = resolveTarget(channelOrUrl, undefined, threadTsArg);
       if (!target.thread_ts) {
         console.error("Error: thread_ts is required (pass as 2nd arg or via permalink URL)");
         process.exit(1);
@@ -767,7 +847,7 @@ files
   .option("--initial-comment <text>", "Initial comment with the file")
   .action(async (channelId, filePath, opts) => {
     try {
-      const client = createClient();
+      const client = await createClient();
       const mode = getOutputMode();
       await client.uploadFile(channelId, filePath, {
         threadTs: opts.threadTs,
@@ -795,7 +875,7 @@ files
   .option("--output <path>", "Save path (default: original filename in current directory)")
   .action(async (fileIdOrUrl, opts) => {
     try {
-      const client = createClient();
+      const client = await createClient();
       const mode = getOutputMode();
 
       let downloadUrl: string;
@@ -841,7 +921,7 @@ engagement
   .option("--until <date>", "End date (YYYY-MM-DD, default: same as since)")
   .action(async (userId, opts) => {
     try {
-      const client = createClient();
+      const client = await createClient();
       const mode = getOutputMode();
       const result = await client.getUserEngagement(userId, {
         since: opts.since,
@@ -874,7 +954,7 @@ engagement
   .option("--delay <ms>", "Delay between API calls in ms (rate limit)", "3000")
   .action(async (opts) => {
     try {
-      const client = createClient();
+      const client = await createClient();
       const mode = getOutputMode();
       const delay = parseInt(opts.delay, 10);
       const users = await client.listUsers();
@@ -946,7 +1026,7 @@ assistant
   .option("--loading-message <text...>", "Rotating loading messages")
   .action(async (opts: { channel: string; thread: string; status: string; loadingMessage?: string[] }) => {
     try {
-      const client = createClient();
+      const client = await createClient();
       const apiOpts = opts.loadingMessage && opts.loadingMessage.length > 0
         ? { loadingMessages: opts.loadingMessage }
         : undefined;
@@ -965,4 +1045,4 @@ assistant
     }
   });
 
-program.parse();
+await program.parseAsync();

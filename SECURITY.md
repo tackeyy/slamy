@@ -12,11 +12,8 @@ We release security patches for the following versions:
 
 **Please do not report security vulnerabilities through public GitHub issues.**
 
-To report a security vulnerability, please contact us via:
-
-- **Email (preferred)**: t@ma-navi.co.jp
-- **X (Twitter) — backup only**: [@3chhe](https://x.com/3chhe) — DMs are checked best-effort; please
-  use email for anything time-sensitive (the 48-hour acknowledgment SLA below applies to email).
+Use [GitHub Private Vulnerability Reporting](https://github.com/tackeyy/slamy/security/advisories/new)
+to report a vulnerability privately.
 
 Please include the following information:
 
@@ -28,8 +25,8 @@ Please include the following information:
 
 ## Response Process
 
-1. We will acknowledge receipt within **48 hours**
-2. We will provide an initial assessment within **7 days**
+1. We will acknowledge the report through GitHub Security Advisories
+2. We will assess the impact and coordinate next steps with the reporter
 3. We will release a patch and publish a security advisory after the fix is ready
 
 ## Disclosure Policy
@@ -42,8 +39,7 @@ Please include the following information:
 
 The following are **in scope** for security reports:
 
-- Slack token handling and storage in the CLI / MCP server
-- MCP server protocol implementation (tool invocation, authentication)
+- Slack token handling and workspace selection in the API client and CLI
 - Command injection or argument parsing flaws in `src/cli/`
 - Dependency vulnerabilities affecting the published npm package
 

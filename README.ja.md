@@ -1,13 +1,14 @@
-# slamy — Slack MCP サーバー & CLI
+# slamy — Slack API クライアント & CLI
 
 [English](README.md) | **日本語**
 
-Slack 用の [MCP (Model Context Protocol)](https://modelcontextprotocol.io/) サーバー兼 CLI ツール。Claude Code や Claude Desktop などの AI エージェントから Slack を操作したり、ターミナルから直接利用できます。
+Slack の閲覧・検索・投稿に対応する Slack API クライアント兼 CLI ツールです。
 
 ## 機能
 
-- **MCP サーバー** — Slack 操作を MCP ツールとして AI エージェントに公開
-- **CLI** — 同じ操作をターミナルから直接実行
+- **CLI** — Slack 操作をターミナルから直接実行
+- **TypeScript API クライアント** — Node.js アプリケーションから `SlamyClient` を利用
+- **Socket Mode イベント** — `SlamyEvents` で Slack イベントを購読
 - **チャンネル** — チャンネル一覧、メッセージ履歴取得
 - **メッセージ** — メッセージ投稿、スレッド返信
 - **ユーザー** — ワークスペースメンバー一覧、プロフィール表示
@@ -15,7 +16,37 @@ Slack 用の [MCP (Model Context Protocol)](https://modelcontextprotocol.io/) �
 - **検索** — Slack クエリ構文でメッセージ横断検索
 - **複数出力フォーマット** — テキスト、JSON、TSV
 
+## Slack 公式 CLI と slamy の役割
+
+Slack 公式の [`slack` CLI](https://docs.slack.dev/tools/slack-cli/) は、アプリの
+create/link/install/uninstall、Manifest、ローカル実行、デプロイ、activity、ログ、ドキュメント、
+任意の Web API 呼び出しなど、Slack アプリ開発を担当します。対応する公式コマンドでは、`--team`
+による明示的なワークスペース選択も行えます。slamy の目標範囲は、人やエージェントが使う
+タスク指向の操作です。TypeScript CLIのすべてのSlack APIコマンドは、明示・default選択に同じ
+workspace resolverとcredential検証経路を使用し、安定した出力を提供します。Slack URLを受け取る
+コマンドではpermalink由来のtargetも解決します。
+
+slamy は公式 CLI を子プロセスとして呼び出さず、その非公開 credential ファイルも読みません。
+公開 Slack API を直接利用するため、両ツールは独立して併用できます。責務分担表、機能追加の
+判断基準、将来の廃止基準は [ADR 001](docs/adr/001-official-slack-cli-boundary.md) を参照してください。
+
+## アーキテクチャ
+
+TypeScriptをslamyのCLIとライブラリに共通する単一マスター実装とします。現在のGo/TypeScript
+実装から、workspace、credential、target、Slack adapter、command、output、event、CLI、libraryの
+境界を持つ単一packageのモジュール構造へ段階的に移行します。この目標構造はまだ完全には
+実装されていません。
+
+component/data-flow図、import規則、公開API互換方針、Go削除gateは
+[ADR 002](docs/adr/002-typescript-module-architecture.md)を参照してください。
+
 ## インストール
+
+### npm（TypeScript API / CLI）
+
+```bash
+npm install slamy
+```
 
 ### Homebrew
 
@@ -29,12 +60,12 @@ brew install tackeyy/tap/slamy
 go install github.com/tackeyy/slamy@latest
 ```
 
-### ソースからビルド
+### ソースから Go CLI をビルド
 
 ```bash
 git clone https://github.com/tackeyy/slamy.git
-cd slamy
-go build -o slamy .
+cd slamy/go-src
+go build -o ../slamy .
 ```
 
 ## クイックスタート
@@ -53,29 +84,84 @@ go build -o slamy .
 |---|---|
 | `channels:history` | パブリックチャンネルのメッセージ閲覧 |
 | `channels:read` | チャンネル情報の取得 |
+| `channels:write` | パブリックチャンネルの作成 |
+| `channels:write.topic` | パブリックチャンネルのtopic・説明設定 |
 | `chat:write` | メッセージ送信（自分として投稿） |
 | `files:read` | チャンネル内で共有されたファイルのダウンロード |
 | `groups:history` | プライベートチャンネルのメッセージ閲覧 |
 | `groups:read` | プライベートチャンネル情報の取得 |
+| `groups:write` | プライベートチャンネルの作成 |
+| `groups:write.topic` | プライベートチャンネルのtopic・説明設定 |
 | `reactions:write` | 絵文字リアクションの追加 |
 | `search:read` | メッセージ検索 |
 | `users:read` | ユーザー情報の取得 |
 | `users:read.email` | メールアドレスの閲覧 |
 | `users.profile:read` | ユーザープロフィールの閲覧 |
+| `team:read` | ワークスペース（team）情報の取得 |
 
-### 3. インストールと環境変数の設定
+### 3. インストールと workspace の登録
 
-ワークスペースにアプリをインストールし、トークンを設定:
+ワークスペースにアプリをインストールし、slamy に workspace を登録する:
 
 ```bash
+slamy workspace add --team-id T01234567 --alias myworkspace \
+  --domain myworkspace.slack.com --name "My Workspace" \
+  --user-token-env SLACK_USER_TOKEN
+```
+
+オプションの詳細は `slamy workspace --help` を参照してください。
+
+### 4. 認証セッションの開始
+
+パスワードマネージャーから stdin にトークンを渡してメモリ内のローカルセッションを開始する:
+
+```bash
+op read 'op://<vault>/<item>/<field>' |
+  slamy --workspace myworkspace auth session start
+```
+
+トークンをコマンドライン引数として渡すことはできません。
+
+### 5. 実行
+
+```bash
+slamy channels list
+```
+
+### レガシー: 環境変数による認証（非推奨）
+
+`SLACK_USER_TOKEN` または `SLACK_BOT_TOKEN` による直接認証は後方互換のためにサポートされていますが、**非推奨**です。workspace registry と `auth session start` の利用を推奨します。
+
+```bash
+# 非推奨 — 上記の workspace registry + auth session start を使用してください
 export SLACK_USER_TOKEN=xoxp-your-user-token
 ```
 
-### 4. 実行
+### 任意: セッション TTL とフォアグラウンドモード
+
+既定の TTL は 24 時間です。延長またはフォアグラウンドで動かす場合:
 
 ```bash
-./slamy channels list
+# 7日間が明示指定できる上限値
+op read 'op://<vault>/<item>/<field>' |
+  slamy --workspace wedgeai auth session start --ttl 7d
+
+# Terminal、launchd等のsupervisor自身にbrokerを保持させる場合
+op read 'op://<vault>/<item>/<field>' |
+  slamy --workspace wedgeai auth session start --ttl 7d --foreground
+
+slamy --workspace wedgeai auth session status
+slamy --workspace wedgeai auth session revoke
 ```
+
+バックグラウンドのbrokerはSlackトークンをメモリ内に保持し、canonical Team IDを検証して、
+owner限定のUnix socketからslamyが許可したSlack操作だけを受け付けます。後続のCLIプロセスへ
+Slackトークン自体は返しません。ただし、同じmacOSユーザーとして動く別プロセスは、期限切れ
+またはrevokeまでbrokerを利用できます。通常は既定の24時間を使用し、必要な場合だけ7日間を
+指定してください。ローカルrevokeはSlack OAuth token自体をrotationしません。制御と残余リスクは
+[security record](docs/reports/local-auth-session-security.md)を参照してください。
+foreground modeも同じ制御を使いますが、brokerは現在プロセスに接続されたままになります。
+セッション期間中は、そのTerminalまたはsupervisorプロセスを動かし続けてください。
 
 ## User Token vs Bot Token
 
@@ -90,7 +176,7 @@ Slack App は 2 種類のトークンを発行できます。用途に応じて�
 
 ### User Token を使うケース: ユーザーの代理として動作する場合
 
-slamy は **AI 秘書 / パーソナルアシスタント**（Claude Code + MCP）の一部として開発されました。特定のユーザーに代わって Slack の閲覧・検索・投稿を行うユースケースでは、User Token が自然な選択です:
+slamy は、特定のユーザーに代わって Slack の閲覧・検索・投稿を行うアプリケーションをサポートします。このユースケースでは、User Token が自然な選択です:
 
 1. **検索に必須** — `search:read` は User Token 専用のスコープ。Bot Token ではメッセージ検索ができない
 2. **トークン 1 つで完結** — 2 つのトークンを管理して操作ごとに使い分ける必要がない
@@ -121,16 +207,61 @@ slamy channels list [--limit <number>] [--include-archived] [--json] [--plain]
 | `--json` | No | JSON 形式で出力 |
 | `--plain` | No | TSV 形式で出力 |
 
+### `channels create` — チャンネル作成・整合
+
+```bash
+slamy channels create 01-engineering \
+  --workspace wedgeai \
+  --topic "AI・ソフトウェア開発" \
+  --purpose "AI・ソフトウェア開発と技術判断を共有します。" \
+  --dry-run
+```
+
+`--workspace`または`SLAMY_DEFAULT_WORKSPACE`でworkspaceを選択し、設定済みcredentialのTeam IDを
+照合してから実行します。同名チャンネルが存在する場合は
+重複作成せず、topicとpurposeを指定値へ整えます。`--private`を付けるとprivate channelを対象とします。
+`--dry-run`はcredentialを読まず、Slack APIも呼ばずに予定操作だけを返します。通常実行では作成・設定後に
+`conversations.info`で再取得し、名前、公開範囲、topic、purposeが一致した場合だけ成功とします。
+
 ### グローバルオプション
 
-すべてのコマンドで利用可能:
+slamy には Go 版と TypeScript 版の CLI があります。利用できるルートオプションは、インストールした CLI によって異なります。
+
+Go CLI（`go install` またはソースからビルド）:
 
 | フラグ | 説明 |
 |---|---|
+| `--workspace <alias>` | この実行で使用する Slack ワークスペースエイリアスを指定 |
+| `--json` | JSON 形式で出力 |
+| `--plain` | TSV 形式で出力 |
+
+TypeScript CLI（`npm install`）:
+
+| フラグ | 説明 |
+|---|---|
+| `--workspace <selector>` | alias、Team ID、または登録済みの現在・過去の完全修飾Slack domainでworkspaceを選択 |
 | `--json` | JSON 形式で出力 |
 | `--plain` | TSV 形式で出力 |
 | `--utc` | タイムスタンプを UTC で表示（デフォルトはローカル TZ） |
 | `--tz <iana>` | 指定 IANA タイムゾーンで表示（例: `Asia/Tokyo`） |
+
+TypeScript CLIでは、Slack APIを呼ばないworkspace registry管理も利用できます。
+
+```bash
+slamy workspace list
+slamy workspace add --team-id T01234567 --alias primary \
+  --domain primary.slack.com --name "Primary" \
+  --user-token-env SLAMY_WORKSPACE_PRIMARY_USER_TOKEN --default
+slamy workspace show primary
+slamy workspace default primary
+slamy workspace default --clear
+slamy workspace remove primary
+```
+
+これらのコマンドはSlackへ接続せず、token値を引数として受け取りません。Slack APIを呼ぶすべての
+TypeScript CLIコマンドは、root selectorをこのregistryで解決し、API client作成前に設定済みの全
+credentialを`auth.test`で検証します。TypeScript libraryでは、atomic credential-set resolver、
+厳格なpermalink Target resolver、名前付きworkspace-aware Slack操作も利用できます。
 
 ### `channels history` — チャンネルのメッセージ履歴
 
@@ -252,13 +383,13 @@ slamy search messages <query> [--count <n>] [--page <n>] [--sort <field>] [--sor
 slamy auth test [--json] [--plain]
 ```
 
-### `mcp` — MCP サーバー起動
+### `team info` — ワークスペース情報の取得
 
 ```bash
-slamy mcp
+slamy team info [--json] [--plain]
 ```
 
-stdio 経由の MCP サーバーを起動し、すべての操作を AI エージェント向けツールとして公開します。
+ワークスペースのドメイン・`email_domain`・Enterprise 情報を返す。`email_domain` は SSO のドメイン不一致の診断に役立つ。`team:read` スコープが必要。なお、SSO の必須化設定は Slack API では取得**できない**。
 
 ## 設定
 
@@ -266,12 +397,133 @@ stdio 経由の MCP サーバーを起動し、すべての操作を AI エー�
 
 | 変数 | 必須 | 説明 |
 |---|---|---|
-| `SLACK_USER_TOKEN` | いずれか | Slack User OAuth Token (`xoxp-...`) — `search messages` や読み取り操作で必要 |
+| `SLAMY_CONFIG_FILE` | No | TypeScript workspace registryのpathを上書き。既定は`$XDG_CONFIG_HOME/slamy/workspaces.json`または`~/.config/slamy/workspaces.json` |
+| `SLAMY_WORKSPACE_<ALIAS>_USER_TOKEN` | 対応するエイリアスの選択時 | ワークスペースエイリアス用の User OAuth Token。エイリアスを大文字化し、ハイフンをアンダースコアへ変換 |
+| `SLAMY_DEFAULT_WORKSPACE` | No | `--workspace`を省略した場合に使用する登録済みworkspace selector（alias、Team ID、または現在・過去の完全修飾Slack domain） |
+| `SLACK_USER_TOKEN` | 従来の単一ワークスペース利用時 | 後方互換用 Slack User OAuth Token (`xoxp-...`)。明示・defaultのどちらのworkspace selectorも設定されない場合のみ使用 |
 | `SLACK_BOT_TOKEN` | いずれか | Slack Bot OAuth Token (`xoxb-...`) — 書き込み操作と `reactions get` で使用 |
 | `SLAMY_TZ` | No | `engagement` コマンド用の IANA タイムゾーン（デフォルト: `Asia/Tokyo`） |
 | `SLACK_TEAM_ID` | No | Slack Team ID（ワークスペース固有の操作用） |
 
-`SLACK_USER_TOKEN` / `SLACK_BOT_TOKEN` のいずれかを必ず設定してください。両方設定すると、操作に応じて適切なトークンが自動選択されます。
+従来モードで `SLACK_USER_TOKEN` / `SLACK_BOT_TOKEN` の両方を設定すると、操作に応じて適切なトークンが自動選択されます。
+
+### 複数ワークスペース
+
+TypeScript workspace registryではSlack Team IDを正規識別子とします。alias、現在domain、過去domain、
+表示名、default状態、credential referenceは変更可能な属性です。referenceは検証済みprovider IDと
+opaqueなreference名を持ちます。組み込みproviderは環境変数名を解決し、custom providerはworkspace
+recordを変更せずKeychainやOAuthのreferenceを解決できます。registryにはreference名だけを保存し、
+token値は保存しません。破損JSON、未知field、Team ID・alias・domainの重複、参照先のないdefault、
+symlink、group/otherから読めるfileを拒否し、更新時はdocument全体をatomicに置き換えます。
+
+上記の`workspace list/add/remove/show/default`を利用でき、`--json`と`--plain`にも対応します。
+POSIXでは専用config directoryを`0700`、registry fileを`0600`で作成します。
+
+libraryから`createCredentialResolver()`を使うと、一つの`WorkspaceRecord`に設定されたUser/Bot
+referenceを一つのsetとして解決・検証できます。別token種別への代替、検証途中の部分set返却、
+cross-workspaceのUser/Bot混在、registry workspaceからlegacy global tokenへのfallbackは行いません。
+raw token値は文字列化、JSON、inspection、provider error、verification errorでredactされます。
+operation終了時は返却setの`destroy()`を呼び出してください。set内の全credentialを冪等に破棄します。
+custom providerとverifierはinterface上raw tokenを扱う必要があるため、trusted componentです。実装を
+検証し、適切に隔離してください。
+
+Slackの`auth.test`が証明するのはidentityとTeam IDであり、操作scopeではありません。Userの
+`search:read`などはrequirement metadataとして保持できます。workspace-aware adapterはtransport前に
+この宣言契約を確認し、Slackから返る`missing_scope`をsecret-safeなplatform errorへ正規化しますが、
+宣言自体はtokenへscopeが付与済みであることの証明ではありません。
+
+library callerは、検証済みcredential setから明示contextを一つ作り、すべての名前付き操作へ渡します。
+
+```ts
+import {
+  createSlackWorkspaceContext,
+  createWorkspaceSlackAdapter,
+} from "slamy";
+
+const context = createSlackWorkspaceContext({
+  teamId: workspace.teamId,
+  credentials,
+});
+const slack = createWorkspaceSlackAdapter();
+
+try {
+  await slack.postMessage(context, { channelId: "C0123ABC", text: "hello" });
+} finally {
+  credentials.destroy();
+}
+```
+
+packageが公開するのはslamy所有の名前付きDTOだけで、汎用`apiCall`は公開しません。policyは操作ごとに
+UserまたはBotのcredential種別と必要scope metadataを固定します。呼び出しごとにcacheしないSDK clientを
+使い、自動retryは無効です。rate limitは`retryAfterSeconds`を持つ`SlackAdapterError`として上位へ返します。
+cursorは`response_metadata.next_cursor`だけを追跡し、反復・不正cursorを拒否して上限を設けます。
+diagnosticsにはlocal request ID、method、Team ID、credential種別、結果、正規化済みerror codeだけを含めます。
+local request IDはslamy内の相関IDであり、Slackの`x-slack-req-id`ではありません。
+organization-wide token対応methodでは、policyが明示contextのTeam IDをSlack仕様の`team`または
+`team_id`引数へ写像します。
+
+libraryから`createTargetResolver()`へ`WorkspaceCatalog`を注入すると、Slackの`archives`
+permalink（`thread_ts` / `cid`を含む）、`app.slack.com/client`のchannel URLと観測済みthread URL、
+および厳格な従来channel IDと任意のmessage/thread timestampを解決できます。返却するimmutableな
+Targetはworkspace、channel、message、threadの根拠を一つにまとめます。workspaceは、明示指定、
+Target Team ID、登録済みの現在または過去hostname、URLを伴わない入力に限るregistry defaultの順で
+fail-closedに選択します。競合または未登録のURL根拠をdefaultへfallbackしません。
+
+Slack Connect channelの所有workspaceは`unknown`として返します。曖昧でない根拠から実行workspaceを
+一つ選択できても、接続先のどのworkspaceがchannelを所有するかは推測しません。候補Team IDが複数ある
+場合とEnterprise IDだけの`app.slack.com` URLは明示workspaceが必要です。parserとworkspace選択は
+credentialへアクセスせず、Slack APIも呼びません。
+
+以下の環境変数alias方式は従来のGo CLI契約です。v2中はread-only互換を維持し、削除は早くても
+v3.0.0以降です。旧環境変数だけではSlack Team IDを証明できないため、自動importしません。
+詳細は[workspace registry移行ガイド](docs/migrations/workspace-registry-v2.md)を参照してください。
+
+ワークスペースエイリアスはローカルの識別子です。Slack 上のワークスペース名、ドメイン、Team ID とは独立しており、slamy がエイリアスを自動検出・照合することはありません。エイリアスは 1〜63 文字で、正規表現 `^[a-z0-9]+(?:-[a-z0-9]+)*$` に一致する必要があります（例: `primary`、`operations`、`project-a`）。
+
+エイリアスごとに User OAuth Token を設定します。環境変数名は、エイリアスを大文字化し、ハイフンをアンダースコアへ変換して作成します。
+
+```bash
+export SLAMY_DEFAULT_WORKSPACE=primary
+export SLAMY_WORKSPACE_PRIMARY_USER_TOKEN='<user-token>'
+export SLAMY_WORKSPACE_OPERATIONS_USER_TOKEN='<user-token>'
+export SLAMY_WORKSPACE_PROJECT_A_USER_TOKEN='<user-token>'
+```
+
+Slack APIを呼ぶすべてのTypeScript CLIコマンドでは、接続先を次の順序で選択します。
+
+1. ルートの`--workspace <selector>`（registryのalias、Team ID、または現在・過去の完全修飾Slack domain）
+2. `SLAMY_DEFAULT_WORKSPACE`
+3. 上記2つがどちらも未設定の場合のみ、後方互換用の`SLACK_USER_TOKEN` / `SLACK_BOT_TOKEN`
+
+選択用の `SLAMY_WORKSPACE` 環境変数はありません。明示指定には `--workspace` を使用してください。
+
+```bash
+# デフォルトエイリアス primary を使用
+slamy channels list
+
+# 明示指定はデフォルトより優先
+slamy --workspace operations channels list
+slamy --workspace project-a auth test
+```
+
+registry選択はfail-closedです。選択したworkspaceに設定されたcredential referenceだけを解決し、
+`auth.test`のTeam IDをregistryと照合します。credential欠落、identity不一致、曖昧・未登録の選択、
+workspaceをまたぐUser/Bot credentialではAPI clientを作成しません。registry selectorがある場合、
+`SLACK_USER_TOKEN`、`SLACK_BOT_TOKEN`、別workspaceへはfallbackしません。
+
+`channel_or_url`を受け取るコマンドは、API client作成前に対応するSlack permalinkを解決します。
+permalinkのhostnameまたはTeam IDは、登録済みの過去domainを含め、選択workspaceと一致する必要が
+あります。競合、未登録、Slack以外のURLではAPIを呼ばず失敗します。明示/default selectorがない
+permalinkはlegacy global credentialではなく登録先workspaceを使用します。selectorなしの通常channel
+IDだけは従来の単一workspace動作を維持します。
+
+既存の単一ワークスペース設定には後方互換性があります。`SLACK_USER_TOKEN`または
+`SLACK_BOT_TOKEN`をそのまま設定し、`--workspace`と`SLAMY_DEFAULT_WORKSPACE`の両方を未設定にします。
+移行するには、token環境変数をregistry workspaceのcredential referenceへ追加し、
+`SLAMY_DEFAULT_WORKSPACE`をそのworkspaceの有効なselectorに設定します。新しい設定を確認した後で
+legacy変数を削除してください。
+
+すべてのトークンを secret として扱ってください。リポジトリへコミットしたり、コマンドライン引数で渡したり、ログ・標準出力・標準エラー出力・JSON へ出力したりしないでください。保護された環境変数または secret 管理機能から渡してください。
 
 ## 出力フォーマット
 
@@ -302,57 +554,32 @@ C01234ABCDE	general	42	public
 C01234FGHIJ	random	15	private
 ```
 
-## MCP サーバー
+## TypeScript API
 
-### Claude Code での利用
+npm パッケージは、Slack Web API 操作用の `SlamyClient` と Socket Mode イベント用の `SlamyEvents` を公開しています。Node.js 25 以上が必要です。
 
-```bash
-claude mcp add slamy /path/to/slamy mcp
+```ts
+import { SlamyClient } from "slamy";
+
+const client = new SlamyClient({ userToken: process.env.SLACK_USER_TOKEN });
+const channels = await client.listChannels();
 ```
 
-### Claude Desktop での利用
-
-`claude_desktop_config.json` に追加:
-
-```json
-{
-  "mcpServers": {
-    "slamy": {
-      "command": "/path/to/slamy",
-      "args": ["mcp"],
-      "env": {
-        "SLACK_USER_TOKEN": "xoxp-your-user-token"
-      }
-    }
-  }
-}
-```
-
-### 利用可能なツール
-
-| ツール | 説明 |
-|---|---|
-| `slack_list_channels` | チャンネル一覧 |
-| `slack_get_channel_history` | チャンネルのメッセージ履歴取得 |
-| `slack_get_thread_replies` | スレッド返信の取得 |
-| `slack_post_message` | チャンネルにメッセージ投稿 |
-| `slack_reply_to_thread` | スレッドに返信 |
-| `slack_add_reaction` | 絵文字リアクション追加 |
-| `slack_get_users` | ユーザー一覧 |
-| `slack_get_user_profile` | ユーザープロフィール取得 |
-| `slack_search_messages` | メッセージ検索 |
+トークンは保護された環境変数またはシークレット管理機能から渡してください。完全な API は公開されている TypeScript の型定義を参照してください。
 
 ## 開発
 
 ```bash
-# ビルド
-go build -o slamy .
-
-# レースディテクタ付きでテスト実行
+# Go CLI のビルドとテスト
+cd go-src
+go build -o ../slamy .
 go test -race ./...
-
-# カバレッジ付きでテスト実行
 go test -cover ./...
+
+# TypeScript API / CLI のビルドとテスト
+cd ..
+npm run build
+npm test
 ```
 
 開発環境のセットアップやコーディング規約は [CONTRIBUTING.md](CONTRIBUTING.md) を参照してください。
@@ -372,4 +599,3 @@ MIT
 
 - [GitHub リポジトリ](https://github.com/tackeyy/slamy)
 - [Slack API ドキュメント](https://api.slack.com/docs)
-- [Model Context Protocol](https://modelcontextprotocol.io/)

@@ -21,9 +21,7 @@ var channelsCmd = &cobra.Command{
 
 // channelsClientFunc は channels コマンドが使う Slack クライアントを返す。
 // テストで差し替えるための DI ポイント (Issue #51 PR-3)。
-var channelsClientFunc = func() (*slackutil.Client, error) {
-	return slackutil.NewClient()
-}
+var channelsClientFunc = newCommandClient
 
 var channelsListCmd = &cobra.Command{
 	Use:   "list",
