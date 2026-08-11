@@ -385,6 +385,19 @@ slamy search messages <query> [--count <n>] [--page <n>] [--sort <field>] [--sor
 | `--sort-dir <dir>` | No | `asc` or `desc` (default: desc) |
 | `--resolve-names` | No | Resolve `user_id` to display names |
 
+#### Channel filters in `in:`
+
+Slack accepts a channel **name** (`in:general`, `in:#general`) or a channel **mention** (`in:<#C0123456789>`) for the `in:` modifier. A bare channel ID is **not** a valid filter:
+
+```bash
+slamy search messages 'in:general'            # OK
+slamy search messages 'in:#general'           # OK
+slamy search messages 'in:<#C0123456789>'     # OK — a channel ID works in mention form
+slamy search messages 'in:C0123456789'        # returns 0 matches, without an error
+```
+
+Prefer the mention form when you only have a channel ID: it filters correctly and needs no name lookup. The bare-ID form fails silently, which is easy to misread as "this channel has no matching messages".
+
 ### `auth test` — Test authentication
 
 ```bash
