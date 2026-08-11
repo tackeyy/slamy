@@ -33,7 +33,7 @@
     "release": "npm run build && changeset publish"
   },
   "dependencies": {
-    "@slack/bolt": "^4.7.3",
+    "@slack/bolt": "^5.0.0",
     "@slack/web-api": "^8.0.0",
     "commander": "^15.0.0"
   },
