@@ -873,23 +873,7 @@ export class SlamyClient {
     limit: number,
   ): Promise<Message[]> {
     const matches: any[] = [];
-    let channelQuery = resolvedChannel;
-    try {
-      const channelName = await this.resolveChannelName(resolvedChannel);
-      if (channelName && channelName !== resolvedChannel) {
-        channelQuery = channelName;
-      } else {
-        process.stderr.write(
-          `Warning: channel name resolution failed for ${resolvedChannel}; ` +
-            "search.messages is falling back to the channel ID.\n",
-        );
-      }
-    } catch {
-      process.stderr.write(
-        `Warning: channel name resolution failed for ${resolvedChannel}; ` +
-          "search.messages is falling back to the channel ID.\n",
-      );
-    }
+    const channelQuery = `<#${resolvedChannel}>`;
 
     let page = 1;
     let pagesFetched = 0;
