@@ -615,10 +615,6 @@ describe("getThreadReplies (read)", () => {
     mockWebClient.conversations.replies.mockRejectedValue(
       slackError("missing_scope", "channels:history"),
     );
-    mockWebClient.conversations.list.mockResolvedValue({
-      ok: true,
-      channels: [{ id: "C123", name: "target" }],
-    });
     mockWebClient.search.messages.mockResolvedValue({
       ok: true,
       messages: {
@@ -686,33 +682,18 @@ describe("getThreadReplies (read)", () => {
       "Reply with top-level thread_ts",
     ]);
     expect(mockWebClient.search.messages).toHaveBeenCalledWith({
-      query: "in:target",
+      query: "in:<#C123>",
       sort: "timestamp",
       sort_dir: "asc",
       count: 100,
       page: 1,
     });
+    expect(mockWebClient.conversations.list).not.toHaveBeenCalled();
+    expect(mockWebClient.conversations.info).not.toHaveBeenCalled();
     expect(stderr).toHaveBeenCalledTimes(1);
     expect(stderr.mock.calls[0]?.[0]).toContain("search.messages");
-  });
-
-  it("channel 名解決が例外なら ID query に戻し stderr で警告する", async () => {
-    mockWebClient.conversations.replies.mockRejectedValue(slackError("missing_scope"));
-    mockWebClient.search.messages.mockResolvedValue({
-      ok: true,
-      messages: { matches: [], paging: { page: 1, pages: 1 } },
-    });
-    const stderr = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
-    const client = new SlamyClient({ userToken: "xoxp-test" });
-    vi.spyOn(client, "resolveChannelName").mockRejectedValue(new Error("lookup failed"));
-
-    await client.getThreadReplies("C123", "123.456");
-
-    expect(mockWebClient.search.messages).toHaveBeenCalledWith(
-      expect.objectContaining({ query: "in:C123" }),
-    );
-    expect(stderr.mock.calls.map((call) => String(call[0]))).toContainEqual(
-      expect.stringContaining("channel name"),
+    expect(stderr.mock.calls.map((call) => String(call[0])).join("\n")).not.toContain(
+      "channel name resolution failed",
     );
   });
 
@@ -791,7 +772,6 @@ describe("getThreadReplies (read)", () => {
     }));
     const stderr = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
     const client = new SlamyClient({ userToken: "xoxp-test" });
-    vi.spyOn(client, "resolveChannelName").mockResolvedValue("target");
 
     const msgs = await client.getThreadReplies("C123", "123.456", { limit: 100 });
 
@@ -819,7 +799,6 @@ describe("getThreadReplies (read)", () => {
     });
     vi.spyOn(process.stderr, "write").mockImplementation(() => true);
     const client = new SlamyClient({ userToken: "xoxp-test" });
-    vi.spyOn(client, "resolveChannelName").mockResolvedValue("target");
 
     const msgs = await client.getThreadReplies("C123", "123.456");
 
@@ -852,7 +831,6 @@ describe("getThreadReplies (read)", () => {
     });
     vi.spyOn(process.stderr, "write").mockImplementation(() => true);
     const client = new SlamyClient({ userToken: "xoxp-test" });
-    vi.spyOn(client, "resolveChannelName").mockResolvedValue("target");
 
     const msgs = await client.getThreadReplies("C123", "123.456");
 
