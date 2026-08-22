@@ -189,7 +189,7 @@ export async function startLocalSessionBroker(input: {
             },
           );
         },
-        () => respond(`${JSON.stringify({ ok: false, error: "Local session request failed" })}\n`),
+        (error) => respond(`${JSON.stringify(localSessionFailureResponse(error))}\n`),
       );
   });
 
@@ -247,10 +247,53 @@ export async function callLocalSessionBroker(
   } catch {
     throw new Error("Local session returned an invalid response");
   }
-  if (!isRecord(response) || response.ok !== true || !("value" in response)) {
-    throw new Error("Local session request failed");
+  return decodeLocalSessionBrokerResponse(response);
+}
+
+export function localSessionFailureResponse(error: unknown): Readonly<{
+  ok: false;
+  error: "Local session request failed";
+  platformCode?: string;
+}> {
+  const platformCode = slackPlatformCode(error);
+  return Object.freeze({
+    ok: false as const,
+    error: "Local session request failed" as const,
+    ...(platformCode ? { platformCode } : {}),
+  });
+}
+
+export function decodeLocalSessionBrokerResponse(response: unknown): unknown {
+  if (isRecord(response) && response.ok === true && "value" in response) {
+    return decodeLocalSessionValue(response.value as never);
   }
-  return decodeLocalSessionValue(response.value as never);
+  const error = new Error("Local session request failed") as Error & {
+    platformCode?: string;
+  };
+  if (
+    isRecord(response) &&
+    response.ok === false &&
+    response.error === "Local session request failed"
+  ) {
+    const platformCode = safePlatformCode(response.platformCode);
+    if (platformCode) error.platformCode = platformCode;
+  }
+  throw error;
+}
+
+function slackPlatformCode(error: unknown): string | undefined {
+  try {
+    if (!isRecord(error) || error.code !== "slack_webapi_platform_error") return undefined;
+    return isRecord(error.data) ? safePlatformCode(error.data.error) : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function safePlatformCode(value: unknown): string | undefined {
+  return typeof value === "string" && /^[a-z][a-z0-9_]{0,127}$/.test(value)
+    ? value
+    : undefined;
 }
 
 export async function revokeLocalSessionBroker(

@@ -3,6 +3,7 @@ import type {
   SlackConversationMetadataResult,
   SlackCreateConversationInput,
   SlackGetConversationInfoInput,
+  SlackInviteToConversationInput,
   SlackPublicConversation,
   SlackSetConversationPurposeInput,
   SlackSetConversationTopicInput,
@@ -68,6 +69,15 @@ export function createLocalSessionChannelOperations(
         }),
       );
       return mapConversation(response.channel);
+    },
+    inviteToConversation: async (
+      _context: SlackWorkspaceContext,
+      input: SlackInviteToConversationInput,
+    ): Promise<void> => {
+      await call("conversations.invite", {
+        channel: input.channelId,
+        users: input.userIds.join(","),
+      });
     },
     setConversationPurpose: async (
       _context: SlackWorkspaceContext,
