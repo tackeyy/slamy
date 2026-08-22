@@ -122,6 +122,15 @@ describe("Slack method policy", () => {
         workspaceArgument: null,
       },
       {
+        operation: "invite-to-conversation",
+        method: "conversations.invite",
+        credentialKind: "user",
+        requiredScopes: ["channels:write", "groups:write"],
+        pagination: "none",
+        retryPolicy: "never",
+        workspaceArgument: null,
+      },
+      {
         operation: "search-messages",
         method: "search.messages",
         credentialKind: "user",

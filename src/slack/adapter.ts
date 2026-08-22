@@ -89,6 +89,11 @@ export type SlackCreateConversationInput = {
   readonly isPrivate: boolean;
 };
 
+export type SlackInviteToConversationInput = {
+  readonly channelId: string;
+  readonly userIds: readonly string[];
+};
+
 export type SlackSetConversationPurposeInput = {
   readonly channelId: string;
   readonly purpose: string;
@@ -159,6 +164,10 @@ export interface WorkspaceSlackOperations {
     context: SlackWorkspaceContext,
     input: SlackCreateConversationInput,
   ): Promise<SlackPublicConversation>;
+  inviteToConversation(
+    context: SlackWorkspaceContext,
+    input: SlackInviteToConversationInput,
+  ): Promise<void>;
   setConversationPurpose(
     context: SlackWorkspaceContext,
     input: SlackSetConversationPurposeInput,
@@ -207,6 +216,24 @@ export class WorkspaceSlackAdapter implements WorkspaceSlackOperations {
     return this.#execute(operation, context, {}, (value, teamId) =>
       mapAuthIdentity(value, teamId, credentialKind),
     );
+  }
+
+  inviteToConversation(
+    context: SlackWorkspaceContext,
+    input: SlackInviteToConversationInput,
+  ): Promise<void> {
+    let args: Readonly<Record<string, unknown>>;
+    try {
+      const channelId = parsePublicChannelId(input.channelId);
+      if (!Array.isArray(input.userIds) || input.userIds.length < 1 || input.userIds.length > 1_000) {
+        throw new TypeError();
+      }
+      const userIds = input.userIds.map(parseInvitableUserId);
+      args = Object.freeze({ channel: channelId, users: userIds.join(",") });
+    } catch {
+      throw this.#inputError("invite-to-conversation", context);
+    }
+    return this.#execute("invite-to-conversation", context, args, mapAcknowledgement);
   }
 
   async listPublicConversations(
@@ -966,6 +993,20 @@ function safeText(value: unknown, maxLength: number): string {
 function parseChannelId(value: unknown): string {
   if (typeof value !== "string" || !/^[CDG][A-Z0-9]{1,63}$/.test(value)) {
     throw new TypeError("Invalid Slack channel ID");
+  }
+  return value;
+}
+
+function parsePublicChannelId(value: unknown): string {
+  if (typeof value !== "string" || !/^C[A-Z0-9]{1,63}$/.test(value)) {
+    throw new TypeError("Invalid Slack public channel ID");
+  }
+  return value;
+}
+
+function parseInvitableUserId(value: unknown): string {
+  if (typeof value !== "string" || !/^[UW][A-Z0-9]{1,127}$/.test(value)) {
+    throw new TypeError("Invalid Slack user ID");
   }
   return value;
 }
