@@ -36,6 +36,20 @@ export type EnsureChannelResult = {
   readonly channelId?: string;
 };
 
+export type InviteToChannelInput = {
+  readonly workspace: ChannelWorkspace;
+  readonly channelId: string;
+  readonly userIds: readonly string[];
+  readonly dryRun: boolean;
+};
+
+export type InviteToChannelResult = {
+  readonly status: "planned" | "invited" | "already_in_channel";
+  readonly channelId: string;
+  readonly invited: readonly string[];
+  readonly alreadyInChannel: readonly string[];
+};
+
 export class ChannelEnsureError extends Error {
   readonly stage: "configure" | "verify";
   readonly channelId: string;
@@ -85,6 +99,51 @@ export async function ensureChannel(
   } finally {
     runtime.dispose();
   }
+}
+
+export async function inviteToChannel(
+  input: InviteToChannelInput,
+  loadRuntime: ChannelRuntimeLoader,
+): Promise<InviteToChannelResult> {
+  if (input.dryRun) {
+    return Object.freeze({
+      status: "planned",
+      channelId: input.channelId,
+      invited: Object.freeze([...input.userIds]),
+      alreadyInChannel: Object.freeze([]),
+    });
+  }
+  const runtime = await loadRuntime();
+  try {
+    const invited: string[] = [];
+    const alreadyInChannel: string[] = [];
+    for (const userId of input.userIds) {
+      try {
+        await runtime.slack.inviteToConversation(runtime.context, {
+          channelId: input.channelId,
+          userIds: [userId],
+        });
+        invited.push(userId);
+      } catch (error) {
+        if (platformCode(error) !== "already_in_channel") throw error;
+        alreadyInChannel.push(userId);
+      }
+    }
+    return Object.freeze({
+      status: invited.length > 0 ? "invited" : "already_in_channel",
+      channelId: input.channelId,
+      invited: Object.freeze(invited),
+      alreadyInChannel: Object.freeze(alreadyInChannel),
+    });
+  } finally {
+    runtime.dispose();
+  }
+}
+
+function platformCode(error: unknown): unknown {
+  return typeof error === "object" && error !== null && "platformCode" in error
+    ? error.platformCode
+    : undefined;
 }
 
 async function configureAndVerify(
