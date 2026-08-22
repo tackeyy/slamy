@@ -14,6 +14,7 @@ export type SlackOperation =
   | "set-private-conversation-purpose"
   | "set-public-conversation-topic"
   | "set-private-conversation-topic"
+  | "invite-to-conversation"
   | "search-messages"
   | "post-message";
 
@@ -25,6 +26,7 @@ export type SlackApiMethod =
   | "conversations.create"
   | "conversations.setPurpose"
   | "conversations.setTopic"
+  | "conversations.invite"
   | "search.messages"
   | "chat.postMessage";
 
@@ -129,6 +131,15 @@ const POLICIES: readonly SlackMethodPolicy[] = Object.freeze(
       "conversations.setTopic",
       "user",
       ["groups:write.topic"],
+      "none",
+      "never",
+      null,
+    ),
+    policy(
+      "invite-to-conversation",
+      "conversations.invite",
+      "user",
+      ["channels:write", "groups:write"],
       "none",
       "never",
       null,

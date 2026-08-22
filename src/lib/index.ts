@@ -69,6 +69,7 @@ export type {
   SlackConversationMetadataResult,
   SlackConversationInfo,
   SlackGetConversationInfoInput,
+  SlackInviteToConversationInput,
   SlackSetConversationPurposeInput,
   SlackSetConversationTopicInput,
   SlackDiagnosticEvent,

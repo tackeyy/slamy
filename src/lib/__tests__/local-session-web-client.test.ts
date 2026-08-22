@@ -48,4 +48,25 @@ describe("local session Web API client", () => {
     );
     expect(request).not.toHaveBeenCalled();
   });
+
+  it("allows conversations.invite through the local session", async () => {
+    const request = vi.fn().mockResolvedValue({ ok: true });
+    const connection = {
+      version: 1 as const,
+      teamId: parseTeamId("T0BJ9SG2M0R"),
+      credentialKind: "user" as const,
+      socketPath: "/private/session.sock",
+      capability: "local-capability-canary",
+      createdAt: "2029-01-01T00:00:00.000Z",
+      expiresAt: "2030-01-01T00:00:00.000Z",
+    };
+    const client = createLocalSessionWebClient(connection, request);
+
+    await client.conversations.invite({ channel: "C0123ABC", users: "U00000001" });
+
+    expect(request).toHaveBeenCalledWith(connection, "conversations.invite", {
+      channel: "C0123ABC",
+      users: "U00000001",
+    });
+  });
 });

@@ -3,6 +3,23 @@ import { parseTeamId } from "../../domain/team-id.js";
 import { createLocalSessionChannelOperations } from "../local-session-channel-operations.js";
 
 describe("local session channel operations", () => {
+  it("maps conversation invites to the broker without credentials", async () => {
+    const request = vi.fn().mockResolvedValue({ ok: true });
+    const connection = localConnection();
+    const operations = createLocalSessionChannelOperations(connection, request);
+
+    await expect(
+      operations.inviteToConversation({} as never, {
+        channelId: "C0123ABC",
+        userIds: ["U00000001", "W00000002"],
+      }),
+    ).resolves.toBeUndefined();
+    expect(request).toHaveBeenCalledWith(connection, "conversations.invite", {
+      channel: "C0123ABC",
+      users: "U00000001,W00000002",
+    });
+  });
+
   it("maps channel management operations to the broker without credentials", async () => {
     const request = vi
       .fn()
@@ -15,15 +32,7 @@ describe("local session channel operations", () => {
         ok: true,
         channel: { id: "C2", name: "new-channel", is_archived: false, is_private: false },
       });
-    const connection = {
-      version: 1 as const,
-      teamId: parseTeamId("T0BJ9SG2M0R"),
-      credentialKind: "user" as const,
-      socketPath: "/private/session.sock",
-      capability: "local-capability-canary",
-      createdAt: "2029-01-01T00:00:00.000Z",
-      expiresAt: "2030-01-01T00:00:00.000Z",
-    };
+    const connection = localConnection();
     const operations = createLocalSessionChannelOperations(connection, request);
 
     await expect(operations.listAllPublicConversations({} as never)).resolves.toEqual([
@@ -63,15 +72,7 @@ describe("local session channel operations", () => {
           purpose: { value: "purpose" },
         },
       });
-    const connection = {
-      version: 1 as const,
-      teamId: parseTeamId("T0BJ9SG2M0R"),
-      credentialKind: "user" as const,
-      socketPath: "/private/session.sock",
-      capability: "local-capability-canary",
-      createdAt: "2029-01-01T00:00:00.000Z",
-      expiresAt: "2030-01-01T00:00:00.000Z",
-    };
+    const connection = localConnection();
     const operations = createLocalSessionChannelOperations(connection, request);
 
     await expect(operations.listAllPrivateConversations({} as never)).resolves.toHaveLength(2);
@@ -98,15 +99,7 @@ describe("local session channel operations", () => {
   });
 
   it("rejects repeated cursors and malformed Slack responses", async () => {
-    const connection = {
-      version: 1 as const,
-      teamId: parseTeamId("T0BJ9SG2M0R"),
-      credentialKind: "user" as const,
-      socketPath: "/private/session.sock",
-      capability: "local-capability-canary",
-      createdAt: "2029-01-01T00:00:00.000Z",
-      expiresAt: "2030-01-01T00:00:00.000Z",
-    };
+    const connection = localConnection();
     const repeated = createLocalSessionChannelOperations(connection, vi.fn()
       .mockResolvedValueOnce({ channels: [], response_metadata: { next_cursor: "same" } })
       .mockResolvedValueOnce({ channels: [], response_metadata: { next_cursor: "same" } }));
@@ -116,3 +109,15 @@ describe("local session channel operations", () => {
     await expect(malformed.listAllPublicConversations({} as never)).rejects.toThrow("invalid Slack response");
   });
 });
+
+function localConnection() {
+  return {
+    version: 1 as const,
+    teamId: parseTeamId("T0BJ9SG2M0R"),
+    credentialKind: "user" as const,
+    socketPath: "/private/session.sock",
+    capability: "local-capability-canary",
+    createdAt: "2029-01-01T00:00:00.000Z",
+    expiresAt: "2030-01-01T00:00:00.000Z",
+  };
+}

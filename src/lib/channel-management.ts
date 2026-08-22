@@ -1,4 +1,9 @@
-import { ensureChannel, type EnsureChannelResult } from "../commands/channel-management.js";
+import {
+  ensureChannel,
+  inviteToChannel,
+  type EnsureChannelResult,
+  type InviteToChannelResult,
+} from "../commands/channel-management.js";
 import type { CredentialResolver } from "../credentials/index.js";
 import type { VerifiedCredentialSet } from "../credentials/types.js";
 import { createSlackWorkspaceContext, type WorkspaceSlackOperations } from "../slack/index.js";
@@ -30,6 +35,15 @@ export type EnsureWorkspaceChannelOptions = {
     connection: LocalSessionConnection,
   ) => WorkspaceSlackOperations;
 };
+
+export type InviteWorkspaceChannelUsersRequest = {
+  readonly workspace: string;
+  readonly channelId: string;
+  readonly userIds: readonly string[];
+  readonly dryRun: boolean;
+};
+
+export type InviteWorkspaceChannelUsersOptions = EnsureWorkspaceChannelOptions;
 
 export async function ensureWorkspaceChannel(
   request: EnsureWorkspaceChannelRequest,
@@ -75,6 +89,58 @@ export async function ensureWorkspaceChannel(
           requiredKinds: ["user"],
           requiredScopes: { user: requiredUserScopes(request.isPrivate) },
           operation: "channels.create",
+        });
+      return {
+        context: createSlackWorkspaceContext({ teamId: workspace.teamId, credentials }),
+        slack: options.slack ?? createWorkspaceSlackAdapter(),
+        dispose: () => credentials.destroy(),
+      };
+    },
+  );
+}
+
+export async function inviteWorkspaceChannelUsers(
+  request: InviteWorkspaceChannelUsersRequest,
+  options: InviteWorkspaceChannelUsersOptions = {},
+): Promise<InviteToChannelResult> {
+  const registry = options.registry ?? createWorkspaceRegistry();
+  const workspace = await registry.resolve(request.workspace);
+  return inviteToChannel(
+    {
+      workspace: {
+        teamId: workspace.teamId,
+        alias: workspace.alias,
+        domain: workspace.domain,
+        displayName: workspace.displayName,
+      },
+      channelId: request.channelId,
+      userIds: request.userIds,
+      dryRun: request.dryRun,
+    },
+    async () => {
+      const localSessionLookup =
+        options.localSessionLookup ??
+        (options.credentialResolver || options.slack
+          ? () => Promise.resolve(undefined)
+          : (selected) => findLocalSessionForWorkspace(selected));
+      const localSession = await localSessionLookup(workspace);
+      if (localSession) {
+        if (localSession.teamId !== workspace.teamId || localSession.credentialKind !== "user") {
+          throw new Error("Local session does not match the selected workspace");
+        }
+        return {
+          context: sessionContext(workspace.teamId),
+          slack: (options.localSessionSlackFactory ?? createLocalSessionChannelOperations)(
+            localSession,
+          ),
+          dispose() {},
+        };
+      }
+      const credentials = await (options.credentialResolver ?? createCredentialResolver())
+        .resolveForWorkspace(workspace, {
+          requiredKinds: ["user"],
+          requiredScopes: { user: ["channels:write", "groups:write"] },
+          operation: "conversations.invite",
         });
       return {
         context: createSlackWorkspaceContext({ teamId: workspace.teamId, credentials }),

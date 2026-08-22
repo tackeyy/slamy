@@ -83,6 +83,50 @@ describe("WorkspaceSlackAdapter named operations", () => {
     });
   });
 
+  it("invites users to a channel with the explicit workspace User credential", async () => {
+    const transport = new QueueTransport([{ ok: true }]);
+    const adapter = new WorkspaceSlackAdapter({ transport, requestIdFactory: idFactory() });
+    const context = contextWith({
+      userToken: "xoxp-user",
+      userScopes: ["channels:write", "groups:write"],
+    });
+
+    await expect(
+      adapter.inviteToConversation(context, {
+        channelId: "C0123ABC",
+        userIds: ["U00000001", "W00000002"],
+      }),
+    ).resolves.toBeUndefined();
+    expect(transport.requests).toEqual([
+      {
+        method: "conversations.invite",
+        token: "xoxp-user",
+        teamId: PRIMARY_TEAM_ID,
+        requestId: "req-1",
+        arguments: { channel: "C0123ABC", users: "U00000001,W00000002" },
+      },
+    ]);
+  });
+
+  it("preserves already_in_channel as a classified Slack platform error", async () => {
+    const transport = new QueueTransport([{ ok: false, error: "already_in_channel" }]);
+    const adapter = new WorkspaceSlackAdapter({ transport, requestIdFactory: idFactory() });
+    const context = contextWith({
+      userToken: "xoxp-user",
+      userScopes: ["channels:write", "groups:write"],
+    });
+
+    await expect(
+      adapter.inviteToConversation(context, {
+        channelId: "C0123ABC",
+        userIds: ["U00000001"],
+      }),
+    ).rejects.toMatchObject({
+      code: "SLACK_PLATFORM_ERROR",
+      platformCode: "already_in_channel",
+    });
+  });
+
   it("sets a public channel purpose through the topic-specific scope", async () => {
     const transport = new QueueTransport([
       { ok: true, purpose: "AI・ソフトウェア開発と技術判断を共有します。" },
