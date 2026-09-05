@@ -39,8 +39,8 @@
   },
   "devDependencies": {
     "@changesets/cli": "^2.31.1",
-    "@types/node": "^26.1.2",
-    "@vitest/coverage-v8": "^4.1.10",
+    "@types/node": "^26.2.0",
+    "@vitest/coverage-v8": "^4.1.11",
     "markdownlint-cli2": "^0.23.2",
     "typescript": "^7.0.2",
     "vitest": "^4.1.8"
