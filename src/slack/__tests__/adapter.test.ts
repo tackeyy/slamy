@@ -44,6 +44,23 @@ describe("WorkspaceSlackAdapter", () => {
     });
   });
 
+  it("rejects an invalid rename name before calling the Slack API", async () => {
+    const transport = new FakeTransport();
+    const adapter = new WorkspaceSlackAdapter({ transport });
+
+    let caught: unknown;
+    try {
+      adapter.renameConversation(
+        contextWith({ userToken: "xoxp-user", userScopes: ["channels:write"] }),
+        { channelId: "C0123ABC", name: "Invalid Name", isPrivate: false },
+      );
+    } catch (error) {
+      caught = error;
+    }
+    expect(caught).toMatchObject({ code: "INVALID_SLACK_INPUT" });
+    expect(transport.requests).toHaveLength(0);
+  });
+
   it("selects the policy credential without cross-kind fallback", async () => {
     const transport = new FakeTransport();
     const adapter = new WorkspaceSlackAdapter({ transport, requestIdFactory: () => "req-1" });

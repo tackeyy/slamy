@@ -38,6 +38,28 @@ describe("renameChannel", () => {
     });
   });
 
+  it("renames a private channel using the private visibility operation", async () => {
+    const renameConversation = vi.fn().mockResolvedValue(undefined);
+    const slack = {
+      listAllPublicConversations: vi.fn().mockResolvedValue([]),
+      listAllPrivateConversations: vi.fn().mockResolvedValue([
+        { channelId: "C0123ABC", name: "01-private", isArchived: false, isPrivate: true },
+      ]),
+      renameConversation,
+      getConversationInfo: vi.fn().mockResolvedValue({ name: "001-private" }),
+    } as unknown as WorkspaceSlackOperations;
+
+    await expect(renameChannel(
+      { channelId: "C0123ABC", name: "001-private", dryRun: false },
+      runtime(slack),
+    )).resolves.toEqual({
+      status: "renamed", channelId: "C0123ABC", name: "001-private", previousName: "01-private",
+    });
+    expect(renameConversation).toHaveBeenCalledWith(expect.anything(), {
+      channelId: "C0123ABC", name: "001-private", isPrivate: true,
+    });
+  });
+
   it("does not call Slack rename when the requested name is already current", async () => {
     const renameConversation = vi.fn();
     const slack = {
@@ -87,10 +109,59 @@ describe("renameChannel", () => {
     await expect(renameChannel({ channelId: "C0123ABC", name: "001-general", dryRun: false }, runtime(slack)))
       .rejects.toThrow("Slack channel rename verification did not match the requested name");
   });
+
+  it("rejects with a distinct verification error when reading the renamed channel fails", async () => {
+    const slack = {
+      listAllPublicConversations: vi.fn().mockResolvedValue([
+        { channelId: "C0123ABC", name: "01-general", isArchived: false, isPrivate: false },
+      ]),
+      listAllPrivateConversations: vi.fn().mockResolvedValue([]),
+      renameConversation: vi.fn().mockResolvedValue(undefined),
+      getConversationInfo: vi.fn().mockRejectedValue(new Error("read failed")),
+    } as unknown as WorkspaceSlackOperations;
+
+    await expect(renameChannel({ channelId: "C0123ABC", name: "001-general", dryRun: false }, runtime(slack)))
+      .rejects.toThrow("Slack channel rename verification could not read the channel");
+  });
+
+  it.each([
+    ["renamed", "01-general", "001-general", "renamed"],
+    ["unchanged", "001-general", "001-general", "unchanged"],
+  ] as const)("disposes the runtime once after %s", async (_caseName, previousName, name, status) => {
+    const dispose = vi.fn();
+    const slack = {
+      listAllPublicConversations: vi.fn().mockResolvedValue([
+        { channelId: "C0123ABC", name: previousName, isArchived: false, isPrivate: false },
+      ]),
+      listAllPrivateConversations: vi.fn().mockResolvedValue([]),
+      renameConversation: vi.fn().mockResolvedValue(undefined),
+      getConversationInfo: vi.fn().mockResolvedValue({ name }),
+    } as unknown as WorkspaceSlackOperations;
+
+    await expect(renameChannel(
+      { channelId: "C0123ABC", name, dryRun: false },
+      runtime(slack, dispose),
+    )).resolves.toMatchObject({ status });
+    expect(dispose).toHaveBeenCalledTimes(1);
+  });
+
+  it("disposes the runtime once after a rename error", async () => {
+    const dispose = vi.fn();
+    const slack = {
+      listAllPublicConversations: vi.fn().mockResolvedValue([]),
+      listAllPrivateConversations: vi.fn().mockResolvedValue([]),
+    } as unknown as WorkspaceSlackOperations;
+
+    await expect(renameChannel(
+      { channelId: "C0123ABC", name: "001-general", dryRun: false },
+      runtime(slack, dispose),
+    )).rejects.toThrow("Channel not found in the selected workspace");
+    expect(dispose).toHaveBeenCalledTimes(1);
+  });
 });
 
-function runtime(slack: WorkspaceSlackOperations) {
-  return async () => ({ context: contextWith({ userToken: "xoxp-user" }), slack, dispose() {} });
+function runtime(slack: WorkspaceSlackOperations, dispose = vi.fn()) {
+  return async () => ({ context: contextWith({ userToken: "xoxp-user" }), slack, dispose });
 }
 
 describe("ensureChannel", () => {
