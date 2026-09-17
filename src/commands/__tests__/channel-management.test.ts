@@ -282,6 +282,174 @@ describe("ensureChannel", () => {
     expect(dispose).toHaveBeenCalledTimes(1);
   });
 
+  it("accepts Slack-escaped topic and purpose metadata during verification", async () => {
+    const slack = {
+      listAllPublicConversations: vi.fn().mockResolvedValue([]),
+      listAllPrivateConversations: vi.fn().mockResolvedValue([]),
+      createConversation: vi.fn().mockResolvedValue({
+        channelId: "C0999XYZ",
+        name: "01-engineering",
+        isArchived: false,
+        isPrivate: false,
+      }),
+      setConversationPurpose: vi.fn().mockResolvedValue({}),
+      setConversationTopic: vi.fn().mockResolvedValue({}),
+      getConversationInfo: vi.fn().mockResolvedValue({
+        channelId: "C0999XYZ",
+        name: "01-engineering",
+        isArchived: false,
+        isPrivate: false,
+        topic: "AI&amp;開発 &lt;速報&gt;",
+        purpose: "AI&amp;ソフトウェア開発と技術判断を共有します。&lt;内部&gt; &gt;",
+      }),
+    } as unknown as WorkspaceSlackOperations;
+
+    await expect(
+      ensureChannel(
+        {
+          ...channelInput(),
+          topic: "AI&開発 <速報>",
+          purpose: "AI&ソフトウェア開発と技術判断を共有します。<内部> >",
+        },
+        async () => ({
+          context: contextWith({ userToken: "xoxp-user" }),
+          slack,
+          dispose() {},
+        }),
+      ),
+    ).resolves.toMatchObject({ status: "created", channelId: "C0999XYZ" });
+  });
+
+  it("reports only topic when verified metadata differs", async () => {
+    const slack = verificationSlack({ topic: "異なる topic" });
+
+    await expect(
+      ensureChannel(channelInput(), async () => ({
+        context: contextWith({ userToken: "xoxp-user" }),
+        slack,
+        dispose() {},
+      })),
+    ).rejects.toMatchObject({
+      stage: "verify-mismatch",
+      channelId: "C0999XYZ",
+      status: "created",
+      mismatchedFields: ["topic"],
+      message: "Slack channel verify failed after the channel target was resolved: mismatched topic",
+    });
+  });
+
+  it("reports only purpose when verified metadata differs", async () => {
+    const slack = verificationSlack({ purpose: "異なる purpose" });
+
+    await expect(
+      ensureChannel(channelInput(), async () => ({
+        context: contextWith({ userToken: "xoxp-user" }),
+        slack,
+        dispose() {},
+      })),
+    ).rejects.toMatchObject({
+      stage: "verify-mismatch",
+      mismatchedFields: ["purpose"],
+      message: "Slack channel verify failed after the channel target was resolved: mismatched purpose",
+    });
+  });
+
+  it("restores double-escaped metadata by exactly one level", async () => {
+    const slack = verificationSlack({
+      purpose: "AI&amp;amp;ソフトウェア開発と技術判断を共有します。",
+    });
+
+    await expect(
+      ensureChannel(
+        { ...channelInput(), purpose: "AI&amp;ソフトウェア開発と技術判断を共有します。" },
+        async () => ({
+          context: contextWith({ userToken: "xoxp-user" }),
+          slack,
+          dispose() {},
+        }),
+      ),
+    ).resolves.toMatchObject({ status: "created", channelId: "C0999XYZ" });
+  });
+
+  it("keeps literal entity text in the input after restoring one level", async () => {
+    const slack = verificationSlack({
+      topic: "&amp;lt;tag&amp;gt;",
+      purpose: "AI&amp;lt;ソフトウェア開発と技術判断を共有します。",
+    });
+
+    await expect(
+      ensureChannel(
+        {
+          ...channelInput(),
+          topic: "&lt;tag&gt;",
+          purpose: "AI&lt;ソフトウェア開発と技術判断を共有します。",
+        },
+        async () => ({
+          context: contextWith({ userToken: "xoxp-user" }),
+          slack,
+          dispose() {},
+        }),
+      ),
+    ).resolves.toMatchObject({ status: "created", channelId: "C0999XYZ" });
+  });
+
+  it("does not restore double-escaped metadata by two levels", async () => {
+    const slack = verificationSlack({
+      purpose: "AI&amp;amp;ソフトウェア開発と技術判断を共有します。",
+    });
+
+    await expect(
+      ensureChannel(channelInput(), async () => ({
+        context: contextWith({ userToken: "xoxp-user" }),
+        slack,
+        dispose() {},
+      })),
+    ).rejects.toMatchObject({
+      stage: "verify-mismatch",
+      mismatchedFields: ["purpose"],
+    });
+  });
+
+  it("reports every differing verification field without exposing values", async () => {
+    const slack = verificationSlack({
+      name: "different-channel",
+      isPrivate: true,
+      topic: "異なる topic",
+      purpose: "異なる purpose",
+    });
+
+    await expect(
+      ensureChannel(channelInput(), async () => ({
+        context: contextWith({ userToken: "xoxp-user" }),
+        slack,
+        dispose() {},
+      })),
+    ).rejects.toMatchObject({
+      stage: "verify-mismatch",
+      mismatchedFields: ["name", "isPrivate", "topic", "purpose"],
+      message: "Slack channel verify failed after the channel target was resolved: mismatched name, isPrivate, topic, purpose",
+    });
+  });
+
+  it("reports verification fetch failures separately from mismatches", async () => {
+    const slack = verificationSlack({});
+    (slack.getConversationInfo as ReturnType<typeof vi.fn>).mockRejectedValue(
+      new Error("Slack API unavailable"),
+    );
+
+    await expect(
+      ensureChannel(channelInput(), async () => ({
+        context: contextWith({ userToken: "xoxp-user" }),
+        slack,
+        dispose() {},
+      })),
+    ).rejects.toMatchObject({
+      stage: "verify-fetch",
+      mismatchedFields: [],
+      message: "Slack channel verify failed after the channel target was resolved: could not read the channel",
+    });
+  });
+
   it("reports the created channel id when metadata configuration fails", async () => {
     const slack = {
       listAllPublicConversations: vi.fn().mockResolvedValue([]),
@@ -458,4 +626,35 @@ function inviteInput() {
     userIds: ["U00000001", "W00000002"],
     dryRun: false,
   } as const;
+}
+
+function verificationSlack(
+  metadata: Partial<{
+    readonly name: string;
+    readonly isPrivate: boolean;
+    readonly topic: string;
+    readonly purpose: string;
+  }>,
+) {
+  return {
+    listAllPublicConversations: vi.fn().mockResolvedValue([]),
+    listAllPrivateConversations: vi.fn().mockResolvedValue([]),
+    createConversation: vi.fn().mockResolvedValue({
+      channelId: "C0999XYZ",
+      name: "01-engineering",
+      isArchived: false,
+      isPrivate: false,
+    }),
+    setConversationPurpose: vi.fn().mockResolvedValue({}),
+    setConversationTopic: vi.fn().mockResolvedValue({}),
+    getConversationInfo: vi.fn().mockResolvedValue({
+      channelId: "C0999XYZ",
+      name: "01-engineering",
+      isArchived: false,
+      isPrivate: false,
+      topic: "AI・開発",
+      purpose: "AI・ソフトウェア開発と技術判断を共有します。",
+      ...metadata,
+    }),
+  } as unknown as WorkspaceSlackOperations;
 }
