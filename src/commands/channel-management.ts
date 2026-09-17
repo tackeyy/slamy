@@ -50,6 +50,19 @@ export type InviteToChannelResult = {
   readonly alreadyInChannel: readonly string[];
 };
 
+export type RenameChannelInput = {
+  readonly channelId: string;
+  readonly name: string;
+  readonly dryRun: boolean;
+};
+
+export type RenameChannelResult = {
+  readonly status: "planned" | "renamed" | "unchanged";
+  readonly channelId: string;
+  readonly name: string;
+  readonly previousName?: string;
+};
+
 type ChannelMismatchField = "name" | "isPrivate" | "topic" | "purpose";
 
 export class ChannelEnsureError extends Error {
@@ -139,6 +152,61 @@ export async function inviteToChannel(
       channelId: input.channelId,
       invited: Object.freeze(invited),
       alreadyInChannel: Object.freeze(alreadyInChannel),
+    });
+  } finally {
+    runtime.dispose();
+  }
+}
+
+export async function renameChannel(
+  input: RenameChannelInput,
+  loadRuntime: ChannelRuntimeLoader,
+): Promise<RenameChannelResult> {
+  if (input.dryRun) {
+    return Object.freeze({ status: "planned", channelId: input.channelId, name: input.name });
+  }
+  const runtime = await loadRuntime();
+  try {
+    const [publicChannels, privateChannels] = await Promise.all([
+      runtime.slack.listAllPublicConversations(runtime.context),
+      runtime.slack.listAllPrivateConversations(runtime.context),
+    ]);
+    const channels = [...publicChannels, ...privateChannels];
+    const channel = channels.find(({ channelId }) => channelId === input.channelId);
+    if (!channel) throw new Error("Channel not found in the selected workspace");
+    if (channel.name === input.name) {
+      return Object.freeze({
+        status: "unchanged",
+        channelId: channel.channelId,
+        name: input.name,
+        previousName: channel.name,
+      });
+    }
+    if (channels.some(({ channelId, name }) => channelId !== channel.channelId && name === input.name)) {
+      throw new Error("Another channel already uses the requested name");
+    }
+    await runtime.slack.renameConversation(runtime.context, {
+      channelId: channel.channelId,
+      name: input.name,
+      isPrivate: channel.isPrivate,
+    });
+    let verified;
+    try {
+      verified = await runtime.slack.getConversationInfo(runtime.context, {
+        channelId: channel.channelId,
+        isPrivate: channel.isPrivate,
+      });
+    } catch {
+      throw new Error("Slack channel rename verification could not read the channel");
+    }
+    if (verified.name !== input.name) {
+      throw new Error("Slack channel rename verification did not match the requested name");
+    }
+    return Object.freeze({
+      status: "renamed",
+      channelId: channel.channelId,
+      name: input.name,
+      previousName: channel.name,
     });
   } finally {
     runtime.dispose();

@@ -263,3 +263,66 @@ describe("channels invite CLI", () => {
     expect(process.exitCode).toBe(1);
   });
 });
+
+describe("channels rename CLI", () => {
+  it("prints the documented JSON dry-run plan", async () => {
+    const renameChannel = vi.fn().mockResolvedValue({
+      status: "planned", channelId: "C0123ABC", name: "001-general",
+    });
+    const writeOut = vi.fn();
+    const program = new Command().option("--json").option("--workspace <selector>");
+    const channels = program.command("channels");
+    registerChannelManagementCommands(channels, program, {
+      ensureChannel: vi.fn(), inviteChannel: vi.fn(), renameChannel, writeOut, writeErr: vi.fn(),
+    });
+
+    await program.parseAsync([
+      "node", "slamy", "--json", "--workspace", "wedgeai", "channels", "rename",
+      "C0123ABC", "001-general", "--dry-run",
+    ]);
+
+    expect(renameChannel).toHaveBeenCalledWith({
+      workspace: "wedgeai", channelId: "C0123ABC", name: "001-general", dryRun: true,
+    });
+    expect(JSON.parse(writeOut.mock.calls[0]![0])).toEqual({
+      status: "planned", channelId: "C0123ABC", name: "001-general",
+    });
+  });
+
+  it("accepts a legacy G-prefixed private channel ID", async () => {
+    const renameChannel = vi.fn().mockResolvedValue({
+      status: "planned", channelId: "G0123ABC", name: "001-private",
+    });
+    const program = new Command().option("--workspace <selector>");
+    const channels = program.command("channels");
+    registerChannelManagementCommands(channels, program, {
+      ensureChannel: vi.fn(), inviteChannel: vi.fn(), renameChannel, writeOut: vi.fn(), writeErr: vi.fn(),
+    });
+
+    await program.parseAsync([
+      "node", "slamy", "--workspace", "wedgeai", "channels", "rename",
+      "G0123ABC", "001-private", "--dry-run",
+    ]);
+
+    expect(renameChannel).toHaveBeenCalledWith({
+      workspace: "wedgeai", channelId: "G0123ABC", name: "001-private", dryRun: true,
+    });
+  });
+
+  it.each([["D0123ABC", "001-general"], ["C0123ABC", "Invalid Name"]])(
+    "rejects invalid rename input without calling the API",
+    async (channelId, name) => {
+      const renameChannel = vi.fn();
+      const writeErr = vi.fn();
+      const program = new Command().option("--workspace <selector>");
+      const channels = program.command("channels");
+      registerChannelManagementCommands(channels, program, {
+        ensureChannel: vi.fn(), inviteChannel: vi.fn(), renameChannel, writeOut: vi.fn(), writeErr,
+      });
+
+      await program.parseAsync(["node", "slamy", "--workspace", "wedgeai", "channels", "rename", channelId, name]);
+      expect(renameChannel).not.toHaveBeenCalled();
+      expect(writeErr).toHaveBeenCalledWith(expect.stringContaining("Channel"));
+    },
+  );
+});

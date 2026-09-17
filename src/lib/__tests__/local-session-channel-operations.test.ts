@@ -20,6 +20,19 @@ describe("local session channel operations", () => {
     });
   });
 
+  it("maps a conversation rename to the broker without credentials", async () => {
+    const request = vi.fn().mockResolvedValue({ ok: true });
+    const connection = localConnection();
+    const operations = createLocalSessionChannelOperations(connection, request);
+
+    await expect(operations.renameConversation({} as never, {
+      channelId: "C0123ABC", name: "001-general", isPrivate: false,
+    })).resolves.toBeUndefined();
+    expect(request).toHaveBeenCalledWith(connection, "conversations.rename", {
+      channel: "C0123ABC", name: "001-general",
+    });
+  });
+
   it("maps channel management operations to the broker without credentials", async () => {
     const request = vi
       .fn()

@@ -4,10 +4,13 @@ import {
   type EnsureWorkspaceChannelRequest,
   inviteWorkspaceChannelUsers,
   type InviteWorkspaceChannelUsersRequest,
+  renameWorkspaceChannel,
+  type RenameWorkspaceChannelRequest,
 } from "../lib/channel-management.js";
 import {
   formatEnsureChannelResult,
   formatInviteToChannelResult,
+  formatRenameChannelResult,
 } from "../output/channel-management.js";
 import { resolveCliWorkspaceSelector } from "./api-client.js";
 
@@ -16,6 +19,7 @@ export type ChannelManagementCommandDependencies = {
   inviteChannel: (
     request: InviteWorkspaceChannelUsersRequest,
   ) => ReturnType<typeof inviteWorkspaceChannelUsers>;
+  renameChannel?: (request: RenameWorkspaceChannelRequest) => ReturnType<typeof renameWorkspaceChannel>;
   writeOut: (line: string) => void;
   writeErr: (line: string) => void;
   env?: NodeJS.ProcessEnv;
@@ -24,6 +28,7 @@ export type ChannelManagementCommandDependencies = {
 const defaultDependencies: ChannelManagementCommandDependencies = {
   ensureChannel: (request) => ensureWorkspaceChannel(request),
   inviteChannel: (request) => inviteWorkspaceChannelUsers(request),
+  renameChannel: (request) => renameWorkspaceChannel(request),
   writeOut: (line) => console.log(line),
   writeErr: (line) => console.error(line),
 };
@@ -38,6 +43,8 @@ type CreateOptions = {
 type InviteOptions = {
   dryRun?: boolean;
 };
+
+type RenameOptions = { dryRun?: boolean };
 
 export function registerChannelManagementCommands(
   channels: Command,
@@ -104,6 +111,28 @@ export function registerChannelManagementCommands(
         process.exitCode = 1;
       }
     });
+
+  channels
+    .command("rename <channel> <name>")
+    .description("Rename a channel in an explicit workspace")
+    .option("--dry-run", "Print the planned operation without reading credentials or Slack")
+    .action(async (channelId: string, name: string, options: RenameOptions) => {
+      try {
+        validateRenameInput(channelId, name);
+        const workspace = resolveCliWorkspaceSelector(
+          program.opts<{ workspace?: string }>().workspace,
+          dependencies.env ?? process.env,
+        );
+        if (workspace === undefined) throw new Error("A workspace selector is required");
+        const result = await (dependencies.renameChannel ?? renameWorkspaceChannel)({
+          workspace, channelId, name, dryRun: Boolean(options.dryRun),
+        });
+        dependencies.writeOut(formatRenameChannelResult(result, outputMode(program)));
+      } catch (error) {
+        dependencies.writeErr(`Error: ${channelManagementErrorMessage(error)}`);
+        process.exitCode = 1;
+      }
+    });
 }
 
 function validateInput(name: string, topic: string, purpose: string): void {
@@ -124,6 +153,15 @@ function validateInviteInput(channelId: string, userIds: readonly string[]): voi
   if (userIds.length < 1) throw new Error("At least one user ID is required");
   if (userIds.some((userId) => !/^[UW][A-Z0-9]+$/.test(userId))) {
     throw new Error("User IDs must start with U or W and contain only uppercase letters or numbers");
+  }
+}
+
+function validateRenameInput(channelId: string, name: string): void {
+  if (!/^[CG][A-Z0-9]+$/.test(channelId)) {
+    throw new Error("Channel ID must start with C or G and contain only uppercase letters or numbers");
+  }
+  if (!/^[a-z0-9][a-z0-9_-]{0,79}$/.test(name)) {
+    throw new Error("Channel name must use lowercase letters, numbers, hyphens, or underscores");
   }
 }
 

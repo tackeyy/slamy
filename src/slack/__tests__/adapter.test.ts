@@ -21,6 +21,46 @@ class FakeTransport implements SlackTransport {
 }
 
 describe("WorkspaceSlackAdapter", () => {
+  it.each([
+    [false, ["channels:write"], "rename-public-conversation"],
+    [true, ["groups:write"], "rename-private-conversation"],
+  ])("renames a channel with the visibility-specific policy", async (isPrivate, userScopes, operation) => {
+    const transport = new FakeTransport();
+    const calls: string[] = [];
+    const adapter = new WorkspaceSlackAdapter({
+      transport,
+      verificationHook: ({ operation: actual }) => { calls.push(actual); },
+    });
+
+    await expect(adapter.renameConversation(
+      contextWith({ userToken: "xoxp-user", userScopes }),
+      { channelId: "C0123ABC", name: "001-general", isPrivate },
+    )).resolves.toBeUndefined();
+    expect(calls).toEqual([operation]);
+    expect(transport.requests).toHaveLength(1);
+    expect(transport.requests[0]).toMatchObject({
+      method: "conversations.rename",
+      arguments: { channel: "C0123ABC", name: "001-general" },
+    });
+  });
+
+  it("rejects an invalid rename name before calling the Slack API", async () => {
+    const transport = new FakeTransport();
+    const adapter = new WorkspaceSlackAdapter({ transport });
+
+    let caught: unknown;
+    try {
+      adapter.renameConversation(
+        contextWith({ userToken: "xoxp-user", userScopes: ["channels:write"] }),
+        { channelId: "C0123ABC", name: "Invalid Name", isPrivate: false },
+      );
+    } catch (error) {
+      caught = error;
+    }
+    expect(caught).toMatchObject({ code: "INVALID_SLACK_INPUT" });
+    expect(transport.requests).toHaveLength(0);
+  });
+
   it("selects the policy credential without cross-kind fallback", async () => {
     const transport = new FakeTransport();
     const adapter = new WorkspaceSlackAdapter({ transport, requestIdFactory: () => "req-1" });
