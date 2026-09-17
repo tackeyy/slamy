@@ -60,6 +60,26 @@ describe("renameChannel", () => {
     });
   });
 
+  it("renames a G-prefixed private channel using the private visibility operation", async () => {
+    const renameConversation = vi.fn().mockResolvedValue(undefined);
+    const slack = {
+      listAllPublicConversations: vi.fn().mockResolvedValue([]),
+      listAllPrivateConversations: vi.fn().mockResolvedValue([
+        { channelId: "G0123ABC", name: "01-private", isArchived: false, isPrivate: true },
+      ]),
+      renameConversation,
+      getConversationInfo: vi.fn().mockResolvedValue({ name: "001-private" }),
+    } as unknown as WorkspaceSlackOperations;
+
+    await expect(renameChannel(
+      { channelId: "G0123ABC", name: "001-private", dryRun: false },
+      runtime(slack),
+    )).resolves.toMatchObject({ status: "renamed", channelId: "G0123ABC" });
+    expect(renameConversation).toHaveBeenCalledWith(expect.anything(), {
+      channelId: "G0123ABC", name: "001-private", isPrivate: true,
+    });
+  });
+
   it("does not call Slack rename when the requested name is already current", async () => {
     const renameConversation = vi.fn();
     const slack = {

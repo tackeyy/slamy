@@ -157,8 +157,8 @@ function validateInviteInput(channelId: string, userIds: readonly string[]): voi
 }
 
 function validateRenameInput(channelId: string, name: string): void {
-  if (!/^C[A-Z0-9]+$/.test(channelId)) {
-    throw new Error("Channel ID must start with C and contain only uppercase letters or numbers");
+  if (!/^[CG][A-Z0-9]+$/.test(channelId)) {
+    throw new Error("Channel ID must start with C or G and contain only uppercase letters or numbers");
   }
   if (!/^[a-z0-9][a-z0-9_-]{0,79}$/.test(name)) {
     throw new Error("Channel name must use lowercase letters, numbers, hyphens, or underscores");

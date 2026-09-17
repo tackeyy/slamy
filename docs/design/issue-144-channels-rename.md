@@ -29,7 +29,7 @@ slamy --workspace <alias> channels rename <channel_id> <new_name> [--dry-run] [-
 
 入力検査（API を呼ぶ前）:
 
-- channel ID は `invite` と同じ `/^C[A-Z0-9]+$/`
+- channel ID は `/^[CG][A-Z0-9]+$/`
 - new_name は `create` と同じ `/^[a-z0-9][a-z0-9_-]{0,79}$/`
 
 処理順（dry-run 以外）:

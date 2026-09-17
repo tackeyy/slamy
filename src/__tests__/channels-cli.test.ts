@@ -289,7 +289,27 @@ describe("channels rename CLI", () => {
     });
   });
 
-  it.each([["G0123ABC", "001-general"], ["C0123ABC", "Invalid Name"]])(
+  it("accepts a legacy G-prefixed private channel ID", async () => {
+    const renameChannel = vi.fn().mockResolvedValue({
+      status: "planned", channelId: "G0123ABC", name: "001-private",
+    });
+    const program = new Command().option("--workspace <selector>");
+    const channels = program.command("channels");
+    registerChannelManagementCommands(channels, program, {
+      ensureChannel: vi.fn(), inviteChannel: vi.fn(), renameChannel, writeOut: vi.fn(), writeErr: vi.fn(),
+    });
+
+    await program.parseAsync([
+      "node", "slamy", "--workspace", "wedgeai", "channels", "rename",
+      "G0123ABC", "001-private", "--dry-run",
+    ]);
+
+    expect(renameChannel).toHaveBeenCalledWith({
+      workspace: "wedgeai", channelId: "G0123ABC", name: "001-private", dryRun: true,
+    });
+  });
+
+  it.each([["D0123ABC", "001-general"], ["C0123ABC", "Invalid Name"]])(
     "rejects invalid rename input without calling the API",
     async (channelId, name) => {
       const renameChannel = vi.fn();
