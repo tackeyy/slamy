@@ -50,21 +50,26 @@ export type InviteToChannelResult = {
   readonly alreadyInChannel: readonly string[];
 };
 
+type ChannelMismatchField = "name" | "isPrivate" | "topic" | "purpose";
+
 export class ChannelEnsureError extends Error {
-  readonly stage: "configure" | "verify";
+  readonly stage: "configure" | "verify-fetch" | "verify-mismatch";
   readonly channelId: string;
   readonly status: "created" | "existing";
+  readonly mismatchedFields: readonly ChannelMismatchField[];
 
   constructor(
-    stage: "configure" | "verify",
+    stage: "configure" | "verify-fetch" | "verify-mismatch",
     channelId: string,
     status: "created" | "existing",
+    mismatchedFields: readonly ChannelMismatchField[] = [],
   ) {
-    super(`Slack channel ${stage} failed after the channel target was resolved`);
+    super(channelEnsureErrorMessage(stage, mismatchedFields));
     this.name = "ChannelEnsureError";
     this.stage = stage;
     this.channelId = channelId;
     this.status = status;
+    this.mismatchedFields = Object.freeze([...mismatchedFields]);
   }
 }
 
@@ -173,16 +178,33 @@ async function configureAndVerify(
       isPrivate: input.isPrivate,
     });
   } catch {
-    throw new ChannelEnsureError("verify", channelId, status);
+    throw new ChannelEnsureError("verify-fetch", channelId, status);
   }
-  if (
-    verified.name !== input.name ||
-    verified.isPrivate !== input.isPrivate ||
-    verified.topic !== input.topic ||
-    verified.purpose !== input.purpose
-  ) {
-    throw new ChannelEnsureError("verify", channelId, status);
+  const mismatchedFields: ChannelMismatchField[] = [];
+  if (verified.name !== input.name) mismatchedFields.push("name");
+  if (verified.isPrivate !== input.isPrivate) mismatchedFields.push("isPrivate");
+  if (restoreSlackEscapes(verified.topic) !== input.topic) mismatchedFields.push("topic");
+  if (restoreSlackEscapes(verified.purpose) !== input.purpose) mismatchedFields.push("purpose");
+  if (mismatchedFields.length > 0) {
+    throw new ChannelEnsureError("verify-mismatch", channelId, status, mismatchedFields);
   }
+}
+
+function channelEnsureErrorMessage(
+  stage: ChannelEnsureError["stage"],
+  mismatchedFields: readonly string[],
+): string {
+  if (stage === "configure") {
+    return "Slack channel configure failed after the channel target was resolved";
+  }
+  if (stage === "verify-fetch") {
+    return "Slack channel verify failed after the channel target was resolved: could not read the channel";
+  }
+  return `Slack channel verify failed after the channel target was resolved: mismatched ${mismatchedFields.join(", ")}`;
+}
+
+function restoreSlackEscapes(value: string): string {
+  return value.replaceAll("&lt;", "<").replaceAll("&gt;", ">").replaceAll("&amp;", "&");
 }
 
 function result(
