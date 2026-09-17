@@ -215,6 +215,28 @@ describe("ensureChannel", () => {
     ).resolves.toMatchObject({ status: "created", channelId: "C0999XYZ" });
   });
 
+  it("keeps literal entity text in the input after restoring one level", async () => {
+    const slack = verificationSlack({
+      topic: "&amp;lt;tag&amp;gt;",
+      purpose: "AI&amp;lt;ソフトウェア開発と技術判断を共有します。",
+    });
+
+    await expect(
+      ensureChannel(
+        {
+          ...channelInput(),
+          topic: "&lt;tag&gt;",
+          purpose: "AI&lt;ソフトウェア開発と技術判断を共有します。",
+        },
+        async () => ({
+          context: contextWith({ userToken: "xoxp-user" }),
+          slack,
+          dispose() {},
+        }),
+      ),
+    ).resolves.toMatchObject({ status: "created", channelId: "C0999XYZ" });
+  });
+
   it("does not restore double-escaped metadata by two levels", async () => {
     const slack = verificationSlack({
       purpose: "AI&amp;amp;ソフトウェア開発と技術判断を共有します。",
