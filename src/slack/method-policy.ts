@@ -15,6 +15,7 @@ export type SlackOperation =
   | "set-public-conversation-topic"
   | "set-private-conversation-topic"
   | "invite-to-conversation"
+  | "invite-shared-to-conversation"
   | "rename-public-conversation"
   | "rename-private-conversation"
   | "search-messages"
@@ -29,6 +30,7 @@ export type SlackApiMethod =
   | "conversations.setPurpose"
   | "conversations.setTopic"
   | "conversations.invite"
+  | "conversations.inviteShared"
   | "conversations.rename"
   | "search.messages"
   | "chat.postMessage";
@@ -143,6 +145,15 @@ const POLICIES: readonly SlackMethodPolicy[] = Object.freeze(
       "conversations.invite",
       "user",
       ["channels:write", "groups:write"],
+      "none",
+      "never",
+      null,
+    ),
+    policy(
+      "invite-shared-to-conversation",
+      "conversations.inviteShared",
+      "user",
+      ["conversations.connect:write"],
       "none",
       "never",
       null,

@@ -94,6 +94,16 @@ export type SlackInviteToConversationInput = {
   readonly userIds: readonly string[];
 };
 
+export type SlackInviteSharedToConversationInput = {
+  readonly channelId: string;
+  readonly emails: readonly string[];
+  readonly externalLimited: boolean;
+};
+
+export type SlackInviteSharedToConversationResult = {
+  readonly inviteId: string;
+};
+
 export type SlackRenameConversationInput = {
   readonly channelId: string;
   readonly name: string;
@@ -174,6 +184,10 @@ export interface WorkspaceSlackOperations {
     context: SlackWorkspaceContext,
     input: SlackInviteToConversationInput,
   ): Promise<void>;
+  inviteSharedToConversation(
+    context: SlackWorkspaceContext,
+    input: SlackInviteSharedToConversationInput,
+  ): Promise<SlackInviteSharedToConversationResult>;
   renameConversation(
     context: SlackWorkspaceContext,
     input: SlackRenameConversationInput,
@@ -244,6 +258,28 @@ export class WorkspaceSlackAdapter implements WorkspaceSlackOperations {
       throw this.#inputError("invite-to-conversation", context);
     }
     return this.#execute("invite-to-conversation", context, args, mapAcknowledgement);
+  }
+
+  inviteSharedToConversation(
+    context: SlackWorkspaceContext,
+    input: SlackInviteSharedToConversationInput,
+  ): Promise<SlackInviteSharedToConversationResult> {
+    let args: Readonly<Record<string, unknown>>;
+    try {
+      const channelId = parsePublicChannelId(input.channelId);
+      if (!Array.isArray(input.emails) || input.emails.length < 1 || input.emails.length > 1_000) {
+        throw new TypeError();
+      }
+      if (typeof input.externalLimited !== "boolean") throw new TypeError();
+      args = Object.freeze({
+        channel: channelId,
+        emails: input.emails.map(parseInviteEmail).join(","),
+        external_limited: input.externalLimited,
+      });
+    } catch {
+      throw this.#inputError("invite-shared-to-conversation", context);
+    }
+    return this.#execute("invite-shared-to-conversation", context, args, mapSharedInvite);
   }
 
   renameConversation(
@@ -875,6 +911,15 @@ function mapAcknowledgement(value: unknown): void {
   if (input.ok !== true) throw platformResult(input);
 }
 
+function mapSharedInvite(value: unknown): SlackInviteSharedToConversationResult {
+  const input = safeObject(value);
+  if (input.ok !== true) throw platformResult(input);
+  if (typeof input.invite_id !== "string" || !/^I[A-Z0-9]{1,63}$/.test(input.invite_id)) {
+    throw new ResponseMappingError("invalid");
+  }
+  return Object.freeze({ inviteId: input.invite_id });
+}
+
 function mapSearchMessages(value: unknown): readonly SlackSearchMessage[] {
   const input = safeObject(value);
   if (input.ok !== true) throw platformResult(input);
@@ -1039,6 +1084,16 @@ function parsePublicChannelId(value: unknown): string {
 function parseInvitableUserId(value: unknown): string {
   if (typeof value !== "string" || !/^[UW][A-Z0-9]{1,127}$/.test(value)) {
     throw new TypeError("Invalid Slack user ID");
+  }
+  return value;
+}
+
+function parseInviteEmail(value: unknown): string {
+  if (
+    typeof value !== "string" ||
+    !/^[^\s,@]+@[^\s,@]+\.[^\s,@]+$/.test(value)
+  ) {
+    throw new TypeError("Invalid invite email");
   }
   return value;
 }

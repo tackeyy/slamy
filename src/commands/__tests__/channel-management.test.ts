@@ -5,6 +5,7 @@ import { contextWith } from "../../slack/__tests__/helpers.js";
 import {
   ChannelEnsureError,
   ensureChannel,
+  inviteSharedToChannel,
   inviteToChannel,
   renameChannel,
 } from "../channel-management.js";
@@ -638,6 +639,90 @@ function channelInput() {
     dryRun: false,
   } as const;
 }
+
+describe("inviteSharedToChannel", () => {
+  it("returns a plan without resolving credentials or calling Slack", async () => {
+    const loadRuntime = vi.fn();
+
+    await expect(inviteSharedToChannel({
+      workspace: channelInput().workspace,
+      channelId: "C0123ABC",
+      emails: ["advisor@example.com"],
+      externalLimited: true,
+      dryRun: true,
+    }, loadRuntime)).resolves.toEqual({
+      status: "planned", teamId: parseTeamId("T00000001"), workspace: "wedgeai",
+      channelId: "C0123ABC", emails: ["advisor@example.com"], externalLimited: true,
+    });
+    expect(loadRuntime).not.toHaveBeenCalled();
+  });
+
+  it("invites all email recipients once, drops join secrets, and disposes the runtime", async () => {
+    const inviteSharedToConversation = vi.fn().mockResolvedValue({
+      inviteId: "I0123ABC",
+      url: "https://slack.example/invite-secret",
+      confCode: "conf-secret",
+    });
+    const dispose = vi.fn();
+    const slack = { inviteSharedToConversation } as unknown as WorkspaceSlackOperations;
+
+    await expect(
+      inviteSharedToChannel(
+        {
+          workspace: channelInput().workspace,
+          channelId: "C0123ABC",
+          emails: ["advisor@example.com", "tax@example.com"],
+          externalLimited: true,
+          dryRun: false,
+        },
+        async () => ({ context: contextWith({ userToken: "xoxp-user" }), slack, dispose }),
+      ),
+    ).resolves.toEqual({
+      status: "invited",
+      teamId: parseTeamId("T00000001"),
+      workspace: "wedgeai",
+      channelId: "C0123ABC",
+      emails: ["advisor@example.com", "tax@example.com"],
+      externalLimited: true,
+      inviteId: "I0123ABC",
+    });
+    expect(inviteSharedToConversation).toHaveBeenCalledWith(expect.anything(), {
+      channelId: "C0123ABC",
+      emails: ["advisor@example.com", "tax@example.com"],
+      externalLimited: true,
+    });
+    expect(dispose).toHaveBeenCalledTimes(1);
+  });
+
+  it("passes full-access policy through as externalLimited false", async () => {
+    const inviteSharedToConversation = vi.fn().mockResolvedValue({ inviteId: "I0123ABC" });
+    const slack = { inviteSharedToConversation } as unknown as WorkspaceSlackOperations;
+
+    await inviteSharedToChannel({
+      workspace: channelInput().workspace, channelId: "C0123ABC", emails: ["advisor@example.com"],
+      externalLimited: false, dryRun: false,
+    }, async () => ({ context: contextWith({ userToken: "xoxp-user" }), slack, dispose() {} }));
+
+    expect(inviteSharedToConversation).toHaveBeenCalledWith(expect.anything(), {
+      channelId: "C0123ABC", emails: ["advisor@example.com"], externalLimited: false,
+    });
+  });
+
+  it("propagates the platform error from the single invite call and disposes the runtime", async () => {
+    const failure = Object.assign(new Error("Slack API failed"), { platformCode: "missing_scope" });
+    const dispose = vi.fn();
+    const slack = {
+      inviteSharedToConversation: vi.fn().mockRejectedValue(failure),
+    } as unknown as WorkspaceSlackOperations;
+
+    await expect(inviteSharedToChannel({
+      workspace: channelInput().workspace, channelId: "C0123ABC", emails: ["advisor@example.com"],
+      externalLimited: true, dryRun: false,
+    }, async () => ({ context: contextWith({ userToken: "xoxp-user" }), slack, dispose }))).rejects.toBe(failure);
+    expect(slack.inviteSharedToConversation).toHaveBeenCalledTimes(1);
+    expect(dispose).toHaveBeenCalledTimes(1);
+  });
+});
 
 function inviteInput() {
   return {

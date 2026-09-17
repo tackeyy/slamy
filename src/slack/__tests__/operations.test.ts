@@ -108,6 +108,61 @@ describe("WorkspaceSlackAdapter named operations", () => {
     ]);
   });
 
+  it("invites external email recipients with the Slack Connect scope and returns only the invite ID", async () => {
+    const transport = new QueueTransport([
+      { ok: true, invite_id: "I0123ABC", url: "https://slack.example/invite-secret", conf_code: "conf-secret" },
+    ]);
+    const adapter = new WorkspaceSlackAdapter({ transport, requestIdFactory: idFactory() });
+    const context = contextWith({ userToken: "xoxp-user", userScopes: ["conversations.connect:write"] });
+
+    await expect(
+      adapter.inviteSharedToConversation(context, {
+        channelId: "C0123ABC",
+        emails: ["advisor@example.com", "tax@example.com"],
+        externalLimited: false,
+      }),
+    ).resolves.toEqual({ inviteId: "I0123ABC" });
+    expect(transport.requests).toEqual([
+      expect.objectContaining({
+        method: "conversations.inviteShared",
+        arguments: {
+          channel: "C0123ABC",
+          emails: "advisor@example.com,tax@example.com",
+          external_limited: false,
+        },
+      }),
+    ]);
+  });
+
+  it.each([true, false])("sends external_limited=%s to Slack", async (externalLimited) => {
+    const transport = new QueueTransport([{ ok: true, invite_id: "I0123ABC" }]);
+    const adapter = new WorkspaceSlackAdapter({ transport, requestIdFactory: idFactory() });
+    const context = contextWith({ userToken: "xoxp-user", userScopes: ["conversations.connect:write"] });
+
+    await adapter.inviteSharedToConversation(context, {
+      channelId: "C0123ABC", emails: ["advisor@example.com"], externalLimited,
+    });
+
+    expect(transport.requests[0]?.arguments).toEqual({
+      channel: "C0123ABC", emails: "advisor@example.com", external_limited: externalLimited,
+    });
+  });
+
+  it.each([
+    ["an empty recipient list", []],
+    ["more than 1,000 recipients", Array.from({ length: 1_001 }, (_, index) => `advisor${index}@example.com`)],
+    ["an invalid recipient email", ["not-an-email"]],
+  ])("rejects %s before transport", async (_label, emails) => {
+    const transport = new QueueTransport([]);
+    const adapter = new WorkspaceSlackAdapter({ transport, requestIdFactory: idFactory() });
+    const context = contextWith({ userToken: "xoxp-user", userScopes: ["conversations.connect:write"] });
+
+    expect(() => adapter.inviteSharedToConversation(context, {
+      channelId: "C0123ABC", emails, externalLimited: true,
+    })).toThrow(expect.objectContaining({ code: "INVALID_SLACK_INPUT" }));
+    expect(transport.requests).toEqual([]);
+  });
+
   it("preserves already_in_channel as a classified Slack platform error", async () => {
     const transport = new QueueTransport([{ ok: false, error: "already_in_channel" }]);
     const adapter = new WorkspaceSlackAdapter({ transport, requestIdFactory: idFactory() });

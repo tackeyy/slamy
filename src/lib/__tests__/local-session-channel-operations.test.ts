@@ -20,6 +20,23 @@ describe("local session channel operations", () => {
     });
   });
 
+  it("maps shared conversation invites to the broker without credentials", async () => {
+    const request = vi.fn().mockResolvedValue({ ok: true, invite_id: "I0123ABC" });
+    const connection = localConnection();
+    const operations = createLocalSessionChannelOperations(connection, request);
+
+    await expect(
+      operations.inviteSharedToConversation({} as never, {
+        channelId: "C0123ABC",
+        emails: ["advisor@example.com"],
+        externalLimited: true,
+      }),
+    ).resolves.toEqual({ inviteId: "I0123ABC" });
+    expect(request).toHaveBeenCalledWith(connection, "conversations.inviteShared", {
+      channel: "C0123ABC", emails: "advisor@example.com", external_limited: true,
+    });
+  });
+
   it("maps a conversation rename to the broker without credentials", async () => {
     const request = vi.fn().mockResolvedValue({ ok: true });
     const connection = localConnection();

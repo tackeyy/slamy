@@ -4,6 +4,8 @@ import type {
   SlackCreateConversationInput,
   SlackGetConversationInfoInput,
   SlackInviteToConversationInput,
+  SlackInviteSharedToConversationInput,
+  SlackInviteSharedToConversationResult,
   SlackRenameConversationInput,
   SlackPublicConversation,
   SlackSetConversationPurposeInput,
@@ -79,6 +81,19 @@ export function createLocalSessionChannelOperations(
         channel: input.channelId,
         users: input.userIds.join(","),
       });
+    },
+    inviteSharedToConversation: async (
+      _context: SlackWorkspaceContext,
+      input: SlackInviteSharedToConversationInput,
+    ): Promise<SlackInviteSharedToConversationResult> => {
+      const response = asRecord(
+        await call("conversations.inviteShared", {
+          channel: input.channelId,
+          emails: input.emails.join(","),
+          external_limited: input.externalLimited,
+        }),
+      );
+      return Object.freeze({ inviteId: stringValue(response.invite_id) });
     },
     renameConversation: async (
       _context: SlackWorkspaceContext,

@@ -3,11 +3,73 @@ import { parseTeamId } from "../../domain/team-id.js";
 import type { WorkspaceSlackOperations } from "../../slack/adapter.js";
 import {
   ensureWorkspaceChannel,
+  inviteSharedWorkspaceChannel,
   inviteWorkspaceChannelUsers,
   renameWorkspaceChannel,
 } from "../channel-management.js";
 
 describe("workspace channel management local session", () => {
+  it("uses the team-bound broker for shared invites and announces the target before it invokes Slack", async () => {
+    const teamId = parseTeamId("T0BJ9SG2M0R");
+    const workspace = workspaceWith(teamId);
+    const connection = connectionWith(teamId);
+    const events: string[] = [];
+    const slack = {
+      inviteSharedToConversation: vi.fn().mockImplementation(async () => {
+        events.push("slack");
+        return { inviteId: "I0123ABC" };
+      }),
+    } as unknown as WorkspaceSlackOperations;
+    const credentialResolver = { resolveForWorkspace: vi.fn() };
+
+    await expect(inviteSharedWorkspaceChannel({
+      workspace: "wedgeai", channelId: "C0123ABC", emails: ["advisor@example.com"],
+      externalLimited: true, dryRun: false,
+    }, {
+      registry: { resolve: vi.fn().mockResolvedValue(workspace) } as never,
+      credentialResolver: credentialResolver as never,
+      localSessionLookup: vi.fn().mockResolvedValue(connection),
+      localSessionSlackFactory: vi.fn().mockReturnValue(slack),
+      beforeExecute: (target) => {
+        expect(target).toEqual({
+          workspace: "wedgeai", teamId, channelId: "C0123ABC", emails: ["advisor@example.com"],
+        });
+        events.push("announce");
+      },
+    })).resolves.toMatchObject({ status: "invited", inviteId: "I0123ABC" });
+    expect(events).toEqual(["announce", "slack"]);
+    expect(credentialResolver.resolveForWorkspace).not.toHaveBeenCalled();
+  });
+
+  it("requests the Slack Connect scope and destroys credential-backed shared-invite runtime", async () => {
+    const teamId = parseTeamId("T0BJ9SG2M0R");
+    const destroy = vi.fn();
+    const credentials = {
+      teamId,
+      user: { kind: "user" as const, teamId, use<Result>(consumer: (token: string) => Result): Result { return consumer("xoxp-user"); }, destroy() {} },
+      requiredScopes: {}, destroy,
+    };
+    const credentialResolver = { resolveForWorkspace: vi.fn().mockResolvedValue(credentials) };
+    const slack = ({
+      inviteSharedToConversation: vi.fn().mockResolvedValue({ inviteId: "I0123ABC" }),
+    }) as unknown as WorkspaceSlackOperations;
+
+    await inviteSharedWorkspaceChannel({
+      workspace: "wedgeai", channelId: "C0123ABC", emails: ["advisor@example.com"],
+      externalLimited: true, dryRun: false,
+    }, {
+      registry: { resolve: vi.fn().mockResolvedValue(workspaceWith(teamId)) } as never,
+      credentialResolver: credentialResolver as never,
+      localSessionLookup: vi.fn().mockResolvedValue(undefined), slack,
+    });
+    expect(credentialResolver.resolveForWorkspace).toHaveBeenCalledWith(expect.anything(), {
+      requiredKinds: ["user"],
+      requiredScopes: { user: ["conversations.connect:write"] },
+      operation: "conversations.inviteShared",
+    });
+    expect(destroy).toHaveBeenCalledTimes(1);
+  });
+
   it("renames through the team-bound broker without resolving a raw credential", async () => {
     const teamId = parseTeamId("T0BJ9SG2M0R");
     const workspace = workspaceWith(teamId);

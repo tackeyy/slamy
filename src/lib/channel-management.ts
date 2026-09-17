@@ -1,8 +1,10 @@
 import {
   ensureChannel,
+  inviteSharedToChannel,
   inviteToChannel,
   renameChannel,
   type EnsureChannelResult,
+  type InviteSharedToChannelResult,
   type InviteToChannelResult,
   type RenameChannelResult,
 } from "../commands/channel-management.js";
@@ -46,6 +48,23 @@ export type InviteWorkspaceChannelUsersRequest = {
 };
 
 export type InviteWorkspaceChannelUsersOptions = EnsureWorkspaceChannelOptions;
+
+export type InviteSharedWorkspaceChannelRequest = {
+  readonly workspace: string;
+  readonly channelId: string;
+  readonly emails: readonly string[];
+  readonly externalLimited: boolean;
+  readonly dryRun: boolean;
+};
+
+export type InviteSharedWorkspaceChannelOptions = EnsureWorkspaceChannelOptions & {
+  readonly beforeExecute?: (target: {
+    readonly workspace: string;
+    readonly teamId: string;
+    readonly channelId: string;
+    readonly emails: readonly string[];
+  }) => void;
+};
 
 export type RenameWorkspaceChannelRequest = {
   readonly workspace: string;
@@ -152,6 +171,65 @@ export async function inviteWorkspaceChannelUsers(
           requiredKinds: ["user"],
           requiredScopes: { user: ["channels:write", "groups:write"] },
           operation: "conversations.invite",
+        });
+      return {
+        context: createSlackWorkspaceContext({ teamId: workspace.teamId, credentials }),
+        slack: options.slack ?? createWorkspaceSlackAdapter(),
+        dispose: () => credentials.destroy(),
+      };
+    },
+  );
+}
+
+export async function inviteSharedWorkspaceChannel(
+  request: InviteSharedWorkspaceChannelRequest,
+  options: InviteSharedWorkspaceChannelOptions = {},
+): Promise<InviteSharedToChannelResult> {
+  const registry = options.registry ?? createWorkspaceRegistry();
+  const workspace = await registry.resolve(request.workspace);
+  if (!request.dryRun) {
+    options.beforeExecute?.({
+      workspace: workspace.alias,
+      teamId: workspace.teamId,
+      channelId: request.channelId,
+      emails: request.emails,
+    });
+  }
+  return inviteSharedToChannel(
+    {
+      workspace: {
+        teamId: workspace.teamId,
+        alias: workspace.alias,
+        domain: workspace.domain,
+        displayName: workspace.displayName,
+      },
+      channelId: request.channelId,
+      emails: request.emails,
+      externalLimited: request.externalLimited,
+      dryRun: request.dryRun,
+    },
+    async () => {
+      const localSessionLookup =
+        options.localSessionLookup ??
+        (options.credentialResolver || options.slack
+          ? () => Promise.resolve(undefined)
+          : (selected) => findLocalSessionForWorkspace(selected));
+      const localSession = await localSessionLookup(workspace);
+      if (localSession) {
+        if (localSession.teamId !== workspace.teamId || localSession.credentialKind !== "user") {
+          throw new Error("Local session does not match the selected workspace");
+        }
+        return {
+          context: sessionContext(workspace.teamId),
+          slack: (options.localSessionSlackFactory ?? createLocalSessionChannelOperations)(localSession),
+          dispose() {},
+        };
+      }
+      const credentials = await (options.credentialResolver ?? createCredentialResolver())
+        .resolveForWorkspace(workspace, {
+          requiredKinds: ["user"],
+          requiredScopes: { user: ["conversations.connect:write"] },
+          operation: "conversations.inviteShared",
         });
       return {
         context: createSlackWorkspaceContext({ teamId: workspace.teamId, credentials }),
