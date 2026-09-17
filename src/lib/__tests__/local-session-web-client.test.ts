@@ -75,7 +75,7 @@ describe("local session Web API client", () => {
     const connection = {
       version: 1 as const,
       teamId: parseTeamId("T0BJ9SG2M0R"),
-      credentialKind: "user" as const,
+      credentialKind: "bot" as const,
       socketPath: "/private/session.sock",
       capability: "local-capability-canary",
       createdAt: "2029-01-01T00:00:00.000Z",

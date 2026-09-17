@@ -37,7 +37,7 @@ describe("formatInviteSharedToChannelResult", () => {
     teamId: parseTeamId("T00000001"),
     workspace: "wedgeai",
     channelId: "C0123ABC",
-    emails: ["advisor@example.com"],
+    email: "advisor@example.com",
     externalLimited: true,
     inviteId: "I0123ABC",
   };
@@ -53,7 +53,7 @@ describe("formatInviteSharedToChannelResult", () => {
       "invited\tT00000001\twedgeai\tC0123ABC\tadvisor@example.com\tlimited\tI0123ABC",
     );
     expect(formatInviteSharedToChannelResult(sharedResult, "human")).toBe(
-      "invited: C0123ABC in wedgeai recipients=advisor@example.com access=limited",
+      "invited: C0123ABC in wedgeai recipient=advisor@example.com access=limited",
     );
   });
 });

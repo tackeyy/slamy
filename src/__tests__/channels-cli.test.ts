@@ -268,7 +268,7 @@ describe("channels invite-shared CLI", () => {
   it("accepts a legacy G-prefixed private channel ID", async () => {
     const inviteSharedChannel = vi.fn().mockResolvedValue({
       status: "planned", teamId: "T00000001", workspace: "wedgeai", channelId: "G0123ABC",
-      emails: ["advisor@example.com"], externalLimited: true,
+      email: "advisor@example.com", externalLimited: true,
     });
     const program = new Command().option("--workspace <selector>");
     const channels = program.command("channels");
@@ -287,15 +287,15 @@ describe("channels invite-shared CLI", () => {
     }), expect.any(Function));
   });
 
-  it("passes all recipients and access policy, and shows the final external-send target on stderr", async () => {
+  it("passes one recipient and access policy, and shows the final external-send target on stderr", async () => {
     const inviteSharedChannel = vi.fn().mockImplementation(async (_request, beforeExecute) => {
       beforeExecute({
         workspace: "wedgeai", teamId: "T00000001", channelId: "C0123ABC",
-        emails: ["advisor@example.com", "tax@example.com"],
+        email: "advisor@example.com",
       });
       return {
         status: "invited", teamId: "T00000001", workspace: "wedgeai", channelId: "C0123ABC",
-        emails: ["advisor@example.com", "tax@example.com"], externalLimited: false, inviteId: "I0123ABC",
+        email: "advisor@example.com", externalLimited: false, inviteId: "I0123ABC",
       };
     });
     const writeErr = vi.fn();
@@ -308,16 +308,16 @@ describe("channels invite-shared CLI", () => {
 
     await program.parseAsync([
       "node", "slamy", "--workspace", "wedgeai", "channels", "invite-shared", "C0123ABC",
-      "--email", "advisor@example.com", "--email", "tax@example.com", "--full-access",
+      "--email", "advisor@example.com", "--full-access",
     ]);
 
     expect(inviteSharedChannel).toHaveBeenCalledWith({
-      workspace: "wedgeai", channelId: "C0123ABC", emails: ["advisor@example.com", "tax@example.com"],
+      workspace: "wedgeai", channelId: "C0123ABC", email: "advisor@example.com",
       externalLimited: false, dryRun: false,
     }, expect.any(Function));
     expect(writeErr.mock.calls.map(([line]) => line)).toEqual([
       "workspace alias: wedgeai", "Team ID: T00000001", "channel ID: C0123ABC",
-      "recipient email: advisor@example.com", "recipient email: tax@example.com",
+      "recipient email: advisor@example.com",
     ]);
     expect(writeOut.mock.calls[0]![0]).not.toContain("url");
     expect(writeOut.mock.calls[0]![0]).not.toContain("conf_code");
@@ -326,7 +326,7 @@ describe("channels invite-shared CLI", () => {
   it.each([
     ["D0123ABC", ["advisor@example.com"]],
     ["C0123ABC", ["not-an-email"]],
-    ["C0123ABC", ["advisor@example.com", "advisor@example.com"]],
+    ["C0123ABC", ["advisor@example.com", "tax@example.com"]],
   ])("rejects invalid channel or email input before the API call", async (channelId, emails) => {
     const inviteSharedChannel = vi.fn();
     const writeErr = vi.fn();
@@ -359,7 +359,7 @@ describe("channels invite-shared CLI", () => {
     ]);
 
     expect(inviteSharedChannel).not.toHaveBeenCalled();
-    expect(writeErr).toHaveBeenCalledWith("Error: At least one email is required");
+    expect(writeErr).toHaveBeenCalledWith("Error: Exactly one email is required");
   });
 });
 

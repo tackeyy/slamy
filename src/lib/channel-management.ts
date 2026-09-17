@@ -52,7 +52,7 @@ export type InviteWorkspaceChannelUsersOptions = EnsureWorkspaceChannelOptions;
 export type InviteSharedWorkspaceChannelRequest = {
   readonly workspace: string;
   readonly channelId: string;
-  readonly emails: readonly string[];
+  readonly email: string;
   readonly externalLimited: boolean;
   readonly dryRun: boolean;
 };
@@ -62,7 +62,7 @@ export type InviteSharedWorkspaceChannelOptions = EnsureWorkspaceChannelOptions 
     readonly workspace: string;
     readonly teamId: string;
     readonly channelId: string;
-    readonly emails: readonly string[];
+    readonly email: string;
   }) => void;
 };
 
@@ -192,7 +192,7 @@ export async function inviteSharedWorkspaceChannel(
       workspace: workspace.alias,
       teamId: workspace.teamId,
       channelId: request.channelId,
-      emails: request.emails,
+      email: request.email,
     });
   }
   return inviteSharedToChannel(
@@ -204,7 +204,7 @@ export async function inviteSharedWorkspaceChannel(
         displayName: workspace.displayName,
       },
       channelId: request.channelId,
-      emails: request.emails,
+      email: request.email,
       externalLimited: request.externalLimited,
       dryRun: request.dryRun,
     },
@@ -216,7 +216,7 @@ export async function inviteSharedWorkspaceChannel(
           : (selected) => findLocalSessionForWorkspace(selected));
       const localSession = await localSessionLookup(workspace);
       if (localSession) {
-        if (localSession.teamId !== workspace.teamId || localSession.credentialKind !== "user") {
+        if (localSession.teamId !== workspace.teamId || localSession.credentialKind !== "bot") {
           throw new Error("Local session does not match the selected workspace");
         }
         return {
@@ -227,8 +227,8 @@ export async function inviteSharedWorkspaceChannel(
       }
       const credentials = await (options.credentialResolver ?? createCredentialResolver())
         .resolveForWorkspace(workspace, {
-          requiredKinds: ["user"],
-          requiredScopes: { user: ["conversations.connect:write"] },
+          requiredKinds: ["bot"],
+          requiredScopes: { bot: ["conversations.connect:write"] },
           operation: "conversations.inviteShared",
         });
       return {

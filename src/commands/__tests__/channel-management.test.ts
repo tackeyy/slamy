@@ -647,17 +647,17 @@ describe("inviteSharedToChannel", () => {
     await expect(inviteSharedToChannel({
       workspace: channelInput().workspace,
       channelId: "C0123ABC",
-      emails: ["advisor@example.com"],
+      email: "advisor@example.com",
       externalLimited: true,
       dryRun: true,
     }, loadRuntime)).resolves.toEqual({
       status: "planned", teamId: parseTeamId("T00000001"), workspace: "wedgeai",
-      channelId: "C0123ABC", emails: ["advisor@example.com"], externalLimited: true,
+      channelId: "C0123ABC", email: "advisor@example.com", externalLimited: true,
     });
     expect(loadRuntime).not.toHaveBeenCalled();
   });
 
-  it("invites all email recipients once, drops join secrets, and disposes the runtime", async () => {
+  it("invites one email recipient, drops join secrets, and disposes the runtime", async () => {
     const inviteSharedToConversation = vi.fn().mockResolvedValue({
       inviteId: "I0123ABC",
       url: "https://slack.example/invite-secret",
@@ -671,7 +671,7 @@ describe("inviteSharedToChannel", () => {
         {
           workspace: channelInput().workspace,
           channelId: "C0123ABC",
-          emails: ["advisor@example.com", "tax@example.com"],
+          email: "advisor@example.com",
           externalLimited: true,
           dryRun: false,
         },
@@ -682,13 +682,13 @@ describe("inviteSharedToChannel", () => {
       teamId: parseTeamId("T00000001"),
       workspace: "wedgeai",
       channelId: "C0123ABC",
-      emails: ["advisor@example.com", "tax@example.com"],
+      email: "advisor@example.com",
       externalLimited: true,
       inviteId: "I0123ABC",
     });
     expect(inviteSharedToConversation).toHaveBeenCalledWith(expect.anything(), {
       channelId: "C0123ABC",
-      emails: ["advisor@example.com", "tax@example.com"],
+      email: "advisor@example.com",
       externalLimited: true,
     });
     expect(dispose).toHaveBeenCalledTimes(1);
@@ -699,12 +699,12 @@ describe("inviteSharedToChannel", () => {
     const slack = { inviteSharedToConversation } as unknown as WorkspaceSlackOperations;
 
     await inviteSharedToChannel({
-      workspace: channelInput().workspace, channelId: "C0123ABC", emails: ["advisor@example.com"],
+      workspace: channelInput().workspace, channelId: "C0123ABC", email: "advisor@example.com",
       externalLimited: false, dryRun: false,
     }, async () => ({ context: contextWith({ userToken: "xoxp-user" }), slack, dispose() {} }));
 
     expect(inviteSharedToConversation).toHaveBeenCalledWith(expect.anything(), {
-      channelId: "C0123ABC", emails: ["advisor@example.com"], externalLimited: false,
+      channelId: "C0123ABC", email: "advisor@example.com", externalLimited: false,
     });
   });
 
@@ -716,7 +716,7 @@ describe("inviteSharedToChannel", () => {
     } as unknown as WorkspaceSlackOperations;
 
     await expect(inviteSharedToChannel({
-      workspace: channelInput().workspace, channelId: "C0123ABC", emails: ["advisor@example.com"],
+      workspace: channelInput().workspace, channelId: "C0123ABC", email: "advisor@example.com",
       externalLimited: true, dryRun: false,
     }, async () => ({ context: contextWith({ userToken: "xoxp-user" }), slack, dispose }))).rejects.toBe(failure);
     expect(slack.inviteSharedToConversation).toHaveBeenCalledTimes(1);

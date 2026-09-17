@@ -96,7 +96,7 @@ export type SlackInviteToConversationInput = {
 
 export type SlackInviteSharedToConversationInput = {
   readonly channelId: string;
-  readonly emails: readonly string[];
+  readonly email: string;
   readonly externalLimited: boolean;
 };
 
@@ -266,14 +266,11 @@ export class WorkspaceSlackAdapter implements WorkspaceSlackOperations {
   ): Promise<SlackInviteSharedToConversationResult> {
     let args: Readonly<Record<string, unknown>>;
     try {
-      const channelId = parsePublicChannelId(input.channelId);
-      if (!Array.isArray(input.emails) || input.emails.length < 1 || input.emails.length > 1_000) {
-        throw new TypeError();
-      }
+      const channelId = parseChannelId(input.channelId);
       if (typeof input.externalLimited !== "boolean") throw new TypeError();
       args = Object.freeze({
         channel: channelId,
-        emails: input.emails.map(parseInviteEmail).join(","),
+        emails: parseInviteEmail(input.email),
         external_limited: input.externalLimited,
       });
     } catch {

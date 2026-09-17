@@ -12,7 +12,7 @@ describe("workspace channel management local session", () => {
   it("uses the team-bound broker for shared invites and announces the target before it invokes Slack", async () => {
     const teamId = parseTeamId("T0BJ9SG2M0R");
     const workspace = workspaceWith(teamId);
-    const connection = connectionWith(teamId);
+    const connection = connectionWith(teamId, "bot");
     const events: string[] = [];
     const slack = {
       inviteSharedToConversation: vi.fn().mockImplementation(async () => {
@@ -23,7 +23,7 @@ describe("workspace channel management local session", () => {
     const credentialResolver = { resolveForWorkspace: vi.fn() };
 
     await expect(inviteSharedWorkspaceChannel({
-      workspace: "wedgeai", channelId: "C0123ABC", emails: ["advisor@example.com"],
+      workspace: "wedgeai", channelId: "C0123ABC", email: "advisor@example.com",
       externalLimited: true, dryRun: false,
     }, {
       registry: { resolve: vi.fn().mockResolvedValue(workspace) } as never,
@@ -32,7 +32,7 @@ describe("workspace channel management local session", () => {
       localSessionSlackFactory: vi.fn().mockReturnValue(slack),
       beforeExecute: (target) => {
         expect(target).toEqual({
-          workspace: "wedgeai", teamId, channelId: "C0123ABC", emails: ["advisor@example.com"],
+          workspace: "wedgeai", teamId, channelId: "C0123ABC", email: "advisor@example.com",
         });
         events.push("announce");
       },
@@ -46,7 +46,7 @@ describe("workspace channel management local session", () => {
     const destroy = vi.fn();
     const credentials = {
       teamId,
-      user: { kind: "user" as const, teamId, use<Result>(consumer: (token: string) => Result): Result { return consumer("xoxp-user"); }, destroy() {} },
+      bot: { kind: "bot" as const, teamId, use<Result>(consumer: (token: string) => Result): Result { return consumer("xoxb-bot"); }, destroy() {} },
       requiredScopes: {}, destroy,
     };
     const credentialResolver = { resolveForWorkspace: vi.fn().mockResolvedValue(credentials) };
@@ -55,7 +55,7 @@ describe("workspace channel management local session", () => {
     }) as unknown as WorkspaceSlackOperations;
 
     await inviteSharedWorkspaceChannel({
-      workspace: "wedgeai", channelId: "C0123ABC", emails: ["advisor@example.com"],
+      workspace: "wedgeai", channelId: "C0123ABC", email: "advisor@example.com",
       externalLimited: true, dryRun: false,
     }, {
       registry: { resolve: vi.fn().mockResolvedValue(workspaceWith(teamId)) } as never,
@@ -63,11 +63,29 @@ describe("workspace channel management local session", () => {
       localSessionLookup: vi.fn().mockResolvedValue(undefined), slack,
     });
     expect(credentialResolver.resolveForWorkspace).toHaveBeenCalledWith(expect.anything(), {
-      requiredKinds: ["user"],
-      requiredScopes: { user: ["conversations.connect:write"] },
+      requiredKinds: ["bot"],
+      requiredScopes: { bot: ["conversations.connect:write"] },
       operation: "conversations.inviteShared",
     });
     expect(destroy).toHaveBeenCalledTimes(1);
+  });
+
+  it("rejects a user local session before invoking Slack or credential resolution", async () => {
+    const teamId = parseTeamId("T0BJ9SG2M0R");
+    const slack = { inviteSharedToConversation: vi.fn() } as unknown as WorkspaceSlackOperations;
+    const credentialResolver = { resolveForWorkspace: vi.fn() };
+
+    await expect(inviteSharedWorkspaceChannel({
+      workspace: "wedgeai", channelId: "C0123ABC", email: "advisor@example.com",
+      externalLimited: true, dryRun: false,
+    }, {
+      registry: { resolve: vi.fn().mockResolvedValue(workspaceWith(teamId)) } as never,
+      credentialResolver: credentialResolver as never,
+      localSessionLookup: vi.fn().mockResolvedValue(connectionWith(teamId, "user")),
+      localSessionSlackFactory: vi.fn().mockReturnValue(slack),
+    })).rejects.toThrow("Local session does not match the selected workspace");
+    expect(slack.inviteSharedToConversation).not.toHaveBeenCalled();
+    expect(credentialResolver.resolveForWorkspace).not.toHaveBeenCalled();
   });
 
   it("renames through the team-bound broker without resolving a raw credential", async () => {
@@ -292,11 +310,11 @@ function workspaceWith(teamId: ReturnType<typeof parseTeamId>) {
   };
 }
 
-function connectionWith(teamId: ReturnType<typeof parseTeamId>) {
+function connectionWith(teamId: ReturnType<typeof parseTeamId>, credentialKind: "user" | "bot" = "user") {
   return {
     version: 1 as const,
     teamId,
-    credentialKind: "user" as const,
+    credentialKind,
     socketPath: "/private/session.sock",
     capability: "local-capability-canary",
     createdAt: "2029-01-01T00:00:00.000Z",

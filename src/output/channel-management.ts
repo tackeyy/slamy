@@ -35,11 +35,11 @@ export function formatInviteSharedToChannelResult(
   if (mode === "json") return JSON.stringify(result, null, 2);
   if (mode === "plain") {
     return [
-      result.status, result.teamId, result.workspace, result.channelId, result.emails.join(","),
+      result.status, result.teamId, result.workspace, result.channelId, result.email,
       result.externalLimited ? "limited" : "full-access", result.inviteId ?? "",
     ].join("\t");
   }
-  return `${result.status}: ${result.channelId} in ${result.workspace} recipients=${result.emails.join(", ")} access=${result.externalLimited ? "limited" : "full"}`;
+  return `${result.status}: ${result.channelId} in ${result.workspace} recipient=${result.email} access=${result.externalLimited ? "limited" : "full"}`;
 }
 
 export function formatInviteToChannelResult(

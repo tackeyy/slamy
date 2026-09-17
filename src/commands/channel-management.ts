@@ -53,7 +53,7 @@ export type InviteToChannelResult = {
 export type InviteSharedToChannelInput = {
   readonly workspace: ChannelWorkspace;
   readonly channelId: string;
-  readonly emails: readonly string[];
+  readonly email: string;
   readonly externalLimited: boolean;
   readonly dryRun: boolean;
 };
@@ -63,7 +63,7 @@ export type InviteSharedToChannelResult = {
   readonly teamId: TeamId;
   readonly workspace: string;
   readonly channelId: string;
-  readonly emails: readonly string[];
+  readonly email: string;
   readonly externalLimited: boolean;
   readonly inviteId?: string;
 };
@@ -185,7 +185,7 @@ export async function inviteSharedToChannel(
   try {
     const invited = await runtime.slack.inviteSharedToConversation(runtime.context, {
       channelId: input.channelId,
-      emails: input.emails,
+      email: input.email,
       externalLimited: input.externalLimited,
     });
     return inviteSharedResult(input, "invited", invited.inviteId);
@@ -265,7 +265,7 @@ function inviteSharedResult(
     teamId: input.workspace.teamId,
     workspace: input.workspace.alias,
     channelId: input.channelId,
-    emails: Object.freeze([...input.emails]),
+    email: input.email,
     externalLimited: input.externalLimited,
     ...(inviteId === undefined ? {} : { inviteId }),
   });

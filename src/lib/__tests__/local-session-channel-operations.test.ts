@@ -28,7 +28,7 @@ describe("local session channel operations", () => {
     await expect(
       operations.inviteSharedToConversation({} as never, {
         channelId: "C0123ABC",
-        emails: ["advisor@example.com"],
+        email: "advisor@example.com",
         externalLimited: true,
       }),
     ).resolves.toEqual({ inviteId: "I0123ABC" });

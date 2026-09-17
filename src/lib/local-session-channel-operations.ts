@@ -89,7 +89,7 @@ export function createLocalSessionChannelOperations(
       const response = asRecord(
         await call("conversations.inviteShared", {
           channel: input.channelId,
-          emails: input.emails.join(","),
+          emails: input.email,
           external_limited: input.externalLimited,
         }),
       );

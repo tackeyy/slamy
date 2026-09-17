@@ -133,7 +133,7 @@ describe("Slack method policy", () => {
       {
         operation: "invite-shared-to-conversation",
         method: "conversations.inviteShared",
-        credentialKind: "user",
+        credentialKind: "bot",
         requiredScopes: ["conversations.connect:write"],
         pagination: "none",
         retryPolicy: "never",
@@ -186,11 +186,11 @@ describe("Slack method policy", () => {
     expect(Object.isFrozen(listSlackMethodPolicies())).toBe(true);
   });
 
-  it("pins the shared invite operation to the Slack Connect user scope", () => {
+  it("pins the shared invite operation to the Slack Connect bot scope", () => {
     expect(getSlackMethodPolicy("invite-shared-to-conversation")).toEqual({
       operation: "invite-shared-to-conversation",
       method: "conversations.inviteShared",
-      credentialKind: "user",
+      credentialKind: "bot",
       requiredScopes: ["conversations.connect:write"],
       pagination: "none",
       retryPolicy: "never",

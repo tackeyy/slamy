@@ -152,7 +152,7 @@ const POLICIES: readonly SlackMethodPolicy[] = Object.freeze(
     policy(
       "invite-shared-to-conversation",
       "conversations.inviteShared",
-      "user",
+      "bot",
       ["conversations.connect:write"],
       "none",
       "never",

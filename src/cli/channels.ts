@@ -28,7 +28,7 @@ export type ChannelManagementCommandDependencies = {
       readonly workspace: string;
       readonly teamId: string;
       readonly channelId: string;
-      readonly emails: readonly string[];
+      readonly email: string;
     }) => void,
   ) => ReturnType<typeof inviteSharedWorkspaceChannel>;
   renameChannel?: (request: RenameWorkspaceChannelRequest) => ReturnType<typeof renameWorkspaceChannel>;
@@ -104,13 +104,13 @@ export function registerChannelManagementCommands(
   channels
     .command("invite-shared <channel>")
     .description("Invite external email recipients through Slack Connect in an explicit workspace")
-    .requiredOption("--email <addr>", "External recipient email", collectEmail, [])
+    .option("--email <addr>", "External recipient email", collectEmail, [])
     .option("--full-access", "Allow external recipients to change channel settings")
     .option("--dry-run", "Print the planned operation without reading credentials or Slack")
     .action(async (channelId: string, options: InviteSharedOptions) => {
       try {
         const emails = options.email ?? [];
-        validateSharedInviteInput(channelId, emails);
+        const email = validateSharedInviteInput(channelId, emails);
         const workspace = resolveCliWorkspaceSelector(
           program.opts<{ workspace?: string }>().workspace,
           dependencies.env ?? process.env,
@@ -120,18 +120,18 @@ export function registerChannelManagementCommands(
           readonly workspace: string;
           readonly teamId: string;
           readonly channelId: string;
-          readonly emails: readonly string[];
+          readonly email: string;
         }) => {
           dependencies.writeErr(`workspace alias: ${target.workspace}`);
           dependencies.writeErr(`Team ID: ${target.teamId}`);
           dependencies.writeErr(`channel ID: ${target.channelId}`);
-          for (const email of target.emails) dependencies.writeErr(`recipient email: ${email}`);
+          dependencies.writeErr(`recipient email: ${target.email}`);
         };
         const result = await (dependencies.inviteSharedChannel ?? ((request, announce) =>
           inviteSharedWorkspaceChannel(request, { beforeExecute: announce })))({
           workspace,
           channelId,
-          emails,
+          email,
           externalLimited: !options.fullAccess,
           dryRun: Boolean(options.dryRun),
         }, beforeExecute);
@@ -216,15 +216,16 @@ function collectEmail(value: string, previous: string[]): string[] {
   return [...previous, value];
 }
 
-function validateSharedInviteInput(channelId: string, emails: readonly string[]): void {
+function validateSharedInviteInput(channelId: string, emails: readonly string[]): string {
   if (!/^[CG][A-Z0-9]+$/.test(channelId)) {
     throw new Error("Channel ID must start with C or G and contain only uppercase letters or numbers");
   }
-  if (emails.length < 1) throw new Error("At least one email is required");
-  if (emails.some((email) => !/^[^\s,@]+@[^\s,@]+\.[^\s,@]+$/.test(email))) {
+  if (emails.length !== 1) throw new Error("Exactly one email is required");
+  const [email] = emails;
+  if (!/^[^\s,@]+@[^\s,@]+\.[^\s,@]+$/.test(email)) {
     throw new Error("Email must be in local@domain.tld format without spaces or commas");
   }
-  if (new Set(emails).size !== emails.length) throw new Error("Duplicate email addresses are not allowed");
+  return email;
 }
 
 function validateRenameInput(channelId: string, name: string): void {
