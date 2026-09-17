@@ -1,8 +1,10 @@
 import {
   ensureChannel,
   inviteToChannel,
+  renameChannel,
   type EnsureChannelResult,
   type InviteToChannelResult,
+  type RenameChannelResult,
 } from "../commands/channel-management.js";
 import type { CredentialResolver } from "../credentials/index.js";
 import type { VerifiedCredentialSet } from "../credentials/types.js";
@@ -44,6 +46,15 @@ export type InviteWorkspaceChannelUsersRequest = {
 };
 
 export type InviteWorkspaceChannelUsersOptions = EnsureWorkspaceChannelOptions;
+
+export type RenameWorkspaceChannelRequest = {
+  readonly workspace: string;
+  readonly channelId: string;
+  readonly name: string;
+  readonly dryRun: boolean;
+};
+
+export type RenameWorkspaceChannelOptions = EnsureWorkspaceChannelOptions;
 
 export async function ensureWorkspaceChannel(
   request: EnsureWorkspaceChannelRequest,
@@ -141,6 +152,46 @@ export async function inviteWorkspaceChannelUsers(
           requiredKinds: ["user"],
           requiredScopes: { user: ["channels:write", "groups:write"] },
           operation: "conversations.invite",
+        });
+      return {
+        context: createSlackWorkspaceContext({ teamId: workspace.teamId, credentials }),
+        slack: options.slack ?? createWorkspaceSlackAdapter(),
+        dispose: () => credentials.destroy(),
+      };
+    },
+  );
+}
+
+export async function renameWorkspaceChannel(
+  request: RenameWorkspaceChannelRequest,
+  options: RenameWorkspaceChannelOptions = {},
+): Promise<RenameChannelResult> {
+  const registry = options.registry ?? createWorkspaceRegistry();
+  const workspace = await registry.resolve(request.workspace);
+  return renameChannel(
+    { channelId: request.channelId, name: request.name, dryRun: request.dryRun },
+    async () => {
+      const localSessionLookup =
+        options.localSessionLookup ??
+        (options.credentialResolver || options.slack
+          ? () => Promise.resolve(undefined)
+          : (selected) => findLocalSessionForWorkspace(selected));
+      const localSession = await localSessionLookup(workspace);
+      if (localSession) {
+        if (localSession.teamId !== workspace.teamId || localSession.credentialKind !== "user") {
+          throw new Error("Local session does not match the selected workspace");
+        }
+        return {
+          context: sessionContext(workspace.teamId),
+          slack: (options.localSessionSlackFactory ?? createLocalSessionChannelOperations)(localSession),
+          dispose() {},
+        };
+      }
+      const credentials = await (options.credentialResolver ?? createCredentialResolver())
+        .resolveForWorkspace(workspace, {
+          requiredKinds: ["user"],
+          requiredScopes: { user: ["channels:read", "groups:read", "channels:write", "groups:write"] },
+          operation: "conversations.rename",
         });
       return {
         context: createSlackWorkspaceContext({ teamId: workspace.teamId, credentials }),

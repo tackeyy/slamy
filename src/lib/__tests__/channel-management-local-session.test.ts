@@ -4,9 +4,35 @@ import type { WorkspaceSlackOperations } from "../../slack/adapter.js";
 import {
   ensureWorkspaceChannel,
   inviteWorkspaceChannelUsers,
+  renameWorkspaceChannel,
 } from "../channel-management.js";
 
 describe("workspace channel management local session", () => {
+  it("renames through the team-bound broker without resolving a raw credential", async () => {
+    const teamId = parseTeamId("T0BJ9SG2M0R");
+    const workspace = workspaceWith(teamId);
+    const connection = connectionWith(teamId);
+    const slack = {
+      listAllPublicConversations: vi.fn().mockResolvedValue([
+        { channelId: "C0123ABC", name: "01-general", isArchived: false, isPrivate: false },
+      ]),
+      listAllPrivateConversations: vi.fn().mockResolvedValue([]),
+      renameConversation: vi.fn().mockResolvedValue(undefined),
+      getConversationInfo: vi.fn().mockResolvedValue({ name: "001-general" }),
+    } as unknown as WorkspaceSlackOperations;
+    const credentialResolver = { resolveForWorkspace: vi.fn() };
+
+    await expect(renameWorkspaceChannel(
+      { workspace: "wedgeai", channelId: "C0123ABC", name: "001-general", dryRun: false },
+      {
+        registry: { resolve: vi.fn().mockResolvedValue(workspace) } as never,
+        credentialResolver: credentialResolver as never,
+        localSessionLookup: vi.fn().mockResolvedValue(connection),
+        localSessionSlackFactory: vi.fn().mockReturnValue(slack),
+      },
+    )).resolves.toMatchObject({ status: "renamed", previousName: "01-general" });
+    expect(credentialResolver.resolveForWorkspace).not.toHaveBeenCalled();
+  });
   it("returns a dry-run plan without local-session or credential lookup", async () => {
     const teamId = parseTeamId("T0BJ9SG2M0R");
     const localSessionLookup = vi.fn();
@@ -158,6 +184,38 @@ describe("workspace channel management local session", () => {
       },
     );
     expect(destroy).toHaveBeenCalledTimes(1);
+  });
+
+  it("requests both visibility read and write scopes for a credential-backed rename", async () => {
+    const teamId = parseTeamId("T0BJ9SG2M0R");
+    const credentials = {
+      teamId,
+      user: { kind: "user" as const, teamId, use<Result>(consumer: (token: string) => Result): Result { return consumer("xoxp-user"); }, destroy() {} },
+      requiredScopes: {}, destroy() {},
+    };
+    const credentialResolver = { resolveForWorkspace: vi.fn().mockResolvedValue(credentials) };
+    const slack = {
+      listAllPublicConversations: vi.fn().mockResolvedValue([
+        { channelId: "C0123ABC", name: "01-general", isArchived: false, isPrivate: false },
+      ]),
+      listAllPrivateConversations: vi.fn().mockResolvedValue([]),
+      renameConversation: vi.fn().mockResolvedValue(undefined),
+      getConversationInfo: vi.fn().mockResolvedValue({ name: "001-general" }),
+    } as unknown as WorkspaceSlackOperations;
+
+    await renameWorkspaceChannel(
+      { workspace: "wedgeai", channelId: "C0123ABC", name: "001-general", dryRun: false },
+      {
+        registry: { resolve: vi.fn().mockResolvedValue(workspaceWith(teamId)) } as never,
+        credentialResolver: credentialResolver as never,
+        localSessionLookup: vi.fn().mockResolvedValue(undefined), slack,
+      },
+    );
+    expect(credentialResolver.resolveForWorkspace).toHaveBeenCalledWith(expect.anything(), {
+      requiredKinds: ["user"],
+      requiredScopes: { user: ["channels:read", "groups:read", "channels:write", "groups:write"] },
+      operation: "conversations.rename",
+    });
   });
 });
 

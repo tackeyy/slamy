@@ -94,6 +94,12 @@ export type SlackInviteToConversationInput = {
   readonly userIds: readonly string[];
 };
 
+export type SlackRenameConversationInput = {
+  readonly channelId: string;
+  readonly name: string;
+  readonly isPrivate: boolean;
+};
+
 export type SlackSetConversationPurposeInput = {
   readonly channelId: string;
   readonly purpose: string;
@@ -168,6 +174,10 @@ export interface WorkspaceSlackOperations {
     context: SlackWorkspaceContext,
     input: SlackInviteToConversationInput,
   ): Promise<void>;
+  renameConversation(
+    context: SlackWorkspaceContext,
+    input: SlackRenameConversationInput,
+  ): Promise<void>;
   setConversationPurpose(
     context: SlackWorkspaceContext,
     input: SlackSetConversationPurposeInput,
@@ -234,6 +244,28 @@ export class WorkspaceSlackAdapter implements WorkspaceSlackOperations {
       throw this.#inputError("invite-to-conversation", context);
     }
     return this.#execute("invite-to-conversation", context, args, mapAcknowledgement);
+  }
+
+  renameConversation(
+    context: SlackWorkspaceContext,
+    input: SlackRenameConversationInput,
+  ): Promise<void> {
+    let args: Readonly<Record<string, unknown>>;
+    try {
+      if (typeof input.isPrivate !== "boolean") throw new TypeError();
+      args = Object.freeze({ channel: parseChannelId(input.channelId), name: parseConversationName(input.name) });
+    } catch {
+      throw this.#inputError(
+        input.isPrivate ? "rename-private-conversation" : "rename-public-conversation",
+        context,
+      );
+    }
+    return this.#execute(
+      input.isPrivate ? "rename-private-conversation" : "rename-public-conversation",
+      context,
+      args,
+      mapAcknowledgement,
+    );
   }
 
   async listPublicConversations(

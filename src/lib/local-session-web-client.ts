@@ -33,6 +33,7 @@ const ALLOWED_METHODS = new Set([
   "conversations.list",
   "conversations.members",
   "conversations.open",
+  "conversations.rename",
   "conversations.replies",
   "conversations.setPurpose",
   "conversations.setTopic",

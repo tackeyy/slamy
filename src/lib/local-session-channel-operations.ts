@@ -4,6 +4,7 @@ import type {
   SlackCreateConversationInput,
   SlackGetConversationInfoInput,
   SlackInviteToConversationInput,
+  SlackRenameConversationInput,
   SlackPublicConversation,
   SlackSetConversationPurposeInput,
   SlackSetConversationTopicInput,
@@ -78,6 +79,12 @@ export function createLocalSessionChannelOperations(
         channel: input.channelId,
         users: input.userIds.join(","),
       });
+    },
+    renameConversation: async (
+      _context: SlackWorkspaceContext,
+      input: SlackRenameConversationInput,
+    ): Promise<void> => {
+      await call("conversations.rename", { channel: input.channelId, name: input.name });
     },
     setConversationPurpose: async (
       _context: SlackWorkspaceContext,

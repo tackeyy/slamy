@@ -21,6 +21,29 @@ class FakeTransport implements SlackTransport {
 }
 
 describe("WorkspaceSlackAdapter", () => {
+  it.each([
+    [false, ["channels:write"], "rename-public-conversation"],
+    [true, ["groups:write"], "rename-private-conversation"],
+  ])("renames a channel with the visibility-specific policy", async (isPrivate, userScopes, operation) => {
+    const transport = new FakeTransport();
+    const calls: string[] = [];
+    const adapter = new WorkspaceSlackAdapter({
+      transport,
+      verificationHook: ({ operation: actual }) => { calls.push(actual); },
+    });
+
+    await expect(adapter.renameConversation(
+      contextWith({ userToken: "xoxp-user", userScopes }),
+      { channelId: "C0123ABC", name: "001-general", isPrivate },
+    )).resolves.toBeUndefined();
+    expect(calls).toEqual([operation]);
+    expect(transport.requests).toHaveLength(1);
+    expect(transport.requests[0]).toMatchObject({
+      method: "conversations.rename",
+      arguments: { channel: "C0123ABC", name: "001-general" },
+    });
+  });
+
   it("selects the policy credential without cross-kind fallback", async () => {
     const transport = new FakeTransport();
     const adapter = new WorkspaceSlackAdapter({ transport, requestIdFactory: () => "req-1" });
