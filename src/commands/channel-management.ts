@@ -50,6 +50,24 @@ export type InviteToChannelResult = {
   readonly alreadyInChannel: readonly string[];
 };
 
+export type InviteSharedToChannelInput = {
+  readonly workspace: ChannelWorkspace;
+  readonly channelId: string;
+  readonly email: string;
+  readonly externalLimited: boolean;
+  readonly dryRun: boolean;
+};
+
+export type InviteSharedToChannelResult = {
+  readonly status: "planned" | "invited";
+  readonly teamId: TeamId;
+  readonly workspace: string;
+  readonly channelId: string;
+  readonly email: string;
+  readonly externalLimited: boolean;
+  readonly inviteId?: string;
+};
+
 export type RenameChannelInput = {
   readonly channelId: string;
   readonly name: string;
@@ -158,6 +176,24 @@ export async function inviteToChannel(
   }
 }
 
+export async function inviteSharedToChannel(
+  input: InviteSharedToChannelInput,
+  loadRuntime: ChannelRuntimeLoader,
+): Promise<InviteSharedToChannelResult> {
+  if (input.dryRun) return inviteSharedResult(input, "planned");
+  const runtime = await loadRuntime();
+  try {
+    const invited = await runtime.slack.inviteSharedToConversation(runtime.context, {
+      channelId: input.channelId,
+      email: input.email,
+      externalLimited: input.externalLimited,
+    });
+    return inviteSharedResult(input, "invited", invited.inviteId);
+  } finally {
+    runtime.dispose();
+  }
+}
+
 export async function renameChannel(
   input: RenameChannelInput,
   loadRuntime: ChannelRuntimeLoader,
@@ -217,6 +253,22 @@ function platformCode(error: unknown): unknown {
   return typeof error === "object" && error !== null && "platformCode" in error
     ? error.platformCode
     : undefined;
+}
+
+function inviteSharedResult(
+  input: InviteSharedToChannelInput,
+  status: InviteSharedToChannelResult["status"],
+  inviteId?: string,
+): InviteSharedToChannelResult {
+  return Object.freeze({
+    status,
+    teamId: input.workspace.teamId,
+    workspace: input.workspace.alias,
+    channelId: input.channelId,
+    email: input.email,
+    externalLimited: input.externalLimited,
+    ...(inviteId === undefined ? {} : { inviteId }),
+  });
 }
 
 async function configureAndVerify(

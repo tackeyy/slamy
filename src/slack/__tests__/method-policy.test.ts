@@ -131,6 +131,15 @@ describe("Slack method policy", () => {
         workspaceArgument: null,
       },
       {
+        operation: "invite-shared-to-conversation",
+        method: "conversations.inviteShared",
+        credentialKind: "bot",
+        requiredScopes: ["conversations.connect:write"],
+        pagination: "none",
+        retryPolicy: "never",
+        workspaceArgument: null,
+      },
+      {
         operation: "rename-public-conversation",
         method: "conversations.rename",
         credentialKind: "user",
@@ -175,5 +184,17 @@ describe("Slack method policy", () => {
     expect(Object.isFrozen(policy)).toBe(true);
     expect(Object.isFrozen(policy.requiredScopes)).toBe(true);
     expect(Object.isFrozen(listSlackMethodPolicies())).toBe(true);
+  });
+
+  it("pins the shared invite operation to the Slack Connect bot scope", () => {
+    expect(getSlackMethodPolicy("invite-shared-to-conversation")).toEqual({
+      operation: "invite-shared-to-conversation",
+      method: "conversations.inviteShared",
+      credentialKind: "bot",
+      requiredScopes: ["conversations.connect:write"],
+      pagination: "none",
+      retryPolicy: "never",
+      workspaceArgument: null,
+    });
   });
 });

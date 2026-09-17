@@ -7,6 +7,8 @@ export type {
   SlackConversationInfo,
   SlackGetConversationInfoInput,
   SlackInviteToConversationInput,
+  SlackInviteSharedToConversationInput,
+  SlackInviteSharedToConversationResult,
   SlackSetConversationPurposeInput,
   SlackSetConversationTopicInput,
   SlackListPublicConversationsInput,

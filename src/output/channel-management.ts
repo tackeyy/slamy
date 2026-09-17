@@ -1,6 +1,7 @@
 import type {
   EnsureChannelResult,
   InviteToChannelResult,
+  InviteSharedToChannelResult,
   RenameChannelResult,
 } from "../commands/channel-management.js";
 
@@ -25,6 +26,20 @@ export function formatEnsureChannelResult(
   }
   const id = result.channelId ? ` (${result.channelId})` : "";
   return `${result.status}: #${result.name}${id} in ${result.workspace} [${result.isPrivate ? "private" : "public"}]`;
+}
+
+export function formatInviteSharedToChannelResult(
+  result: InviteSharedToChannelResult,
+  mode: ChannelManagementOutputMode,
+): string {
+  if (mode === "json") return JSON.stringify(result, null, 2);
+  if (mode === "plain") {
+    return [
+      result.status, result.teamId, result.workspace, result.channelId, result.email,
+      result.externalLimited ? "limited" : "full-access", result.inviteId ?? "",
+    ].join("\t");
+  }
+  return `${result.status}: ${result.channelId} in ${result.workspace} recipient=${result.email} access=${result.externalLimited ? "limited" : "full"}`;
 }
 
 export function formatInviteToChannelResult(

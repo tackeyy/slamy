@@ -108,6 +108,82 @@ describe("WorkspaceSlackAdapter named operations", () => {
     ]);
   });
 
+  it("invites one external email recipient with the Slack Connect bot scope and returns only the invite ID", async () => {
+    const transport = new QueueTransport([
+      { ok: true, invite_id: "I0123ABC", url: "https://slack.example/invite-secret", conf_code: "conf-secret" },
+    ]);
+    const adapter = new WorkspaceSlackAdapter({ transport, requestIdFactory: idFactory() });
+    const context = contextWith({ botToken: "xoxb-bot", botScopes: ["conversations.connect:write"] });
+
+    await expect(
+      adapter.inviteSharedToConversation(context, {
+        channelId: "C0123ABC",
+        email: "advisor@example.com",
+        externalLimited: false,
+      }),
+    ).resolves.toEqual({ inviteId: "I0123ABC" });
+    expect(transport.requests).toEqual([
+      expect.objectContaining({
+        method: "conversations.inviteShared",
+        arguments: {
+          channel: "C0123ABC",
+          emails: "advisor@example.com",
+          external_limited: false,
+        },
+      }),
+    ]);
+  });
+
+  it.each([true, false])("sends external_limited=%s to Slack", async (externalLimited) => {
+    const transport = new QueueTransport([{ ok: true, invite_id: "I0123ABC" }]);
+    const adapter = new WorkspaceSlackAdapter({ transport, requestIdFactory: idFactory() });
+    const context = contextWith({ botToken: "xoxb-bot", botScopes: ["conversations.connect:write"] });
+
+    await adapter.inviteSharedToConversation(context, {
+      channelId: "C0123ABC", email: "advisor@example.com", externalLimited,
+    });
+
+    expect(transport.requests[0]?.arguments).toEqual({
+      channel: "C0123ABC", emails: "advisor@example.com", external_limited: externalLimited,
+    });
+  });
+
+  it.each([
+    ["a non-string recipient", undefined],
+    ["an invalid recipient email", "not-an-email"],
+  ])("rejects %s before transport", async (_label, email) => {
+    const transport = new QueueTransport([]);
+    const adapter = new WorkspaceSlackAdapter({ transport, requestIdFactory: idFactory() });
+    const context = contextWith({ botToken: "xoxb-bot", botScopes: ["conversations.connect:write"] });
+
+    expect(() => adapter.inviteSharedToConversation(context, {
+      channelId: "C0123ABC", email: email as string, externalLimited: true,
+    })).toThrow(expect.objectContaining({ code: "INVALID_SLACK_INPUT" }));
+    expect(transport.requests).toEqual([]);
+  });
+
+  it("accepts a G-prefixed channel ID in the normal adapter execution path", async () => {
+    const transport = new QueueTransport([{ ok: true, invite_id: "I0123ABC" }]);
+    const adapter = new WorkspaceSlackAdapter({ transport, requestIdFactory: idFactory() });
+    const context = contextWith({ botToken: "xoxb-bot", botScopes: ["conversations.connect:write"] });
+
+    await expect(adapter.inviteSharedToConversation(context, {
+      channelId: "G0123ABC", email: "advisor@example.com", externalLimited: true,
+    })).resolves.toEqual({ inviteId: "I0123ABC" });
+    expect(transport.requests[0]?.arguments).toMatchObject({ channel: "G0123ABC" });
+  });
+
+  it("rejects a D-prefixed channel ID before shared-invite transport", () => {
+    const transport = new QueueTransport([]);
+    const adapter = new WorkspaceSlackAdapter({ transport, requestIdFactory: idFactory() });
+    const context = contextWith({ botToken: "xoxb-bot", botScopes: ["conversations.connect:write"] });
+
+    expect(() => adapter.inviteSharedToConversation(context, {
+      channelId: "D0123ABC", email: "advisor@example.com", externalLimited: true,
+    })).toThrow(expect.objectContaining({ code: "INVALID_SLACK_INPUT" }));
+    expect(transport.requests).toEqual([]);
+  });
+
   it("preserves already_in_channel as a classified Slack platform error", async () => {
     const transport = new QueueTransport([{ ok: false, error: "already_in_channel" }]);
     const adapter = new WorkspaceSlackAdapter({ transport, requestIdFactory: idFactory() });

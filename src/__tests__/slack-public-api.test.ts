@@ -21,7 +21,7 @@ describe("workspace Slack adapter public API", () => {
       method: "chat.postMessage",
       credentialKind: "bot",
     });
-    expect(listSlackMethodPolicies()).toHaveLength(18);
+    expect(listSlackMethodPolicies()).toHaveLength(19);
     expect(PartialPaginationError).toBeTypeOf("function");
     expect(SlackAdapterError).toBeTypeOf("function");
   });
