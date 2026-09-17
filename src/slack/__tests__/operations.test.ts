@@ -173,6 +173,17 @@ describe("WorkspaceSlackAdapter named operations", () => {
     expect(transport.requests[0]?.arguments).toMatchObject({ channel: "G0123ABC" });
   });
 
+  it("rejects a D-prefixed channel ID before shared-invite transport", () => {
+    const transport = new QueueTransport([]);
+    const adapter = new WorkspaceSlackAdapter({ transport, requestIdFactory: idFactory() });
+    const context = contextWith({ botToken: "xoxb-bot", botScopes: ["conversations.connect:write"] });
+
+    expect(() => adapter.inviteSharedToConversation(context, {
+      channelId: "D0123ABC", email: "advisor@example.com", externalLimited: true,
+    })).toThrow(expect.objectContaining({ code: "INVALID_SLACK_INPUT" }));
+    expect(transport.requests).toEqual([]);
+  });
+
   it("preserves already_in_channel as a classified Slack platform error", async () => {
     const transport = new QueueTransport([{ ok: false, error: "already_in_channel" }]);
     const adapter = new WorkspaceSlackAdapter({ transport, requestIdFactory: idFactory() });

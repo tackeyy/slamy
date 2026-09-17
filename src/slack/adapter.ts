@@ -266,7 +266,7 @@ export class WorkspaceSlackAdapter implements WorkspaceSlackOperations {
   ): Promise<SlackInviteSharedToConversationResult> {
     let args: Readonly<Record<string, unknown>>;
     try {
-      const channelId = parseChannelId(input.channelId);
+      const channelId = parseSharedChannelId(input.channelId);
       if (typeof input.externalLimited !== "boolean") throw new TypeError();
       args = Object.freeze({
         channel: channelId,
@@ -1067,6 +1067,13 @@ function safeText(value: unknown, maxLength: number): string {
 function parseChannelId(value: unknown): string {
   if (typeof value !== "string" || !/^[CDG][A-Z0-9]{1,63}$/.test(value)) {
     throw new TypeError("Invalid Slack channel ID");
+  }
+  return value;
+}
+
+function parseSharedChannelId(value: unknown): string {
+  if (typeof value !== "string" || !/^[CG][A-Z0-9]{1,63}$/.test(value)) {
+    throw new TypeError("Invalid Slack shared channel ID");
   }
   return value;
 }
