@@ -30,7 +30,7 @@
 - メッセージ:
   - `Slack channel configure failed after the channel target was resolved`（従来どおり）
   - `Slack channel verify failed after the channel target was resolved: could not read the channel`
-  - `Slack channel verify failed after the channel target was resolved: mismatched purpose`（複数なら `, ` 区切り）
+  - `Slack channel verify failed after the channel target was resolved: mismatched purpose`（複数ならカンマと空白で区切る）
 - 復元は照合専用。戻り値や出力の topic / purpose は従来どおり入力値
 
 ## 受け入れ条件
