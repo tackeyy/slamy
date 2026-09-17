@@ -1,6 +1,7 @@
 import type {
   EnsureChannelResult,
   InviteToChannelResult,
+  RenameChannelResult,
 } from "../commands/channel-management.js";
 
 export type ChannelManagementOutputMode = "human" | "json" | "plain";
@@ -44,4 +45,16 @@ export function formatInviteToChannelResult(
     ? result.alreadyInChannel.join(", ")
     : "none";
   return `${result.status}: ${result.channelId} invited=${invited} already_in_channel=${already}`;
+}
+
+export function formatRenameChannelResult(
+  result: RenameChannelResult,
+  mode: ChannelManagementOutputMode,
+): string {
+  if (mode === "json") return JSON.stringify(result, null, 2);
+  if (mode === "plain") {
+    return [result.status, result.channelId, result.name, result.previousName ?? ""].join("\t");
+  }
+  const previous = result.previousName ? `#${result.previousName} (${result.channelId}) -> ` : "";
+  return `${result.status}: ${previous}#${result.name}`;
 }

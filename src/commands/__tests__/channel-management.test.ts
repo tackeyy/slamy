@@ -6,7 +6,92 @@ import {
   ChannelEnsureError,
   ensureChannel,
   inviteToChannel,
+  renameChannel,
 } from "../channel-management.js";
+
+describe("renameChannel", () => {
+  it("returns a plan without resolving credentials or calling Slack", async () => {
+    const loadRuntime = vi.fn();
+
+    await expect(renameChannel({ channelId: "C0123ABC", name: "001-general", dryRun: true }, loadRuntime))
+      .resolves.toEqual({ status: "planned", channelId: "C0123ABC", name: "001-general" });
+    expect(loadRuntime).not.toHaveBeenCalled();
+  });
+
+  it("renames a public channel and verifies the returned name", async () => {
+    const renameConversation = vi.fn().mockResolvedValue(undefined);
+    const slack = {
+      listAllPublicConversations: vi.fn().mockResolvedValue([
+        { channelId: "C0123ABC", name: "01-general", isArchived: false, isPrivate: false },
+      ]),
+      listAllPrivateConversations: vi.fn().mockResolvedValue([]),
+      renameConversation,
+      getConversationInfo: vi.fn().mockResolvedValue({ name: "001-general" }),
+    } as unknown as WorkspaceSlackOperations;
+
+    await expect(renameChannel({ channelId: "C0123ABC", name: "001-general", dryRun: false }, runtime(slack)))
+      .resolves.toEqual({
+        status: "renamed", channelId: "C0123ABC", name: "001-general", previousName: "01-general",
+      });
+    expect(renameConversation).toHaveBeenCalledWith(expect.anything(), {
+      channelId: "C0123ABC", name: "001-general", isPrivate: false,
+    });
+  });
+
+  it("does not call Slack rename when the requested name is already current", async () => {
+    const renameConversation = vi.fn();
+    const slack = {
+      listAllPublicConversations: vi.fn().mockResolvedValue([
+        { channelId: "C0123ABC", name: "001-general", isArchived: false, isPrivate: false },
+      ]),
+      listAllPrivateConversations: vi.fn().mockResolvedValue([]),
+      renameConversation,
+    } as unknown as WorkspaceSlackOperations;
+
+    await expect(renameChannel({ channelId: "C0123ABC", name: "001-general", dryRun: false }, runtime(slack)))
+      .resolves.toEqual({
+        status: "unchanged", channelId: "C0123ABC", name: "001-general", previousName: "001-general",
+      });
+    expect(renameConversation).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["missing channel", [], "Channel not found in the selected workspace"],
+    ["duplicate name", [
+      { channelId: "C0123ABC", name: "01-general", isArchived: false, isPrivate: false },
+      { channelId: "C0456DEF", name: "001-general", isArchived: true, isPrivate: false },
+    ], "Another channel already uses the requested name"],
+  ])("rejects %s without calling rename", async (_caseName, channels, message) => {
+    const renameConversation = vi.fn();
+    const slack = {
+      listAllPublicConversations: vi.fn().mockResolvedValue(channels),
+      listAllPrivateConversations: vi.fn().mockResolvedValue([]),
+      renameConversation,
+    } as unknown as WorkspaceSlackOperations;
+
+    await expect(renameChannel({ channelId: "C0123ABC", name: "001-general", dryRun: false }, runtime(slack)))
+      .rejects.toThrow(message);
+    expect(renameConversation).not.toHaveBeenCalled();
+  });
+
+  it("rejects when the name read back after rename differs", async () => {
+    const slack = {
+      listAllPublicConversations: vi.fn().mockResolvedValue([
+        { channelId: "C0123ABC", name: "01-general", isArchived: false, isPrivate: false },
+      ]),
+      listAllPrivateConversations: vi.fn().mockResolvedValue([]),
+      renameConversation: vi.fn().mockResolvedValue(undefined),
+      getConversationInfo: vi.fn().mockResolvedValue({ name: "unexpected-name" }),
+    } as unknown as WorkspaceSlackOperations;
+
+    await expect(renameChannel({ channelId: "C0123ABC", name: "001-general", dryRun: false }, runtime(slack)))
+      .rejects.toThrow("Slack channel rename verification did not match the requested name");
+  });
+});
+
+function runtime(slack: WorkspaceSlackOperations) {
+  return async () => ({ context: contextWith({ userToken: "xoxp-user" }), slack, dispose() {} });
+}
 
 describe("ensureChannel", () => {
   it("returns a plan without resolving credentials or calling Slack", async () => {
