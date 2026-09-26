@@ -18,10 +18,10 @@ function expect(condition, message) {
 }
 
 const ci = read('.github/workflows/ci.yml')
-const releaseNpm = read('.github/workflows/release-npm.yml')
 const dependabot = read('.github/dependabot.yml')
 
 expect(!existsSync(resolve(root, '.github/workflows/lint.yml')), 'lint.ymlをci.ymlへ統合してください')
+expect(!existsSync(resolve(root, '.github/workflows/release-npm.yml')), 'slamyはnpmへ公開しないため、npm release workflowを置かないでください')
 expect((ci.match(/^\s*runs-on:/gm) ?? []).length === 1, '品質CIを1jobへ統合してください')
 expect((ci.match(/actions\/checkout@/g) ?? []).length === 1, 'checkoutは1回だけ実行してください')
 expect((ci.match(/actions\/setup-node@/g) ?? []).length === 1, 'Node setupは1回だけ実行してください')
@@ -49,8 +49,6 @@ for (const gate of [
 
 expect(ci.includes('if: failure()'), 'Node coverage artifactは失敗時だけ保存してください')
 expect(/retention-days:\s*1/.test(ci), 'Node coverage artifactの保持期間を1日にしてください')
-expect(releaseNpm.includes('paths:'), 'npm releaseを配布対象pathへ限定してください')
-expect(releaseNpm.includes("'.changeset/**'"), 'changeset変更をrelease対象へ含めてください')
 expect((dependabot.match(/groups:/g) ?? []).length === 3, 'npm、Go、Actions更新をgroup化してください')
 expect((dependabot.match(/cooldown:/g) ?? []).length === 3, '各ecosystemへcooldownを設定してください')
 expect((dependabot.match(/rebase-strategy: disabled/g) ?? []).length === 3, 'Dependabot自動rebaseを停止してください')

@@ -42,10 +42,15 @@ component/data-flow図、import規則、公開API互換方針、Go削除gateは
 
 ## インストール
 
-### npm（TypeScript API / CLI）
+### TypeScript API / CLI（ソースから実行）
+
+slamy は npm へ公開していません。リポジトリを clone し、CLI をソースから実行します（Node.js 25 以上）。
 
 ```bash
-npm install slamy
+git clone https://github.com/tackeyy/slamy.git
+cd slamy
+npm install
+npx tsx src/cli/index.ts --help
 ```
 
 ### Homebrew
@@ -235,7 +240,7 @@ Go CLI（`go install` またはソースからビルド）:
 | `--json` | JSON 形式で出力 |
 | `--plain` | TSV 形式で出力 |
 
-TypeScript CLI（`npm install`）:
+TypeScript CLI:
 
 | フラグ | 説明 |
 |---|---|
@@ -556,7 +561,7 @@ C01234FGHIJ	random	15	private
 
 ## TypeScript API
 
-npm パッケージは、Slack Web API 操作用の `SlamyClient` と Socket Mode イベント用の `SlamyEvents` を公開しています。Node.js 25 以上が必要です。
+TypeScript パッケージは、Slack Web API 操作用の `SlamyClient` と Socket Mode イベント用の `SlamyEvents` を公開しています。Node.js 25 以上が必要です。
 
 ```ts
 import { SlamyClient } from "slamy";
