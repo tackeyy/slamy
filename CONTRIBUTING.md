@@ -197,15 +197,6 @@ git checkout -b fix/short-bug-description
 
 - Write code + tests
 - Update documentation if behavior changes
-- Add a changeset if your change should ship to npm:
-
-  ```bash
-  npx changeset
-  ```
-
-  **Forgot to add one?** It's fine — open a follow-up PR with a `patch`-level
-  changeset before the next release. The release workflow won't publish until a
-  changeset exists, so nothing breaks silently.
 
 ### 3. Verify quality locally
 
@@ -239,7 +230,6 @@ git push origin <your-branch>
 - ✅ Code follows existing patterns
 - ✅ Commit messages follow the convention
 - ✅ Tests added for new behavior / regression
-- ✅ Changeset added (if user-visible behavior changes)
 - ✅ Docs updated (README / CONTRIBUTING / TESTING) if applicable
 
 ## 👀 Code Review Process

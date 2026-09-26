@@ -43,10 +43,16 @@ diagrams, import rules, public API compatibility policy, and Go removal gates.
 
 ## Installation
 
-### npm (TypeScript API and CLI)
+### TypeScript API and CLI (from source)
+
+slamy is not published to npm. Clone the repository and run the CLI from source
+(Node.js 25 or later):
 
 ```bash
-npm install slamy
+git clone https://github.com/tackeyy/slamy.git
+cd slamy
+npm install
+npx tsx src/cli/index.ts --help
 ```
 
 ### Homebrew
@@ -239,7 +245,7 @@ Go CLI (`go install` or a source build):
 | `--json` | Output as JSON |
 | `--plain` | Output as TSV |
 
-TypeScript CLI (`npm install`):
+TypeScript CLI:
 
 | Flag | Description |
 |---|---|
@@ -587,7 +593,7 @@ C01234FGHIJ	random	15	private
 
 ## TypeScript API
 
-The npm package exports `SlamyClient` for Slack Web API operations and `SlamyEvents` for Socket Mode events. Node.js 25 or later is required.
+The TypeScript package exports `SlamyClient` for Slack Web API operations and `SlamyEvents` for Socket Mode events. Node.js 25 or later is required.
 
 ```ts
 import { SlamyClient } from "slamy";

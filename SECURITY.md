@@ -41,7 +41,7 @@ The following are **in scope** for security reports:
 
 - Slack token handling and workspace selection in the API client and CLI
 - Command injection or argument parsing flaws in `src/cli/`
-- Dependency vulnerabilities affecting the published npm package
+- Dependency vulnerabilities affecting the TypeScript API and CLI
 
 The following are **out of scope**:
 
