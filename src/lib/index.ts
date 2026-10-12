@@ -105,6 +105,7 @@ export type {
 } from "../credentials/index.js";
 export type {
   Channel,
+  ChannelSharingInfo,
   UnreadChannel,
   Message,
   MessageReaction,

@@ -1,4 +1,6 @@
 import type { Command } from "commander";
+import type { ChannelSharingInfo } from "../lib/types.js";
+import { createCliTargetClient } from "./target-client.js";
 import {
   ensureWorkspaceChannel,
   type EnsureWorkspaceChannelRequest,
@@ -32,6 +34,7 @@ export type ChannelManagementCommandDependencies = {
     }) => void,
   ) => ReturnType<typeof inviteSharedWorkspaceChannel>;
   renameChannel?: (request: RenameWorkspaceChannelRequest) => ReturnType<typeof renameWorkspaceChannel>;
+  readChannelInfo?: (input: string, workspace?: string) => Promise<ChannelSharingInfo>;
   writeOut: (line: string) => void;
   writeErr: (line: string) => void;
   env?: NodeJS.ProcessEnv;
@@ -66,6 +69,28 @@ export function registerChannelManagementCommands(
   program: Command,
   dependencies: ChannelManagementCommandDependencies = defaultDependencies,
 ): void {
+  channels
+    .command("info <channel_or_url>")
+    .description("Read privacy and Slack Connect workspace metadata for a channel ID or permalink")
+    .action(async (input: string) => {
+      try {
+        const workspace = resolveCliWorkspaceSelector(
+          program.opts<{ workspace?: string }>().workspace, dependencies.env ?? process.env,
+        );
+        const info = await (dependencies.readChannelInfo ?? readChannelSharingInfo)(input, workspace);
+        const mode = outputMode(program);
+        if (mode === "json") dependencies.writeOut(sharingJson(info, 2));
+        else {
+          const keys = ["id", "name", "is_private", "is_shared", "is_ext_shared", "is_org_shared", "shared_team_ids", "connected_team_ids", "context_team_id", "conversation_host_id"] as const;
+          const values = keys.map((key) => sharingJson(info[key] ?? "unknown"));
+          dependencies.writeOut(mode === "plain" ? values.join("\t") : keys.map((key, i) => `${key}: ${values[i]}`).join("\n"));
+        }
+      } catch {
+        dependencies.writeErr("Error: Unable to read channel metadata");
+        process.exitCode = 1;
+      }
+    });
+
   channels
     .command("create <name>")
     .description("Create or reconcile a channel in an explicit workspace")
@@ -250,4 +275,14 @@ function outputMode(program: Command): "human" | "json" | "plain" {
   if (options.json) return "json";
   if (options.plain) return "plain";
   return "human";
+}
+
+async function readChannelSharingInfo(input: string, explicitWorkspace?: string): Promise<ChannelSharingInfo> {
+  const lease = await createCliTargetClient<{ getChannelSharingInfo(id: string): Promise<ChannelSharingInfo> }>({ input, explicitWorkspace });
+  try { return await lease.client.getChannelSharingInfo(lease.target.channel); }
+  finally { lease.dispose(); }
+}
+
+function sharingJson(value: unknown, spaces?: number): string {
+  return JSON.stringify(value, null, spaces).replace(/[\u007f-\u009f\u2028\u2029]/gu, (char) => `\\u${char.charCodeAt(0).toString(16).padStart(4, "0")}`);
 }

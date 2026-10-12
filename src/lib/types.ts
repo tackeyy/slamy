@@ -207,3 +207,17 @@ export interface AssistantThreadContextChangedEvent {
     };
   };
 }
+
+/** Read-only sharing metadata. Omitted fields remain unknown, never false/empty defaults. */
+export interface ChannelSharingInfo {
+  id: string;
+  name?: string;
+  is_private?: boolean;
+  is_shared?: boolean;
+  is_ext_shared?: boolean;
+  is_org_shared?: boolean;
+  shared_team_ids?: string[];
+  connected_team_ids?: string[];
+  context_team_id?: string;
+  conversation_host_id?: string;
+}

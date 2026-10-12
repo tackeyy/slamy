@@ -4,6 +4,23 @@
 
 A Slack API client and standalone CLI for reading, searching, and posting to Slack.
 
+## Channel sharing metadata
+
+```sh
+slamy --workspace example --json channels info C012AB3CD
+slamy --json channels info https://example.slack.com/archives/C012AB3CD/p1700000000000001
+```
+
+Uses the shared workspace/permalink resolver and returns only channel identity, privacy/sharing
+flags, shared/connected workspace IDs and the host/context IDs. It never returns messages, topic
+or purpose content. Missing API fields remain omitted in JSON and appear as `unknown` in human
+and TSV output; they do not imply an unshared or public channel. Host IDs can identify a workspace
+(`T...`) or Enterprise organization (`E...`), so a host ID alone is not an external workspace ID.
+
+The command reads the documented
+[`conversations.info`](https://docs.slack.dev/reference/methods/conversations.info/) metadata.
+Existing token permissions and channel membership apply; it does not request new permissions.
+
 ## Features
 
 - **CLI** — run Slack operations directly from the terminal
