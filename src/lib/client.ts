@@ -625,7 +625,7 @@ export class SlamyClient {
 
   /** Return only channel-sharing metadata; never message, topic or purpose content. */
   async getChannelSharingInfo(channelId: string): Promise<ChannelSharingInfo> {
-    if (!/^[CG][A-Z0-9]+$/.test(channelId)) throw new Error("Invalid channel ID");
+    if (channelId.length > 64 || !/^[CG][A-Z0-9]+$/.test(channelId)) throw new Error("Invalid channel ID");
     const res = await this.userClient.conversations.info({ channel: channelId });
     const value: unknown = res.channel;
     const invalid = (): never => { throw new Error("Invalid channel metadata"); };
@@ -634,7 +634,7 @@ export class SlamyClient {
     if (ch.id !== channelId) invalid();
     const result: ChannelSharingInfo = { id: channelId };
     if (ch.name !== undefined) {
-      if (typeof ch.name !== "string") invalid();
+      if (typeof ch.name !== "string" || ch.name.length > 1024) invalid();
       result.name = ch.name as string;
     }
     for (const key of ["is_private", "is_shared", "is_ext_shared", "is_org_shared"] as const) {
@@ -645,13 +645,13 @@ export class SlamyClient {
     for (const key of ["shared_team_ids", "connected_team_ids"] as const) {
       const ids = ch[key];
       if (ids === undefined) continue;
-      if (!Array.isArray(ids) || ids.length > 1000 || ids.some((id) => typeof id !== "string" || !/^T[A-Z0-9]+$/.test(id))) invalid();
+      if (!Array.isArray(ids) || ids.length > 1000 || ids.some((id) => typeof id !== "string" || id.length > 64 || !/^T[A-Z0-9]+$/.test(id))) invalid();
       result[key] = [...ids as string[]];
     }
     for (const key of ["context_team_id", "conversation_host_id"] as const) {
       const id = ch[key];
       if (id === undefined) continue;
-      if (typeof id !== "string" || !(key === "context_team_id" ? /^T[A-Z0-9]+$/ : /^[TE][A-Z0-9]+$/).test(id)) invalid();
+      if (typeof id !== "string" || id.length > 64 || !(key === "context_team_id" ? /^T[A-Z0-9]+$/ : /^[TE][A-Z0-9]+$/).test(id)) invalid();
       result[key] = id as string;
     }
     return result;

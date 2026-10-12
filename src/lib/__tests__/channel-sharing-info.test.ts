@@ -40,3 +40,17 @@ describe("channel sharing metadata", () => {
     expect(info).toHaveBeenCalledTimes(1);
   });
 });
+
+it.each([
+  { name: "a".repeat(1025) }, { shared_team_ids: ["T" + "A".repeat(64)] },
+  { connected_team_ids: ["T" + "A".repeat(64)] }, { context_team_id: "T" + "A".repeat(64) },
+  { conversation_host_id: "E" + "A".repeat(64) },
+])("rejects oversized metadata %j", async (extra) => {
+  info.mockResolvedValue({ ok: true, channel: { id: "C012ABC", ...extra } });
+  await expect(client().getChannelSharingInfo("C012ABC")).rejects.toThrow("Invalid channel metadata");
+});
+it("accepts the name and identifier length boundaries", async () => {
+  const channel = { id: "C012ABC", name: "a".repeat(1024), shared_team_ids: ["T" + "A".repeat(63)], conversation_host_id: "E" + "A".repeat(63) };
+  info.mockResolvedValue({ ok: true, channel });
+  expect(await client().getChannelSharingInfo("C012ABC")).toEqual(channel);
+});

@@ -8,7 +8,7 @@ A Slack API client and standalone CLI for reading, searching, and posting to Sla
 
 ```sh
 slamy --workspace example --json channels info C012AB3CD
-slamy --json channels info https://example.slack.com/archives/C012AB3CD
+slamy --json channels info https://example.slack.com/archives/C012AB3CD/p1700000000000001
 ```
 
 Uses the shared workspace/permalink resolver and returns only channel identity, privacy/sharing

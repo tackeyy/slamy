@@ -79,10 +79,10 @@ export function registerChannelManagementCommands(
         );
         const info = await (dependencies.readChannelInfo ?? readChannelSharingInfo)(input, workspace);
         const mode = outputMode(program);
-        if (mode === "json") dependencies.writeOut(JSON.stringify(info, null, 2));
+        if (mode === "json") dependencies.writeOut(sharingJson(info, 2));
         else {
           const keys = ["id", "name", "is_private", "is_shared", "is_ext_shared", "is_org_shared", "shared_team_ids", "connected_team_ids", "context_team_id", "conversation_host_id"] as const;
-          const values = keys.map((key) => JSON.stringify(info[key] ?? "unknown"));
+          const values = keys.map((key) => sharingJson(info[key] ?? "unknown"));
           dependencies.writeOut(mode === "plain" ? values.join("\t") : keys.map((key, i) => `${key}: ${values[i]}`).join("\n"));
         }
       } catch {
@@ -281,4 +281,8 @@ async function readChannelSharingInfo(input: string, explicitWorkspace?: string)
   const lease = await createCliTargetClient<{ getChannelSharingInfo(id: string): Promise<ChannelSharingInfo> }>({ input, explicitWorkspace });
   try { return await lease.client.getChannelSharingInfo(lease.target.channel); }
   finally { lease.dispose(); }
+}
+
+function sharingJson(value: unknown, spaces?: number): string {
+  return JSON.stringify(value, null, spaces).replace(/[\u007f-\u009f\u2028\u2029]/gu, (char) => `\\u${char.charCodeAt(0).toString(16).padStart(4, "0")}`);
 }
