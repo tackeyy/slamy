@@ -14,6 +14,7 @@ import {
 } from "./local-session-web-client.js";
 import type {
   Channel,
+  ChannelSharingInfo,
   UnreadChannel,
   Message,
   MessageReaction,
@@ -620,6 +621,40 @@ export class SlamyClient {
       is_private: ch.is_private || false,
       is_archived: ch.is_archived || false,
     };
+  }
+
+  /** Return only channel-sharing metadata; never message, topic or purpose content. */
+  async getChannelSharingInfo(channelId: string): Promise<ChannelSharingInfo> {
+    if (!/^[CG][A-Z0-9]+$/.test(channelId)) throw new Error("Invalid channel ID");
+    const res = await this.userClient.conversations.info({ channel: channelId });
+    const value: unknown = res.channel;
+    const invalid = (): never => { throw new Error("Invalid channel metadata"); };
+    if (!value || typeof value !== "object" || Array.isArray(value)) invalid();
+    const ch = value as Record<string, unknown>;
+    if (ch.id !== channelId) invalid();
+    const result: ChannelSharingInfo = { id: channelId };
+    if (ch.name !== undefined) {
+      if (typeof ch.name !== "string") invalid();
+      result.name = ch.name as string;
+    }
+    for (const key of ["is_private", "is_shared", "is_ext_shared", "is_org_shared"] as const) {
+      if (ch[key] === undefined) continue;
+      if (typeof ch[key] !== "boolean") invalid();
+      result[key] = ch[key] as boolean;
+    }
+    for (const key of ["shared_team_ids", "connected_team_ids"] as const) {
+      const ids = ch[key];
+      if (ids === undefined) continue;
+      if (!Array.isArray(ids) || ids.length > 1000 || ids.some((id) => typeof id !== "string" || !/^T[A-Z0-9]+$/.test(id))) invalid();
+      result[key] = [...ids as string[]];
+    }
+    for (const key of ["context_team_id", "conversation_host_id"] as const) {
+      const id = ch[key];
+      if (id === undefined) continue;
+      if (typeof id !== "string" || !(key === "context_team_id" ? /^T[A-Z0-9]+$/ : /^[TE][A-Z0-9]+$/).test(id)) invalid();
+      result[key] = id as string;
+    }
+    return result;
   }
 
   // --- Read operations ---
