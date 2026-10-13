@@ -398,8 +398,13 @@ export class SlamyClient {
   async postMessage(
     channel: string,
     text: string,
-    opts?: { asUser?: boolean },
+    opts?: { asUser?: boolean; threadTs?: string },
   ): Promise<{ channel: string; ts: string }> {
+    const threadTs = opts?.threadTs;
+    if (threadTs !== undefined && !/^\d+\.\d+$/.test(threadTs)) {
+      throw new Error(`Invalid thread_ts: ${JSON.stringify(threadTs)} (expected format like 1700000000.000100)`);
+    }
+
     const fixed = fixSlackMrkdwn(text);
     const chunks = splitMessage(fixed, CHAT_POSTMESSAGE_MAX_LENGTH);
 
@@ -409,14 +414,16 @@ export class SlamyClient {
     const res = await client.chat.postMessage({
       channel: resolvedChannel,
       text: chunks[0],
+      ...(threadTs !== undefined ? { thread_ts: threadTs } : {}),
     });
     const ts = res.ts!;
 
+    // 続きのチャンクは、指定スレッドがあればそこへ、なければ最初の投稿のスレッドへ
     for (const chunk of chunks.slice(1)) {
       await client.chat.postMessage({
         channel: resolvedChannel,
         text: chunk,
-        thread_ts: ts,
+        thread_ts: threadTs ?? ts,
       });
     }
 

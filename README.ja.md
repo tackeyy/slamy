@@ -285,8 +285,10 @@ slamy channels history <channel_or_url> [--limit <n>] [--oldest <ts>] [--latest 
 ### `messages post` — メッセージ投稿
 
 ```bash
-slamy messages post <channel_id> --text <message>
+slamy messages post <channel_id> --text <message> [--as-user] [--thread-ts <ts>]
 ```
+
+`--thread-ts <ts>` を指定すると、そのスレッドへの返信として投稿します（形式は `1700000000.000100`。不正な値は Slack を呼ばずにエラー）。
 
 ### `messages reply` — スレッド返信
 

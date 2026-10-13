@@ -331,11 +331,15 @@ messages
   .description("Post a message to a channel")
   .requiredOption("--text <text>", "Message text")
   .option("--as-user", "Post as the authenticated user (uses user token instead of bot token)")
+  .option("--thread-ts <ts>", "Reply in the thread of this message ts (e.g. 1700000000.000100)")
   .action(async (channelId, opts) => {
     try {
       const client = await createClient();
       const mode = getOutputMode();
-      const result = await client.postMessage(channelId, opts.text, { asUser: opts.asUser === true });
+      const result = await client.postMessage(channelId, opts.text, {
+        asUser: opts.asUser === true,
+        threadTs: opts.threadTs,
+      });
 
       if (mode === "json") {
         jsonOutput(result);
