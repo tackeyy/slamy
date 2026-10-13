@@ -176,6 +176,30 @@ describe("scheduleMessage", () => {
 });
 
 describe("postMessage", () => {
+  it("threadTs 指定時は thread_ts を渡す", async () => {
+    const client = new SlamyClient({ userToken: "xoxp-test" });
+    await client.postMessage("C123", "Hello", { threadTs: "1700000000.000100" });
+    expect(mockWebClient.chat.postMessage).toHaveBeenCalledWith({
+      channel: "C123",
+      text: "Hello",
+      thread_ts: "1700000000.000100",
+    });
+  });
+
+  it("threadTs が不正な形式なら Slack を呼ばずに拒否する", async () => {
+    const client = new SlamyClient({ userToken: "xoxp-test" });
+    for (const bad of ["abc", "1700000000", "1700000000.", ".5", "1.2.3", " 1.2", ""]) {
+      await expect(client.postMessage("C123", "Hello", { threadTs: bad })).rejects.toThrow(/thread_ts/);
+    }
+    expect(mockWebClient.chat.postMessage).not.toHaveBeenCalled();
+  });
+
+  it("threadTs 未指定なら thread_ts を渡さない", async () => {
+    const client = new SlamyClient({ userToken: "xoxp-test" });
+    await client.postMessage("C123", "Hello");
+    expect(mockWebClient.chat.postMessage.mock.calls[0][0]).not.toHaveProperty("thread_ts");
+  });
+
   it("短文メッセージを投稿する", async () => {
     const client = new SlamyClient({ userToken: "xoxp-test" });
     const result = await client.postMessage("C123", "Hello");

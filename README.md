@@ -311,8 +311,10 @@ slamy channels history <channel_or_url> [--limit <n>] [--oldest <ts>] [--latest 
 ### `messages post` — Post a message
 
 ```bash
-slamy messages post <channel_id> --text <message>
+slamy messages post <channel_id> --text <message> [--as-user] [--thread-ts <ts>]
 ```
+
+`--thread-ts <ts>` posts as a reply in that thread (format `1700000000.000100`; invalid values are rejected before calling Slack).
 
 ### `messages reply` — Reply to a thread
 
