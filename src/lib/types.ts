@@ -80,6 +80,12 @@ export interface UserProfile {
   is_admin: boolean;
   is_bot: boolean;
   deleted: boolean;
+  /** 所属の組織（Slack Connect の相手先なら相手の workspace の ID）。無ければ空文字 */
+  team_id: string;
+  /** 複数チャンネルのゲスト */
+  is_restricted: boolean;
+  /** 1チャンネルのゲスト */
+  is_ultra_restricted: boolean;
 }
 
 /** Search result. */

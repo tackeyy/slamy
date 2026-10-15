@@ -1206,6 +1206,46 @@ describe("getUserProfile", () => {
   });
 });
 
+describe("getUserProfile の所属の組織", () => {
+  it("users.info の team_id と制限ゲストの印を返す", async () => {
+    mockWebClient.users.info.mockResolvedValue({
+      ok: true,
+      user: {
+        id: "U2",
+        name: "ext",
+        real_name: "External User",
+        team_id: "T_EXTERNAL",
+        is_restricted: true,
+        is_ultra_restricted: false,
+        profile: { display_name: "ext" },
+        is_bot: false,
+        deleted: false,
+      },
+    });
+
+    const client = new SlamyClient({ userToken: "xoxp-test" });
+    const profile = await client.getUserProfile("U2");
+
+    expect(profile.team_id).toBe("T_EXTERNAL");
+    expect(profile.is_restricted).toBe(true);
+    expect(profile.is_ultra_restricted).toBe(false);
+  });
+
+  it("team_id が無いときは空文字と false にする", async () => {
+    mockWebClient.users.info.mockResolvedValue({
+      ok: true,
+      user: { id: "U3", name: "n", profile: {} },
+    });
+
+    const client = new SlamyClient({ userToken: "xoxp-test" });
+    const profile = await client.getUserProfile("U3");
+
+    expect(profile.team_id).toBe("");
+    expect(profile.is_restricted).toBe(false);
+    expect(profile.is_ultra_restricted).toBe(false);
+  });
+});
+
 describe("searchMessages", () => {
   it("メッセージを検索する", async () => {
     mockWebClient.search.messages.mockResolvedValue({

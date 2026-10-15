@@ -1013,6 +1013,9 @@ export class SlamyClient {
       is_admin: u.is_admin || false,
       is_bot: u.is_bot || false,
       deleted: u.deleted || false,
+      team_id: u.team_id || "",
+      is_restricted: u.is_restricted || false,
+      is_ultra_restricted: u.is_ultra_restricted || false,
     };
   }
 
