@@ -540,6 +540,9 @@ users
         const display = profile.display_name || profile.real_name;
         console.log(`User: ${display} (@${profile.name})`);
         console.log(`ID: ${profile.id}`);
+        if (profile.team_id) console.log(`Team: ${profile.team_id}`);
+        if (profile.is_ultra_restricted) console.log("Guest: single-channel");
+        else if (profile.is_restricted) console.log("Guest: multi-channel");
         if (profile.title) console.log(`Title: ${profile.title}`);
         if (profile.email) console.log(`Email: ${profile.email}`);
         if (profile.status_text)
