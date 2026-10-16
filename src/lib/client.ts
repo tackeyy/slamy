@@ -398,14 +398,35 @@ export class SlamyClient {
   async postMessage(
     channel: string,
     text: string,
-    opts?: { asUser?: boolean; threadTs?: string },
+    opts?: { asUser?: boolean; threadTs?: string; blocks?: unknown[] },
   ): Promise<{ channel: string; ts: string }> {
     const threadTs = opts?.threadTs;
     if (threadTs !== undefined && !/^\d+\.\d+$/.test(threadTs)) {
       throw new Error(`Invalid thread_ts: ${JSON.stringify(threadTs)} (expected format like 1700000000.000100)`);
     }
+    const blocks = opts?.blocks;
+    if (
+      blocks !== undefined &&
+      (!Array.isArray(blocks) ||
+        blocks.length === 0 ||
+        !blocks.every((b) => typeof b === "object" && b !== null && !Array.isArray(b)))
+    ) {
+      throw new Error("Invalid blocks: expected a non-empty array of block objects");
+    }
 
     const fixed = fixSlackMrkdwn(text);
+    // blocks のある投稿は 1 回で送る（text は通知・検索の代わりの文面。分けると blocks と食い違う）
+    if (blocks !== undefined) {
+      const resolvedChannel = await this.resolveChannelId(channel, opts?.asUser);
+      const client = opts?.asUser ? this.userClient : this.botClient;
+      const res = await client.chat.postMessage({
+        channel: resolvedChannel,
+        text: fixed,
+        blocks: blocks as never,
+        ...(threadTs !== undefined ? { thread_ts: threadTs } : {}),
+      });
+      return { channel: resolvedChannel, ts: res.ts! };
+    }
     const chunks = splitMessage(fixed, CHAT_POSTMESSAGE_MAX_LENGTH);
 
     const resolvedChannel = await this.resolveChannelId(channel, opts?.asUser);
