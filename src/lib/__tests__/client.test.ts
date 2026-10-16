@@ -200,6 +200,25 @@ describe("postMessage", () => {
     expect(mockWebClient.chat.postMessage.mock.calls[0][0]).not.toHaveProperty("thread_ts");
   });
 
+  it("blocks を渡すと、text と同じ要求に blocks を載せ、分割しない", async () => {
+    const client = new SlamyClient({ userToken: "xoxp-test" });
+    const blocks = [{ type: "section", text: { type: "mrkdwn", text: "行1\n行2" } }];
+    const long = "あ".repeat(45000);
+    await client.postMessage("C123", long, { blocks });
+    expect(mockWebClient.chat.postMessage).toHaveBeenCalledTimes(1);
+    const params = mockWebClient.chat.postMessage.mock.calls[0][0];
+    expect(params.blocks).toEqual(blocks);
+    expect(params.channel).toBe("C123");
+  });
+
+  it("blocks が配列でない・空なら、Slack を呼ばずに拒否する", async () => {
+    const client = new SlamyClient({ userToken: "xoxp-test" });
+    for (const bad of [[], {}, "x", null, [1]] as unknown[]) {
+      await expect(client.postMessage("C123", "Hello", { blocks: bad as never })).rejects.toThrow(/blocks/);
+    }
+    expect(mockWebClient.chat.postMessage).not.toHaveBeenCalled();
+  });
+
   it("短文メッセージを投稿する", async () => {
     const client = new SlamyClient({ userToken: "xoxp-test" });
     const result = await client.postMessage("C123", "Hello");
