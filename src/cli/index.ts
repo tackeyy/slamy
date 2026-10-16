@@ -339,8 +339,8 @@ messages
       const mode = getOutputMode();
       let blocks: unknown[] | undefined;
       if (opts.blocksFile !== undefined) {
-        const { readFileSync } = await import("node:fs");
-        blocks = JSON.parse(readFileSync(opts.blocksFile, "utf8"));
+        const { readBlocksFile } = await import("../lib/blocks-file.js");
+        blocks = readBlocksFile(opts.blocksFile) as unknown[];
       }
       const result = await client.postMessage(channelId, opts.text, {
         asUser: opts.asUser === true,
