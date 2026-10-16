@@ -69,6 +69,9 @@ function mapMessage(msg: any): Message {
   if (msg.bot_id !== undefined) m.bot_id = msg.bot_id;
   if (msg.subtype !== undefined) m.subtype = msg.subtype;
   if (msg.team !== undefined) m.team = msg.team;
+  if (msg.user_team !== undefined) m.user_team = msg.user_team;
+  if (msg.source_team !== undefined) m.source_team = msg.source_team;
+  if (msg.app_id !== undefined) m.app_id = msg.app_id;
   if (Array.isArray(msg.blocks)) m.blocks = msg.blocks as Record<string, unknown>[];
   if (Array.isArray(msg.attachments)) m.attachments = msg.attachments as Record<string, unknown>[];
   if (Array.isArray(msg.reactions)) {

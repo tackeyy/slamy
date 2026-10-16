@@ -49,6 +49,12 @@ export interface Message {
   bot_id?: string;
   subtype?: string;
   team?: string;
+  /** Slack Connect で発言者が属する workspace（Slack の応答にあるときだけ）。 */
+  user_team?: string;
+  /** Slack Connect で発言が投稿された元の workspace（Slack の応答にあるときだけ）。 */
+  source_team?: string;
+  /** アプリ経由の投稿のときのアプリの ID（Slack の応答にあるときだけ）。 */
+  app_id?: string;
   blocks?: Record<string, unknown>[];
   attachments?: Record<string, unknown>[];
   reactions?: MessageReaction[];
