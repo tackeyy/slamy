@@ -1,4 +1,4 @@
-import { mkdtempSync, writeFileSync, rmSync } from "node:fs";
+import { mkdtempSync, writeFileSync, rmSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -18,7 +18,7 @@ function file(content: string): string {
 
 describe("readBlocksFile", () => {
   it("JSON の配列を読む", () => {
-    expect(readBlocksFile(file('[{"type":"section"}]'))).toEqual([{ type: "section" }]);
+    expect(readBlocksFile(() => readFileSync(file('[{"type":"section"}]'), "utf8"))).toEqual([{ type: "section" }]);
   });
 
   it.each([
@@ -28,7 +28,7 @@ describe("readBlocksFile", () => {
     const p = file(content);
     let message = "";
     try {
-      readBlocksFile(p);
+      readBlocksFile(() => readFileSync(p, "utf8"));
     } catch (e) {
       message = (e as Error).message;
     }
@@ -36,7 +36,7 @@ describe("readBlocksFile", () => {
   });
 
   it("読めないパスは、パスを含まない固定の文面で失敗する", () => {
-    expect(() => readBlocksFile("/nonexistent/SECRETPATHMARK.json")).toThrow(
+    expect(() => readBlocksFile(() => readFileSync("/nonexistent/SECRETPATHMARK.json", "utf8"))).toThrow(
       /^Could not read --blocks-file as a JSON blocks array$/,
     );
   });
