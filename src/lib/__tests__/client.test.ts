@@ -1265,6 +1265,46 @@ describe("setUserRealName", () => {
   });
 });
 
+describe("setUserDisplayName", () => {
+  it("user token で users.profile.set に user と display_name を渡す", async () => {
+    mockWebClient.users.profile.set.mockResolvedValue({ ok: true, profile: { display_name: "全知全能くん" } });
+    const client = new SlamyClient({ userToken: "xoxp-test" });
+    const res = await client.setUserDisplayName("U0BOT", "全知全能くん");
+    expect(mockWebClient.users.profile.set).toHaveBeenCalledWith({
+      user: "U0BOT",
+      profile: { display_name: "全知全能くん" },
+    });
+    expect(res).toEqual({ id: "U0BOT", display_name: "全知全能くん" });
+  });
+
+  it("空の表示名は API を呼ばずに拒否する", async () => {
+    const client = new SlamyClient({ userToken: "xoxp-test" });
+    await expect(client.setUserDisplayName("U0BOT", "  ")).rejects.toThrow();
+    expect(mockWebClient.users.profile.set).not.toHaveBeenCalled();
+  });
+
+  it("user token が無い（bot token だけの）構成では API を呼ばずに拒否する", async () => {
+    const client = new SlamyClient({ botToken: "xoxb-test" });
+    await expect(client.setUserDisplayName("U0BOT", "全知全能くん")).rejects.toThrow(/user token/);
+    expect(mockWebClient.users.profile.set).not.toHaveBeenCalled();
+  });
+
+  it("80 文字ちょうどは通し、文字数はコードポイントで数える", async () => {
+    const client = new SlamyClient({ userToken: "xoxp-test" });
+    await client.setUserDisplayName("U0BOT", "あ".repeat(80));
+    await client.setUserDisplayName("U0BOT", "😀".repeat(80));
+    expect(mockWebClient.users.profile.set).toHaveBeenCalledTimes(2);
+    await expect(client.setUserDisplayName("U0BOT", "😀".repeat(81))).rejects.toThrow();
+    expect(mockWebClient.users.profile.set).toHaveBeenCalledTimes(2);
+  });
+
+  it("81 文字以上は API を呼ばずに拒否する", async () => {
+    const client = new SlamyClient({ userToken: "xoxp-test" });
+    await expect(client.setUserDisplayName("U0BOT", "あ".repeat(81))).rejects.toThrow();
+    expect(mockWebClient.users.profile.set).not.toHaveBeenCalled();
+  });
+});
+
 describe("getUserProfile の所属の組織", () => {
   it("users.info の team_id と制限ゲストの印を返す", async () => {
     mockWebClient.users.info.mockResolvedValue({

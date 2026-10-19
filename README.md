@@ -121,6 +121,7 @@ In **OAuth & Permissions** > **Scopes** > **User Token Scopes**, add:
 | `users:read` | View users and their basic info |
 | `users:read.email` | View email addresses |
 | `users.profile:read` | View user profiles |
+| `users.profile:write` | Update user profiles |
 | `team:read` | View workspace (team) info |
 
 ### 3. Install and register the workspace
@@ -355,15 +356,18 @@ slamy channels members <channel_or_url> [--resolve-names]
 
 `<channel_or_url>` accepts a channel ID or a Slack permalink URL. `--resolve-names` resolves `user_id` to display names.
 
-### `users list` / `users profile` / `users set-real-name`
+### `users list` / `users profile` / `users set-real-name` / `users set-display-name`
 
 ```bash
 slamy users list [--include-deactivated] [--include-bots]
 slamy users profile <user_id>
 slamy users set-real-name <user_id> <real_name>
+slamy users set-display-name <user_id> <display_name>
 ```
 
 `set-real-name` calls `users.profile.set`. It needs a user token (an admin's token on a paid plan to target another user or a bot) and is rejected with a bot token only or in a local session. The real name is limited to 50 characters.
+
+`set-display-name` also calls `users.profile.set`: it needs a user token and is rejected with a bot token only or in a local session. The display name is limited to 80 characters.
 
 ### `assistant set-status` — Set AI Assistant thread status
 
