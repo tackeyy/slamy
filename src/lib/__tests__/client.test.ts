@@ -1243,6 +1243,21 @@ describe("setUserRealName", () => {
     expect(mockWebClient.users.profile.set).not.toHaveBeenCalled();
   });
 
+  it("user token が無い（bot token だけの）構成では API を呼ばずに拒否する", async () => {
+    const client = new SlamyClient({ botToken: "xoxb-test" });
+    await expect(client.setUserRealName("U0BOT", "全知全能くん")).rejects.toThrow(/user token/);
+    expect(mockWebClient.users.profile.set).not.toHaveBeenCalled();
+  });
+
+  it("50 文字ちょうどは通し、文字数はコードポイントで数える", async () => {
+    const client = new SlamyClient({ userToken: "xoxp-test" });
+    await client.setUserRealName("U0BOT", "あ".repeat(50));
+    await client.setUserRealName("U0BOT", "😀".repeat(50));
+    expect(mockWebClient.users.profile.set).toHaveBeenCalledTimes(2);
+    await expect(client.setUserRealName("U0BOT", "😀".repeat(51))).rejects.toThrow();
+    expect(mockWebClient.users.profile.set).toHaveBeenCalledTimes(2);
+  });
+
   it("51 文字以上は API を呼ばずに拒否する", async () => {
     const client = new SlamyClient({ userToken: "xoxp-test" });
     await expect(client.setUserRealName("U0BOT", "あ".repeat(51))).rejects.toThrow();

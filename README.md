@@ -363,6 +363,8 @@ slamy users profile <user_id>
 slamy users set-real-name <user_id> <real_name>
 ```
 
+`set-real-name` calls `users.profile.set`. It needs a user token (an admin's token on a paid plan to target another user or a bot) and is rejected with a bot token only or in a local session. The real name is limited to 50 characters.
+
 ### `assistant set-status` — Set AI Assistant thread status
 
 ```bash
