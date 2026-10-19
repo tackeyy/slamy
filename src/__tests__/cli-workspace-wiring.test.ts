@@ -13,7 +13,7 @@ describe("CLI workspace wiring", () => {
     const targetClientUses = cliSource.match(
       /const \{ client, target \} = await createTargetClient\(/g,
     ) ?? [];
-    expect(plainClientUses).toHaveLength(14);
+    expect(plainClientUses).toHaveLength(15);
     expect(targetClientUses).toHaveLength(9);
     expect(cliSource).not.toContain("function resolveTarget(");
   });

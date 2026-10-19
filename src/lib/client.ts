@@ -1043,6 +1043,31 @@ export class SlamyClient {
     };
   }
 
+  /**
+   * ユーザーの real name を更新する (users.profile.set)。
+   *
+   * admin の user token が必要で、bot ユーザーも対象にできる。
+   * この操作は bot token にフォールバックしない。
+   */
+  async setUserRealName(
+    userId: string,
+    realName: string,
+  ): Promise<{ id: string; real_name: string }> {
+    if (realName.trim() === "") {
+      throw new Error("real name must not be empty");
+    }
+    if ([...realName].length > 50) {
+      throw new Error("real name must be 50 characters or fewer");
+    }
+
+    const res = await this.userClient.users.profile.set({
+      user: userId,
+      profile: { real_name: realName },
+    });
+
+    return { id: userId, real_name: res.profile?.real_name ?? realName };
+  }
+
   async searchMessages(
     query: string,
     opts?: { count?: number; page?: number; sort?: string; sortDir?: string },

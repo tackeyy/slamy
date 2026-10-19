@@ -355,11 +355,12 @@ slamy channels members <channel_or_url> [--resolve-names]
 
 `<channel_or_url>` accepts a channel ID or a Slack permalink URL. `--resolve-names` resolves `user_id` to display names.
 
-### `users list` / `users profile`
+### `users list` / `users profile` / `users set-real-name`
 
 ```bash
 slamy users list [--include-deactivated] [--include-bots]
 slamy users profile <user_id>
+slamy users set-real-name <user_id> <real_name>
 ```
 
 ### `assistant set-status` — Set AI Assistant thread status
