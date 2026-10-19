@@ -102,6 +102,7 @@ go build -o ../slamy .
 | `users:read` | ユーザー情報の取得 |
 | `users:read.email` | メールアドレスの閲覧 |
 | `users.profile:read` | ユーザープロフィールの閲覧 |
+| `users.profile:write` | ユーザープロフィールの更新 |
 | `team:read` | ワークスペース（team）情報の取得 |
 
 ### 3. インストールと workspace の登録
@@ -329,12 +330,16 @@ slamy channels members <channel_or_url> [--resolve-names]
 
 `<channel_or_url>` は channel ID または Slack permalink URL を受け付けます。`--resolve-names` で `user_id` を実名表示。
 
-### `users list` / `users profile`
+### `users list` / `users profile` / `users set-real-name` / `users set-display-name`
 
 ```bash
 slamy users list [--include-deactivated] [--include-bots]
 slamy users profile <user_id>
+slamy users set-real-name <user_id> <real_name>
+slamy users set-display-name <user_id> <display_name>
 ```
+
+`set-display-name` も `users.profile.set` を呼びます: user token が必要で、bot token だけの構成と local session では拒否されます。表示名は 80 文字までです。
 
 ### `assistant set-status` — AI Assistant スレッドのステータス設定
 

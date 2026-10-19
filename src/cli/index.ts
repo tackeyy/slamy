@@ -586,6 +586,28 @@ users
     }
   });
 
+users
+  .command("set-display-name <user_id> <display_name>")
+  .description("Set a user's display name (admin user token; can target bot users)")
+  .action(async (userId, displayName) => {
+    try {
+      const client = await createClient();
+      const mode = getOutputMode();
+      const res = await client.setUserDisplayName(userId, displayName);
+
+      if (mode === "json") {
+        jsonOutput(res);
+      } else if (mode === "plain") {
+        console.log(`${res.id}\t${res.display_name}`);
+      } else {
+        console.log(`Updated display name: ${res.display_name} (${res.id})`);
+      }
+    } catch (err: any) {
+      console.error(`Error: ${err.message}`);
+      process.exit(1);
+    }
+  });
+
 // --- reactions ---
 const reactions = program.command("reactions").description("Reaction operations");
 

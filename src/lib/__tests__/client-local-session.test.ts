@@ -89,3 +89,22 @@ describe("setUserRealName は local session で使えない", () => {
   });
 });
 
+describe("setUserDisplayName は local session で使えない", () => {
+  it("broker を呼ばずに拒否する", async () => {
+    callLocalSessionBroker.mockReset();
+    const client = new SlamyClient({
+      localSession: {
+        version: 1,
+        teamId: parseTeamId("T0BJ9SG2M0R"),
+        credentialKind: "user",
+        socketPath: "/private/session.sock",
+        capability: "local-capability-canary",
+        createdAt: "2029-01-01T00:00:00.000Z",
+        expiresAt: "2030-01-01T00:00:00.000Z",
+      },
+    });
+    await expect(client.setUserDisplayName("U0BOT", "全知全能くん")).rejects.toThrow(/local session/);
+    expect(callLocalSessionBroker).not.toHaveBeenCalled();
+  });
+});
+

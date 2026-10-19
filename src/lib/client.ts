@@ -1078,6 +1078,37 @@ export class SlamyClient {
     return { id: userId, real_name: res.profile?.real_name ?? realName };
   }
 
+  /**
+   * ユーザーの表示名 (display name) を更新する (users.profile.set)。
+   *
+   * admin の user token が必要で、bot ユーザーも対象にできる。
+   * user token が無い構成（bot token だけ）と local session では、API を呼ばずに拒否する。
+   */
+  async setUserDisplayName(
+    userId: string,
+    displayName: string,
+  ): Promise<{ id: string; display_name: string }> {
+    if (this.localSession) {
+      throw new Error("setting a display name is not supported in a local session");
+    }
+    if (!this.hasUserToken) {
+      throw new Error("setting a display name requires a user token");
+    }
+    if (displayName.trim() === "") {
+      throw new Error("display name must not be empty");
+    }
+    if ([...displayName].length > 80) {
+      throw new Error("display name must be 80 characters or fewer");
+    }
+
+    const res = await this.userClient.users.profile.set({
+      user: userId,
+      profile: { display_name: displayName },
+    });
+
+    return { id: userId, display_name: res.profile?.display_name ?? displayName };
+  }
+
   async searchMessages(
     query: string,
     opts?: { count?: number; page?: number; sort?: string; sortDir?: string },
