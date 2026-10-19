@@ -124,6 +124,9 @@ export class SlamyClient {
   private channelNameCache = new Map<string, string>();
   private channelListPromise: Promise<void> | null = null;
 
+  // users.profile.set のように user token を必須とする操作で、bot token への暗黙の代替を防ぐ
+  private readonly hasUserToken: boolean;
+
   constructor(opts: SlamyClientOptions) {
     if (opts.localSession && (opts.botToken || opts.userToken)) {
       throw new Error("A local session cannot be combined with Slack tokens");
@@ -148,6 +151,7 @@ export class SlamyClient {
         ? "user token"
         : "bot token";
     this.localSession = opts.localSession;
+    this.hasUserToken = Boolean(opts.userToken);
     this.logger = opts.logger ?? NOOP_LOGGER;
   }
 
@@ -1041,6 +1045,37 @@ export class SlamyClient {
       is_restricted: u.is_restricted || false,
       is_ultra_restricted: u.is_ultra_restricted || false,
     };
+  }
+
+  /**
+   * ユーザーの real name を更新する (users.profile.set)。
+   *
+   * admin の user token が必要で、bot ユーザーも対象にできる。
+   * user token が無い構成（bot token だけ）と local session では、API を呼ばずに拒否する。
+   */
+  async setUserRealName(
+    userId: string,
+    realName: string,
+  ): Promise<{ id: string; real_name: string }> {
+    if (this.localSession) {
+      throw new Error("setting a real name is not supported in a local session");
+    }
+    if (!this.hasUserToken) {
+      throw new Error("setting a real name requires a user token");
+    }
+    if (realName.trim() === "") {
+      throw new Error("real name must not be empty");
+    }
+    if ([...realName].length > 50) {
+      throw new Error("real name must be 50 characters or fewer");
+    }
+
+    const res = await this.userClient.users.profile.set({
+      user: userId,
+      profile: { real_name: realName },
+    });
+
+    return { id: userId, real_name: res.profile?.real_name ?? realName };
   }
 
   async searchMessages(

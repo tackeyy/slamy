@@ -1225,6 +1225,46 @@ describe("getUserProfile", () => {
   });
 });
 
+describe("setUserRealName", () => {
+  it("user token で users.profile.set に user と real_name を渡す", async () => {
+    mockWebClient.users.profile.set.mockResolvedValue({ ok: true, profile: { real_name: "全知全能くん" } });
+    const client = new SlamyClient({ userToken: "xoxp-test" });
+    const res = await client.setUserRealName("U0BOT", "全知全能くん");
+    expect(mockWebClient.users.profile.set).toHaveBeenCalledWith({
+      user: "U0BOT",
+      profile: { real_name: "全知全能くん" },
+    });
+    expect(res).toEqual({ id: "U0BOT", real_name: "全知全能くん" });
+  });
+
+  it("空の名前は API を呼ばずに拒否する", async () => {
+    const client = new SlamyClient({ userToken: "xoxp-test" });
+    await expect(client.setUserRealName("U0BOT", "  ")).rejects.toThrow();
+    expect(mockWebClient.users.profile.set).not.toHaveBeenCalled();
+  });
+
+  it("user token が無い（bot token だけの）構成では API を呼ばずに拒否する", async () => {
+    const client = new SlamyClient({ botToken: "xoxb-test" });
+    await expect(client.setUserRealName("U0BOT", "全知全能くん")).rejects.toThrow(/user token/);
+    expect(mockWebClient.users.profile.set).not.toHaveBeenCalled();
+  });
+
+  it("50 文字ちょうどは通し、文字数はコードポイントで数える", async () => {
+    const client = new SlamyClient({ userToken: "xoxp-test" });
+    await client.setUserRealName("U0BOT", "あ".repeat(50));
+    await client.setUserRealName("U0BOT", "😀".repeat(50));
+    expect(mockWebClient.users.profile.set).toHaveBeenCalledTimes(2);
+    await expect(client.setUserRealName("U0BOT", "😀".repeat(51))).rejects.toThrow();
+    expect(mockWebClient.users.profile.set).toHaveBeenCalledTimes(2);
+  });
+
+  it("51 文字以上は API を呼ばずに拒否する", async () => {
+    const client = new SlamyClient({ userToken: "xoxp-test" });
+    await expect(client.setUserRealName("U0BOT", "あ".repeat(51))).rejects.toThrow();
+    expect(mockWebClient.users.profile.set).not.toHaveBeenCalled();
+  });
+});
+
 describe("getUserProfile の所属の組織", () => {
   it("users.info の team_id と制限ゲストの印を返す", async () => {
     mockWebClient.users.info.mockResolvedValue({

@@ -29,6 +29,9 @@ export function createMockWebClient() {
       list: vi.fn().mockResolvedValue({ ok: true, members: [] }),
       info: vi.fn().mockResolvedValue({ ok: true, user: {} }),
       conversations: vi.fn().mockResolvedValue({ ok: true, channels: [] }),
+      profile: {
+        set: vi.fn().mockResolvedValue({ ok: true, profile: {} }),
+      },
     },
     search: {
       messages: vi.fn().mockResolvedValue({ ok: true, messages: { matches: [], total: 0, paging: { page: 1 } } }),

@@ -564,6 +564,28 @@ users
     }
   });
 
+users
+  .command("set-real-name <user_id> <real_name>")
+  .description("Set a user's real name (admin user token; can target bot users)")
+  .action(async (userId, realName) => {
+    try {
+      const client = await createClient();
+      const mode = getOutputMode();
+      const res = await client.setUserRealName(userId, realName);
+
+      if (mode === "json") {
+        jsonOutput(res);
+      } else if (mode === "plain") {
+        console.log(`${res.id}\t${res.real_name}`);
+      } else {
+        console.log(`Updated real name: ${res.real_name} (${res.id})`);
+      }
+    } catch (err: any) {
+      console.error(`Error: ${err.message}`);
+      process.exit(1);
+    }
+  });
+
 // --- reactions ---
 const reactions = program.command("reactions").description("Reaction operations");
 
