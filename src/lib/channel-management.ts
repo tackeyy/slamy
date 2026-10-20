@@ -2,10 +2,12 @@ import {
   ensureChannel,
   inviteSharedToChannel,
   inviteToChannel,
+  kickFromChannel,
   renameChannel,
   type EnsureChannelResult,
   type InviteSharedToChannelResult,
   type InviteToChannelResult,
+  type KickFromChannelResult,
   type RenameChannelResult,
 } from "../commands/channel-management.js";
 import type { CredentialResolver } from "../credentials/index.js";
@@ -18,6 +20,8 @@ import { findLocalSessionForWorkspace } from "./local-session-files.js";
 import type { LocalSessionConnection } from "./local-session-web-client.js";
 import { createWorkspaceSlackAdapter } from "./slack.js";
 import { createWorkspaceRegistry } from "./workspace.js";
+
+export { parseInvitableUserId, parsePublicChannelId } from "../slack/adapter.js";
 
 export type EnsureWorkspaceChannelRequest = {
   readonly workspace: string;
@@ -48,6 +52,15 @@ export type InviteWorkspaceChannelUsersRequest = {
 };
 
 export type InviteWorkspaceChannelUsersOptions = EnsureWorkspaceChannelOptions;
+
+export type KickWorkspaceChannelUserRequest = {
+  readonly workspace: string;
+  readonly channelId: string;
+  readonly userId: string;
+  readonly dryRun: boolean;
+};
+
+export type KickWorkspaceChannelUserOptions = EnsureWorkspaceChannelOptions;
 
 export type InviteSharedWorkspaceChannelRequest = {
   readonly workspace: string;
@@ -171,6 +184,58 @@ export async function inviteWorkspaceChannelUsers(
           requiredKinds: ["user"],
           requiredScopes: { user: ["channels:write", "groups:write"] },
           operation: "conversations.invite",
+        });
+      return {
+        context: createSlackWorkspaceContext({ teamId: workspace.teamId, credentials }),
+        slack: options.slack ?? createWorkspaceSlackAdapter(),
+        dispose: () => credentials.destroy(),
+      };
+    },
+  );
+}
+
+export async function kickWorkspaceChannelUser(
+  request: KickWorkspaceChannelUserRequest,
+  options: KickWorkspaceChannelUserOptions = {},
+): Promise<KickFromChannelResult> {
+  const registry = options.registry ?? createWorkspaceRegistry();
+  const workspace = await registry.resolve(request.workspace);
+  return kickFromChannel(
+    {
+      workspace: {
+        teamId: workspace.teamId,
+        alias: workspace.alias,
+        domain: workspace.domain,
+        displayName: workspace.displayName,
+      },
+      channelId: request.channelId,
+      userId: request.userId,
+      dryRun: request.dryRun,
+    },
+    async () => {
+      const localSessionLookup =
+        options.localSessionLookup ??
+        (options.credentialResolver || options.slack
+          ? () => Promise.resolve(undefined)
+          : (selected) => findLocalSessionForWorkspace(selected));
+      const localSession = await localSessionLookup(workspace);
+      if (localSession) {
+        if (localSession.teamId !== workspace.teamId || localSession.credentialKind !== "user") {
+          throw new Error("Local session does not match the selected workspace");
+        }
+        return {
+          context: sessionContext(workspace.teamId),
+          slack: (options.localSessionSlackFactory ?? createLocalSessionChannelOperations)(
+            localSession,
+          ),
+          dispose() {},
+        };
+      }
+      const credentials = await (options.credentialResolver ?? createCredentialResolver())
+        .resolveForWorkspace(workspace, {
+          requiredKinds: ["user"],
+          requiredScopes: { user: ["channels:write", "groups:write"] },
+          operation: "conversations.kick",
         });
       return {
         context: createSlackWorkspaceContext({ teamId: workspace.teamId, credentials }),

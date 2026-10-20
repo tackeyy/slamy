@@ -1,4 +1,5 @@
 import type { TeamId } from "../domain/team-id.js";
+import { parseInvitableUserId, parsePublicChannelId } from "../slack/adapter.js";
 import type { SlackWorkspaceContext, WorkspaceSlackOperations } from "../slack/index.js";
 
 export type ChannelWorkspace = {
@@ -66,6 +67,19 @@ export type InviteSharedToChannelResult = {
   readonly email: string;
   readonly externalLimited: boolean;
   readonly inviteId?: string;
+};
+
+export type KickFromChannelInput = {
+  readonly workspace: ChannelWorkspace;
+  readonly channelId: string;
+  readonly userId: string;
+  readonly dryRun: boolean;
+};
+
+export type KickFromChannelResult = {
+  readonly status: "planned" | "removed" | "not_in_channel";
+  readonly channelId: string;
+  readonly userId: string;
 };
 
 export type RenameChannelInput = {
@@ -194,6 +208,35 @@ export async function inviteSharedToChannel(
   }
 }
 
+export async function kickFromChannel(
+  input: KickFromChannelInput,
+  loadRuntime: ChannelRuntimeLoader,
+): Promise<KickFromChannelResult> {
+  validateKickIds(input.channelId, input.userId);
+  if (input.dryRun) {
+    return Object.freeze({ status: "planned", channelId: input.channelId, userId: input.userId });
+  }
+  const runtime = await loadRuntime();
+  try {
+    try {
+      await runtime.slack.kickFromConversation(runtime.context, {
+        channelId: input.channelId,
+        userId: input.userId,
+      });
+      return Object.freeze({ status: "removed", channelId: input.channelId, userId: input.userId });
+    } catch (error) {
+      if (platformCode(error) !== "not_in_channel") throw error;
+      return Object.freeze({
+        status: "not_in_channel",
+        channelId: input.channelId,
+        userId: input.userId,
+      });
+    }
+  } finally {
+    runtime.dispose();
+  }
+}
+
 export async function renameChannel(
   input: RenameChannelInput,
   loadRuntime: ChannelRuntimeLoader,
@@ -253,6 +296,15 @@ function platformCode(error: unknown): unknown {
   return typeof error === "object" && error !== null && "platformCode" in error
     ? error.platformCode
     : undefined;
+}
+
+function validateKickIds(channelId: string, userId: string): void {
+  try {
+    parsePublicChannelId(channelId);
+    parseInvitableUserId(userId);
+  } catch {
+    throw new Error("Kick requires a valid public channel ID and an invitable user ID");
+  }
 }
 
 function inviteSharedResult(

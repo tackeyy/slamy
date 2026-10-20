@@ -7,6 +7,7 @@ import {
   ensureChannel,
   inviteSharedToChannel,
   inviteToChannel,
+  kickFromChannel,
   renameChannel,
 } from "../channel-management.js";
 
@@ -723,6 +724,134 @@ describe("inviteSharedToChannel", () => {
     expect(dispose).toHaveBeenCalledTimes(1);
   });
 });
+
+describe("kickFromChannel", () => {
+  it("returns a plan without resolving credentials or calling Slack", async () => {
+    const loadRuntime = vi.fn();
+
+    await expect(kickFromChannel({ ...kickInput(), dryRun: true }, loadRuntime)).resolves.toEqual({
+      status: "planned",
+      channelId: "C0123ABC",
+      userId: "U00000001",
+    });
+    expect(loadRuntime).not.toHaveBeenCalled();
+  });
+
+  it("removes the user and disposes the runtime", async () => {
+    const kickFromConversation = vi.fn().mockResolvedValue(undefined);
+    const dispose = vi.fn();
+    const slack = { kickFromConversation } as unknown as WorkspaceSlackOperations;
+
+    await expect(kickFromChannel(kickInput(), runtime(slack, dispose))).resolves.toEqual({
+      status: "removed",
+      channelId: "C0123ABC",
+      userId: "U00000001",
+    });
+    expect(kickFromConversation).toHaveBeenCalledWith(expect.anything(), {
+      channelId: "C0123ABC",
+      userId: "U00000001",
+    });
+    expect(dispose).toHaveBeenCalledTimes(1);
+  });
+
+  it("reports not_in_channel when the user is not a member", async () => {
+    const notInChannel = Object.assign(new Error("Slack API failed"), { platformCode: "not_in_channel" });
+    const slack = {
+      kickFromConversation: vi.fn().mockRejectedValue(notInChannel),
+    } as unknown as WorkspaceSlackOperations;
+
+    await expect(kickFromChannel(kickInput(), runtime(slack))).resolves.toEqual({
+      status: "not_in_channel",
+      channelId: "C0123ABC",
+      userId: "U00000001",
+    });
+  });
+
+  it("propagates other Slack API errors and still disposes the runtime", async () => {
+    const failure = Object.assign(new Error("Slack rejected the operation"), { platformCode: "cant_kick_self" });
+    const dispose = vi.fn();
+    const slack = {
+      kickFromConversation: vi.fn().mockRejectedValue(failure),
+    } as unknown as WorkspaceSlackOperations;
+
+    await expect(kickFromChannel(kickInput(), runtime(slack, dispose))).rejects.toBe(failure);
+    expect(dispose).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("kickFromChannel input validation", () => {
+  it.each([
+    ["an empty channel ID", "", "U0123456789"],
+    ["an empty user ID", "C0123456789", ""],
+    ["a G-prefixed channel ID", "G0123456789", "U0123456789"],
+    ["a B-prefixed user ID", "C0123456789", "B0123456789"],
+    ["an over-length channel ID", `C${"0".repeat(64)}`, "U0123456789"],
+    ["an over-length user ID", "C0123456789", `U${"0".repeat(128)}`],
+  ])("rejects %s without resolving a runtime or calling Slack", async (_caseName, channelId, userId) => {
+    const loadRuntime = vi.fn();
+
+    await expect(kickFromChannel({ ...kickInput(), channelId, userId }, loadRuntime))
+      .rejects.toThrow();
+    expect(loadRuntime).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["an empty channel ID", "", "U0123456789"],
+    ["an empty user ID", "C0123456789", ""],
+    ["a G-prefixed channel ID", "G0123456789", "U0123456789"],
+    ["a B-prefixed user ID", "C0123456789", "B0123456789"],
+    ["an over-length channel ID", `C${"0".repeat(64)}`, "U0123456789"],
+    ["an over-length user ID", "C0123456789", `U${"0".repeat(128)}`],
+  ])("rejects %s on dry-run instead of returning a plan", async (_caseName, channelId, userId) => {
+    const loadRuntime = vi.fn();
+
+    await expect(
+      kickFromChannel({ ...kickInput(), channelId, userId, dryRun: true }, loadRuntime),
+    ).rejects.toThrow();
+    expect(loadRuntime).not.toHaveBeenCalled();
+  });
+
+  it("passes valid IDs through to Slack unchanged", async () => {
+    const kickFromConversation = vi.fn().mockResolvedValue(undefined);
+    const slack = { kickFromConversation } as unknown as WorkspaceSlackOperations;
+
+    await expect(
+      kickFromChannel(
+        { ...kickInput(), channelId: "C0123456789", userId: "U0123456789" },
+        runtime(slack),
+      ),
+    ).resolves.toEqual({
+      status: "removed",
+      channelId: "C0123456789",
+      userId: "U0123456789",
+    });
+    expect(kickFromConversation).toHaveBeenCalledWith(expect.anything(), {
+      channelId: "C0123456789",
+      userId: "U0123456789",
+    });
+  });
+
+  it("keeps planning a dry-run for valid IDs", async () => {
+    const loadRuntime = vi.fn();
+
+    await expect(
+      kickFromChannel(
+        { ...kickInput(), channelId: "C0123456789", userId: "U0123456789", dryRun: true },
+        loadRuntime,
+      ),
+    ).resolves.toEqual({ status: "planned", channelId: "C0123456789", userId: "U0123456789" });
+    expect(loadRuntime).not.toHaveBeenCalled();
+  });
+});
+
+function kickInput() {
+  return {
+    workspace: channelInput().workspace,
+    channelId: "C0123ABC",
+    userId: "U00000001",
+    dryRun: false,
+  } as const;
+}
 
 function inviteInput() {
   return {

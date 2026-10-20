@@ -15,6 +15,7 @@ export type SlackOperation =
   | "set-public-conversation-topic"
   | "set-private-conversation-topic"
   | "invite-to-conversation"
+  | "kick-from-conversation"
   | "invite-shared-to-conversation"
   | "rename-public-conversation"
   | "rename-private-conversation"
@@ -30,6 +31,7 @@ export type SlackApiMethod =
   | "conversations.setPurpose"
   | "conversations.setTopic"
   | "conversations.invite"
+  | "conversations.kick"
   | "conversations.inviteShared"
   | "conversations.rename"
   | "search.messages"
@@ -143,6 +145,15 @@ const POLICIES: readonly SlackMethodPolicy[] = Object.freeze(
     policy(
       "invite-to-conversation",
       "conversations.invite",
+      "user",
+      ["channels:write", "groups:write"],
+      "none",
+      "never",
+      null,
+    ),
+    policy(
+      "kick-from-conversation",
+      "conversations.kick",
       "user",
       ["channels:write", "groups:write"],
       "none",

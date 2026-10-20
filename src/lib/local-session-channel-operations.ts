@@ -4,6 +4,7 @@ import type {
   SlackCreateConversationInput,
   SlackGetConversationInfoInput,
   SlackInviteToConversationInput,
+  SlackKickFromConversationInput,
   SlackInviteSharedToConversationInput,
   SlackInviteSharedToConversationResult,
   SlackRenameConversationInput,
@@ -80,6 +81,15 @@ export function createLocalSessionChannelOperations(
       await call("conversations.invite", {
         channel: input.channelId,
         users: input.userIds.join(","),
+      });
+    },
+    kickFromConversation: async (
+      _context: SlackWorkspaceContext,
+      input: SlackKickFromConversationInput,
+    ): Promise<void> => {
+      await call("conversations.kick", {
+        channel: input.channelId,
+        user: input.userId,
       });
     },
     inviteSharedToConversation: async (

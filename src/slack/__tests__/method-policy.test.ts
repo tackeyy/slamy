@@ -131,6 +131,15 @@ describe("Slack method policy", () => {
         workspaceArgument: null,
       },
       {
+        operation: "kick-from-conversation",
+        method: "conversations.kick",
+        credentialKind: "user",
+        requiredScopes: ["channels:write", "groups:write"],
+        pagination: "none",
+        retryPolicy: "never",
+        workspaceArgument: null,
+      },
+      {
         operation: "invite-shared-to-conversation",
         method: "conversations.inviteShared",
         credentialKind: "bot",
@@ -192,6 +201,18 @@ describe("Slack method policy", () => {
       method: "conversations.inviteShared",
       credentialKind: "bot",
       requiredScopes: ["conversations.connect:write"],
+      pagination: "none",
+      retryPolicy: "never",
+      workspaceArgument: null,
+    });
+  });
+
+  it("pins the kick operation to the user write scopes", () => {
+    expect(getSlackMethodPolicy("kick-from-conversation")).toEqual({
+      operation: "kick-from-conversation",
+      method: "conversations.kick",
+      credentialKind: "user",
+      requiredScopes: ["channels:write", "groups:write"],
       pagination: "none",
       retryPolicy: "never",
       workspaceArgument: null,
