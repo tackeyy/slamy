@@ -264,6 +264,90 @@ describe("channels invite CLI", () => {
   });
 });
 
+describe("channels kick CLI", () => {
+  it("prints a JSON dry-run plan through the shared workspace selector", async () => {
+    const writeOut = vi.fn();
+    const kickChannel = vi.fn().mockResolvedValue({
+      status: "planned",
+      channelId: "C0123ABC",
+      userId: "U00000001",
+    });
+    const program = new Command()
+      .exitOverride()
+      .option("--json")
+      .option("--workspace <selector>");
+    const channels = program.command("channels");
+    registerChannelManagementCommands(channels, program, {
+      ensureChannel: vi.fn(),
+      inviteChannel: vi.fn(),
+      kickChannel,
+      writeOut,
+      writeErr: vi.fn(),
+    });
+
+    await program.parseAsync([
+      "node",
+      "slamy",
+      "--json",
+      "--workspace",
+      "wedgeai",
+      "channels",
+      "kick",
+      "C0123ABC",
+      "U00000001",
+      "--dry-run",
+    ]);
+
+    expect(kickChannel).toHaveBeenCalledWith({
+      workspace: "wedgeai",
+      channelId: "C0123ABC",
+      userId: "U00000001",
+      dryRun: true,
+    });
+    expect(JSON.parse(writeOut.mock.calls[0]![0])).toEqual({
+      status: "planned",
+      channelId: "C0123ABC",
+      userId: "U00000001",
+    });
+  });
+
+  it("rejects a non-C channel ID without calling the kick API", async () => {
+    const kickChannel = vi.fn();
+    const writeErr = vi.fn();
+    const program = new Command().option("--workspace <selector>");
+    const channels = program.command("channels");
+    registerChannelManagementCommands(channels, program, {
+      ensureChannel: vi.fn(), inviteChannel: vi.fn(), kickChannel, writeOut: vi.fn(), writeErr,
+    });
+
+    await program.parseAsync([
+      "node", "slamy", "--workspace", "wedgeai",
+      "channels", "kick", "G0123ABC", "U00000001",
+    ]);
+
+    expect(kickChannel).not.toHaveBeenCalled();
+    expect(writeErr).toHaveBeenCalledWith(expect.stringContaining("Channel ID"));
+  });
+
+  it("rejects an invalid user ID without calling the kick API", async () => {
+    const kickChannel = vi.fn();
+    const writeErr = vi.fn();
+    const program = new Command().option("--workspace <selector>");
+    const channels = program.command("channels");
+    registerChannelManagementCommands(channels, program, {
+      ensureChannel: vi.fn(), inviteChannel: vi.fn(), kickChannel, writeOut: vi.fn(), writeErr,
+    });
+
+    await program.parseAsync([
+      "node", "slamy", "--workspace", "wedgeai",
+      "channels", "kick", "C0123ABC", "B00000001",
+    ]);
+
+    expect(kickChannel).not.toHaveBeenCalled();
+    expect(writeErr).toHaveBeenCalledWith(expect.stringContaining("User ID"));
+  });
+});
+
 describe("channels invite-shared CLI", () => {
   it("accepts a legacy G-prefixed private channel ID", async () => {
     const inviteSharedChannel = vi.fn().mockResolvedValue({

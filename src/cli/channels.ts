@@ -8,6 +8,8 @@ import {
   type InviteSharedWorkspaceChannelRequest,
   inviteWorkspaceChannelUsers,
   type InviteWorkspaceChannelUsersRequest,
+  kickWorkspaceChannelUser,
+  type KickWorkspaceChannelUserRequest,
   renameWorkspaceChannel,
   type RenameWorkspaceChannelRequest,
 } from "../lib/channel-management.js";
@@ -15,6 +17,7 @@ import {
   formatEnsureChannelResult,
   formatInviteSharedToChannelResult,
   formatInviteToChannelResult,
+  formatKickFromChannelResult,
   formatRenameChannelResult,
 } from "../output/channel-management.js";
 import { resolveCliWorkspaceSelector } from "./api-client.js";
@@ -24,6 +27,7 @@ export type ChannelManagementCommandDependencies = {
   inviteChannel: (
     request: InviteWorkspaceChannelUsersRequest,
   ) => ReturnType<typeof inviteWorkspaceChannelUsers>;
+  kickChannel?: (request: KickWorkspaceChannelUserRequest) => ReturnType<typeof kickWorkspaceChannelUser>;
   inviteSharedChannel?: (
     request: InviteSharedWorkspaceChannelRequest,
     beforeExecute: (target: {
@@ -43,6 +47,7 @@ export type ChannelManagementCommandDependencies = {
 const defaultDependencies: ChannelManagementCommandDependencies = {
   ensureChannel: (request) => ensureWorkspaceChannel(request),
   inviteChannel: (request) => inviteWorkspaceChannelUsers(request),
+  kickChannel: (request) => kickWorkspaceChannelUser(request),
   inviteSharedChannel: (request, beforeExecute) => inviteSharedWorkspaceChannel(request, { beforeExecute }),
   renameChannel: (request) => renameWorkspaceChannel(request),
   writeOut: (line) => console.log(line),
@@ -57,6 +62,10 @@ type CreateOptions = {
 };
 
 type InviteOptions = {
+  dryRun?: boolean;
+};
+
+type KickOptions = {
   dryRun?: boolean;
 };
 
@@ -194,6 +203,32 @@ export function registerChannelManagementCommands(
     });
 
   channels
+    .command("kick <channel> <user>")
+    .description("Remove a user from a channel in an explicit workspace")
+    .option("--dry-run", "Print the planned operation without reading credentials or Slack")
+    .action(async (channelId: string, userId: string, options: KickOptions) => {
+      try {
+        validateKickInput(channelId, userId);
+        const rootWorkspace = program.opts<{ workspace?: string }>().workspace;
+        const workspace = resolveCliWorkspaceSelector(
+          rootWorkspace,
+          dependencies.env ?? process.env,
+        );
+        if (workspace === undefined) throw new Error("A workspace selector is required");
+        const result = await (dependencies.kickChannel ?? kickWorkspaceChannelUser)({
+          workspace,
+          channelId,
+          userId,
+          dryRun: Boolean(options.dryRun),
+        });
+        dependencies.writeOut(formatKickFromChannelResult(result, outputMode(program)));
+      } catch (error) {
+        dependencies.writeErr(`Error: ${channelManagementErrorMessage(error)}`);
+        process.exitCode = 1;
+      }
+    });
+
+  channels
     .command("rename <channel> <name>")
     .description("Rename a channel in an explicit workspace")
     .option("--dry-run", "Print the planned operation without reading credentials or Slack")
@@ -234,6 +269,15 @@ function validateInviteInput(channelId: string, userIds: readonly string[]): voi
   if (userIds.length < 1) throw new Error("At least one user ID is required");
   if (userIds.some((userId) => !/^[UW][A-Z0-9]+$/.test(userId))) {
     throw new Error("User IDs must start with U or W and contain only uppercase letters or numbers");
+  }
+}
+
+function validateKickInput(channelId: string, userId: string): void {
+  if (!/^C[A-Z0-9]+$/.test(channelId)) {
+    throw new Error("Channel ID must start with C and contain only uppercase letters or numbers");
+  }
+  if (!/^[UW][A-Z0-9]+$/.test(userId)) {
+    throw new Error("User ID must start with U or W and contain only uppercase letters or numbers");
   }
 }
 

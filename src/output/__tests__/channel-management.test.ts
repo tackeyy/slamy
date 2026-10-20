@@ -3,6 +3,7 @@ import { parseTeamId } from "../../domain/team-id.js";
 import {
   formatInviteSharedToChannelResult,
   formatInviteToChannelResult,
+  formatKickFromChannelResult,
   formatRenameChannelResult,
 } from "../channel-management.js";
 
@@ -54,6 +55,30 @@ describe("formatInviteSharedToChannelResult", () => {
     );
     expect(formatInviteSharedToChannelResult(sharedResult, "human")).toBe(
       "invited: C0123ABC in wedgeai recipient=advisor@example.com access=limited",
+    );
+  });
+});
+
+describe("formatKickFromChannelResult", () => {
+  it("formats the removed result in JSON, plain, and human modes", () => {
+    const removed = {
+      status: "removed" as const, channelId: "C0123ABC", userId: "U00000001",
+    };
+    expect(JSON.parse(formatKickFromChannelResult(removed, "json"))).toEqual(removed);
+    expect(formatKickFromChannelResult(removed, "plain")).toBe("removed\tC0123ABC\tU00000001");
+    expect(formatKickFromChannelResult(removed, "human")).toBe("removed: C0123ABC user=U00000001");
+  });
+
+  it("formats the not_in_channel classification in JSON, plain, and human modes", () => {
+    const notInChannel = {
+      status: "not_in_channel" as const, channelId: "C0123ABC", userId: "U00000001",
+    };
+    expect(JSON.parse(formatKickFromChannelResult(notInChannel, "json"))).toEqual(notInChannel);
+    expect(formatKickFromChannelResult(notInChannel, "plain")).toBe(
+      "not_in_channel\tC0123ABC\tU00000001",
+    );
+    expect(formatKickFromChannelResult(notInChannel, "human")).toBe(
+      "not_in_channel: C0123ABC user=U00000001",
     );
   });
 });

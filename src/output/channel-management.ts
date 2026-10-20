@@ -2,6 +2,7 @@ import type {
   EnsureChannelResult,
   InviteToChannelResult,
   InviteSharedToChannelResult,
+  KickFromChannelResult,
   RenameChannelResult,
 } from "../commands/channel-management.js";
 
@@ -60,6 +61,17 @@ export function formatInviteToChannelResult(
     ? result.alreadyInChannel.join(", ")
     : "none";
   return `${result.status}: ${result.channelId} invited=${invited} already_in_channel=${already}`;
+}
+
+export function formatKickFromChannelResult(
+  result: KickFromChannelResult,
+  mode: ChannelManagementOutputMode,
+): string {
+  if (mode === "json") return JSON.stringify(result, null, 2);
+  if (mode === "plain") {
+    return [result.status, result.channelId, result.userId].join("\t");
+  }
+  return `${result.status}: ${result.channelId} user=${result.userId}`;
 }
 
 export function formatRenameChannelResult(

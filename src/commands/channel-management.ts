@@ -68,6 +68,19 @@ export type InviteSharedToChannelResult = {
   readonly inviteId?: string;
 };
 
+export type KickFromChannelInput = {
+  readonly workspace: ChannelWorkspace;
+  readonly channelId: string;
+  readonly userId: string;
+  readonly dryRun: boolean;
+};
+
+export type KickFromChannelResult = {
+  readonly status: "planned" | "removed" | "not_in_channel";
+  readonly channelId: string;
+  readonly userId: string;
+};
+
 export type RenameChannelInput = {
   readonly channelId: string;
   readonly name: string;
@@ -189,6 +202,34 @@ export async function inviteSharedToChannel(
       externalLimited: input.externalLimited,
     });
     return inviteSharedResult(input, "invited", invited.inviteId);
+  } finally {
+    runtime.dispose();
+  }
+}
+
+export async function kickFromChannel(
+  input: KickFromChannelInput,
+  loadRuntime: ChannelRuntimeLoader,
+): Promise<KickFromChannelResult> {
+  if (input.dryRun) {
+    return Object.freeze({ status: "planned", channelId: input.channelId, userId: input.userId });
+  }
+  const runtime = await loadRuntime();
+  try {
+    try {
+      await runtime.slack.kickFromConversation(runtime.context, {
+        channelId: input.channelId,
+        userId: input.userId,
+      });
+      return Object.freeze({ status: "removed", channelId: input.channelId, userId: input.userId });
+    } catch (error) {
+      if (platformCode(error) !== "not_in_channel") throw error;
+      return Object.freeze({
+        status: "not_in_channel",
+        channelId: input.channelId,
+        userId: input.userId,
+      });
+    }
   } finally {
     runtime.dispose();
   }

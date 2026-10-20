@@ -37,6 +37,19 @@ describe("local session channel operations", () => {
     });
   });
 
+  it("maps a conversation kick to the broker without credentials", async () => {
+    const request = vi.fn().mockResolvedValue({ ok: true });
+    const connection = localConnection();
+    const operations = createLocalSessionChannelOperations(connection, request);
+
+    await expect(operations.kickFromConversation({} as never, {
+      channelId: "C0123ABC", userId: "U00000001",
+    })).resolves.toBeUndefined();
+    expect(request).toHaveBeenCalledWith(connection, "conversations.kick", {
+      channel: "C0123ABC", user: "U00000001",
+    });
+  });
+
   it("maps a conversation rename to the broker without credentials", async () => {
     const request = vi.fn().mockResolvedValue({ ok: true });
     const connection = localConnection();

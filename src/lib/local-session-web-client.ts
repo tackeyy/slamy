@@ -31,6 +31,7 @@ const ALLOWED_METHODS = new Set([
   "conversations.info",
   "conversations.invite",
   "conversations.inviteShared",
+  "conversations.kick",
   "conversations.list",
   "conversations.members",
   "conversations.open",

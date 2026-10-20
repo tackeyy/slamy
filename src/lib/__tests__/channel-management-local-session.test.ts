@@ -5,6 +5,7 @@ import {
   ensureWorkspaceChannel,
   inviteSharedWorkspaceChannel,
   inviteWorkspaceChannelUsers,
+  kickWorkspaceChannelUser,
   renameWorkspaceChannel,
 } from "../channel-management.js";
 
@@ -172,6 +173,36 @@ describe("workspace channel management local session", () => {
     expect(credentialResolver.resolveForWorkspace).not.toHaveBeenCalled();
   });
 
+  it("uses the team-bound broker for channel kicks instead of resolving a raw credential", async () => {
+    const teamId = parseTeamId("T0BJ9SG2M0R");
+    const workspace = workspaceWith(teamId);
+    const connection = connectionWith(teamId);
+    const slack = {
+      kickFromConversation: vi.fn().mockResolvedValue(undefined),
+    } as unknown as WorkspaceSlackOperations;
+    const localSessionSlackFactory = vi.fn().mockReturnValue(slack);
+    const credentialResolver = { resolveForWorkspace: vi.fn() };
+
+    await expect(
+      kickWorkspaceChannelUser(
+        {
+          workspace: "wedgeai",
+          channelId: "C0123ABC",
+          userId: "U00000001",
+          dryRun: false,
+        },
+        {
+          registry: { resolve: vi.fn().mockResolvedValue(workspace) } as never,
+          credentialResolver: credentialResolver as never,
+          localSessionLookup: vi.fn().mockResolvedValue(connection),
+          localSessionSlackFactory,
+        },
+      ),
+    ).resolves.toMatchObject({ status: "removed", userId: "U00000001" });
+    expect(localSessionSlackFactory).toHaveBeenCalledWith(connection);
+    expect(credentialResolver.resolveForWorkspace).not.toHaveBeenCalled();
+  });
+
   it("uses the team-bound broker instead of resolving a raw credential", async () => {
     const teamId = parseTeamId("T0BJ9SG2M0R");
     const workspace = workspaceWith(teamId);
@@ -261,6 +292,55 @@ describe("workspace channel management local session", () => {
         requiredKinds: ["user"],
         requiredScopes: { user: ["channels:write", "groups:write"] },
         operation: "conversations.invite",
+      },
+    );
+    expect(destroy).toHaveBeenCalledTimes(1);
+  });
+
+  it("requests the documented user scopes and operation for a credential-backed kick", async () => {
+    const teamId = parseTeamId("T0BJ9SG2M0R");
+    const destroy = vi.fn();
+    const credentials = {
+      teamId,
+      user: {
+        kind: "user" as const,
+        teamId,
+        use<Result>(consumer: (token: string) => Result): Result {
+          return consumer("xoxp-user");
+        },
+        destroy() {},
+      },
+      requiredScopes: { user: ["channels:write", "groups:write"] },
+      destroy,
+    };
+    const credentialResolver = {
+      resolveForWorkspace: vi.fn().mockResolvedValue(credentials),
+    };
+    const slack = {
+      kickFromConversation: vi.fn().mockResolvedValue(undefined),
+    } as unknown as WorkspaceSlackOperations;
+
+    await kickWorkspaceChannelUser(
+      {
+        workspace: "wedgeai",
+        channelId: "C0123ABC",
+        userId: "U00000001",
+        dryRun: false,
+      },
+      {
+        registry: { resolve: vi.fn().mockResolvedValue(workspaceWith(teamId)) } as never,
+        credentialResolver: credentialResolver as never,
+        localSessionLookup: vi.fn().mockResolvedValue(undefined),
+        slack,
+      },
+    );
+
+    expect(credentialResolver.resolveForWorkspace).toHaveBeenCalledWith(
+      expect.anything(),
+      {
+        requiredKinds: ["user"],
+        requiredScopes: { user: ["channels:write", "groups:write"] },
+        operation: "conversations.kick",
       },
     );
     expect(destroy).toHaveBeenCalledTimes(1);
