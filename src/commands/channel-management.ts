@@ -1,4 +1,5 @@
 import type { TeamId } from "../domain/team-id.js";
+import { parseInvitableUserId, parsePublicChannelId } from "../slack/adapter.js";
 import type { SlackWorkspaceContext, WorkspaceSlackOperations } from "../slack/index.js";
 
 export type ChannelWorkspace = {
@@ -211,6 +212,7 @@ export async function kickFromChannel(
   input: KickFromChannelInput,
   loadRuntime: ChannelRuntimeLoader,
 ): Promise<KickFromChannelResult> {
+  validateKickIds(input.channelId, input.userId);
   if (input.dryRun) {
     return Object.freeze({ status: "planned", channelId: input.channelId, userId: input.userId });
   }
@@ -294,6 +296,15 @@ function platformCode(error: unknown): unknown {
   return typeof error === "object" && error !== null && "platformCode" in error
     ? error.platformCode
     : undefined;
+}
+
+function validateKickIds(channelId: string, userId: string): void {
+  try {
+    parsePublicChannelId(channelId);
+    parseInvitableUserId(userId);
+  } catch {
+    throw new Error("Kick requires a valid public channel ID and an invitable user ID");
+  }
 }
 
 function inviteSharedResult(

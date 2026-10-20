@@ -779,6 +779,71 @@ describe("kickFromChannel", () => {
   });
 });
 
+describe("kickFromChannel input validation", () => {
+  it.each([
+    ["an empty channel ID", "", "U0123456789"],
+    ["an empty user ID", "C0123456789", ""],
+    ["a G-prefixed channel ID", "G0123456789", "U0123456789"],
+    ["a B-prefixed user ID", "C0123456789", "B0123456789"],
+    ["an over-length channel ID", `C${"0".repeat(64)}`, "U0123456789"],
+    ["an over-length user ID", "C0123456789", `U${"0".repeat(128)}`],
+  ])("rejects %s without resolving a runtime or calling Slack", async (_caseName, channelId, userId) => {
+    const loadRuntime = vi.fn();
+
+    await expect(kickFromChannel({ ...kickInput(), channelId, userId }, loadRuntime))
+      .rejects.toThrow();
+    expect(loadRuntime).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["an empty channel ID", "", "U0123456789"],
+    ["an empty user ID", "C0123456789", ""],
+    ["a G-prefixed channel ID", "G0123456789", "U0123456789"],
+    ["a B-prefixed user ID", "C0123456789", "B0123456789"],
+    ["an over-length channel ID", `C${"0".repeat(64)}`, "U0123456789"],
+    ["an over-length user ID", "C0123456789", `U${"0".repeat(128)}`],
+  ])("rejects %s on dry-run instead of returning a plan", async (_caseName, channelId, userId) => {
+    const loadRuntime = vi.fn();
+
+    await expect(
+      kickFromChannel({ ...kickInput(), channelId, userId, dryRun: true }, loadRuntime),
+    ).rejects.toThrow();
+    expect(loadRuntime).not.toHaveBeenCalled();
+  });
+
+  it("passes valid IDs through to Slack unchanged", async () => {
+    const kickFromConversation = vi.fn().mockResolvedValue(undefined);
+    const slack = { kickFromConversation } as unknown as WorkspaceSlackOperations;
+
+    await expect(
+      kickFromChannel(
+        { ...kickInput(), channelId: "C0123456789", userId: "U0123456789" },
+        runtime(slack),
+      ),
+    ).resolves.toEqual({
+      status: "removed",
+      channelId: "C0123456789",
+      userId: "U0123456789",
+    });
+    expect(kickFromConversation).toHaveBeenCalledWith(expect.anything(), {
+      channelId: "C0123456789",
+      userId: "U0123456789",
+    });
+  });
+
+  it("keeps planning a dry-run for valid IDs", async () => {
+    const loadRuntime = vi.fn();
+
+    await expect(
+      kickFromChannel(
+        { ...kickInput(), channelId: "C0123456789", userId: "U0123456789", dryRun: true },
+        loadRuntime,
+      ),
+    ).resolves.toEqual({ status: "planned", channelId: "C0123456789", userId: "U0123456789" });
+    expect(loadRuntime).not.toHaveBeenCalled();
+  });
+});
+
 function kickInput() {
   return {
     workspace: channelInput().workspace,

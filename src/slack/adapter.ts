@@ -1102,14 +1102,14 @@ function parseSharedChannelId(value: unknown): string {
   return value;
 }
 
-function parsePublicChannelId(value: unknown): string {
+export function parsePublicChannelId(value: unknown): string {
   if (typeof value !== "string" || !/^C[A-Z0-9]{1,63}$/.test(value)) {
     throw new TypeError("Invalid Slack public channel ID");
   }
   return value;
 }
 
-function parseInvitableUserId(value: unknown): string {
+export function parseInvitableUserId(value: unknown): string {
   if (typeof value !== "string" || !/^[UW][A-Z0-9]{1,127}$/.test(value)) {
     throw new TypeError("Invalid Slack user ID");
   }

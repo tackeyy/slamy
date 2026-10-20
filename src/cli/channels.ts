@@ -21,6 +21,7 @@ import {
   formatRenameChannelResult,
 } from "../output/channel-management.js";
 import { resolveCliWorkspaceSelector } from "./api-client.js";
+import { parseInvitableUserId, parsePublicChannelId } from "../lib/channel-management.js";
 
 export type ChannelManagementCommandDependencies = {
   ensureChannel: (request: EnsureWorkspaceChannelRequest) => ReturnType<typeof ensureWorkspaceChannel>;
@@ -273,11 +274,19 @@ function validateInviteInput(channelId: string, userIds: readonly string[]): voi
 }
 
 function validateKickInput(channelId: string, userId: string): void {
-  if (!/^C[A-Z0-9]+$/.test(channelId)) {
-    throw new Error("Channel ID must start with C and contain only uppercase letters or numbers");
+  try {
+    parsePublicChannelId(channelId);
+  } catch {
+    throw new Error(
+      "Channel ID must start with C and contain 1 to 63 uppercase letters or numbers",
+    );
   }
-  if (!/^[UW][A-Z0-9]+$/.test(userId)) {
-    throw new Error("User ID must start with U or W and contain only uppercase letters or numbers");
+  try {
+    parseInvitableUserId(userId);
+  } catch {
+    throw new Error(
+      "User ID must start with U or W and contain 1 to 127 uppercase letters or numbers",
+    );
   }
 }
 

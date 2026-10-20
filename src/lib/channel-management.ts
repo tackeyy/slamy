@@ -21,6 +21,8 @@ import type { LocalSessionConnection } from "./local-session-web-client.js";
 import { createWorkspaceSlackAdapter } from "./slack.js";
 import { createWorkspaceRegistry } from "./workspace.js";
 
+export { parseInvitableUserId, parsePublicChannelId } from "../slack/adapter.js";
+
 export type EnsureWorkspaceChannelRequest = {
   readonly workspace: string;
   readonly name: string;
