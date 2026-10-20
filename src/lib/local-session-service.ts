@@ -58,6 +58,7 @@ export async function startLocalSession(
     readonly configHome: string;
     readonly cliPath: string;
     readonly executablePath: string;
+    readonly execArgv?: readonly string[];
   },
   dependencies: StartDependencies = defaultDependencies,
 ): Promise<LocalSessionStatus> {
@@ -110,6 +111,7 @@ export async function startLocalSession(
   await dependencies.launch({
     cliPath: input.cliPath,
     executablePath: input.executablePath,
+    ...(input.execArgv ? { execArgv: input.execArgv } : {}),
     token: input.token,
     configHome: input.configHome,
     connection,

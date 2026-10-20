@@ -29,6 +29,7 @@ type SessionCommandDependencies = {
   readonly env: NodeJS.ProcessEnv;
   readonly cliPath: string;
   readonly executablePath: string;
+  readonly execArgv: readonly string[];
 };
 
 export function registerLocalSessionCommands(
@@ -49,6 +50,7 @@ export function registerLocalSessionCommands(
     env,
     cliPath: dependencies?.cliPath ?? process.argv[1] ?? "",
     executablePath: dependencies?.executablePath ?? process.execPath,
+    execArgv: dependencies?.execArgv ?? process.execArgv,
   };
   const session = auth.command("session").description("Manage a local in-memory Slack session");
 
@@ -69,6 +71,7 @@ export function registerLocalSessionCommands(
           configHome: configHome(deps.env),
           cliPath: deps.cliPath,
           executablePath: deps.executablePath,
+          execArgv: deps.execArgv,
         });
         deps.writeOut(formatStatus(result, outputMode(program), "started"));
         if (ttlMs === MAX_LOCAL_SESSION_TTL_MS && outputMode(program) === "human") {
