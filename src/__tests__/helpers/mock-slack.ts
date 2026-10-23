@@ -9,6 +9,7 @@ export function createMockWebClient() {
       delete: vi.fn().mockResolvedValue({ ok: true }),
     },
     conversations: {
+      open: vi.fn().mockResolvedValue({ ok: true, channel: { id: "D123", user: "U123" } }),
       list: vi.fn().mockResolvedValue({ ok: true, channels: [] }),
       history: vi.fn().mockResolvedValue({ ok: true, messages: [] }),
       info: vi.fn().mockResolvedValue({ ok: true, channel: {} }),
