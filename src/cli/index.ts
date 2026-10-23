@@ -905,11 +905,13 @@ files
   .option("--title <title>", "File title")
   .option("--filename <name>", "File name")
   .option("--initial-comment <text>", "Initial comment with the file")
+  .option("--as-user", "Upload as the authenticated user (uses user token instead of bot token)")
   .action(async (channelId, filePath, opts) => {
     try {
       const client = await createClient();
       const mode = getOutputMode();
       await client.uploadFile(channelId, filePath, {
+        asUser: opts.asUser === true,
         threadTs: opts.threadTs,
         title: opts.title,
         filename: opts.filename,

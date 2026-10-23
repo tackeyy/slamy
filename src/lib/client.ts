@@ -607,12 +607,17 @@ export class SlamyClient {
   async uploadFile(
     channel: string,
     fileOrPath: string | Buffer,
-    opts?: { threadTs?: string; title?: string; filename?: string; initialComment?: string },
+    opts?: { asUser?: boolean; threadTs?: string; title?: string; filename?: string; initialComment?: string },
   ): Promise<void> {
+    if (opts?.asUser && !this.hasUserToken) {
+      throw new Error("--as-user requires a user token");
+    }
+    const client = opts?.asUser ? this.userClient : this.botClient;
+
     // User ID (U...) → DM channel ID via conversations.open
     let channelId = channel;
     if (/^U[A-Z0-9]+$/.test(channel)) {
-      const dm = await this.botClient.conversations.open({ users: channel });
+      const dm = await client.conversations.open({ users: channel });
       channelId = dm.channel!.id!;
     }
 
@@ -639,7 +644,7 @@ export class SlamyClient {
     if (opts?.initialComment) {
       uploadArgs.initial_comment = opts.initialComment;
     }
-    await this.botClient.files.uploadV2(uploadArgs as any);
+    await client.files.uploadV2(uploadArgs as any);
   }
 
   // --- Channel info ---
