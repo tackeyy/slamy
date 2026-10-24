@@ -167,6 +167,14 @@ export class SlamyClient {
   }
 
   /**
+   * --as-user が実行可能か。user token があるか、user credential の local session か。
+   */
+  private canActAsUser(): boolean {
+    if (this.hasUserToken) return true;
+    return this.localSession?.credentialKind === "user";
+  }
+
+  /**
    * user token を優先しつつ、private channel の参加状態に起因するエラーのときだけ
    * bot token で 1 回だけ再試行する (#117)。
    *
@@ -609,7 +617,7 @@ export class SlamyClient {
     fileOrPath: string | Buffer,
     opts?: { asUser?: boolean; threadTs?: string; title?: string; filename?: string; initialComment?: string },
   ): Promise<void> {
-    if (opts?.asUser && !this.hasUserToken) {
+    if (opts?.asUser && !this.canActAsUser()) {
       throw new Error("--as-user requires a user token");
     }
     const client = opts?.asUser ? this.userClient : this.botClient;
