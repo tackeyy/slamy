@@ -7,7 +7,7 @@ const cliSource = readFileSync(new URL("../cli/index.ts", import.meta.url), "utf
 
 /** files upload コマンド定義のブロックを切り出す。 */
 function filesUploadBlock(): string {
-  const start = cliSource.indexOf('.command("upload <channel_id> <file_path>")');
+  const start = cliSource.indexOf('.command("upload <channel_id> <file_paths...>")');
   const end = cliSource.indexOf('.command("download <file_id_or_url>")');
   expect(start).toBeGreaterThan(-1);
   expect(end).toBeGreaterThan(start);
@@ -26,13 +26,13 @@ describe("CLI files upload --as-user wiring", () => {
   it("--as-user は uploadFile へ asUser: opts.asUser === true として渡る", () => {
     const block = filesUploadBlock();
     expect(block).toMatch(
-      /client\.uploadFile\(\s*channelId,\s*filePath,\s*\{[\s\S]*?asUser:\s*opts\.asUser === true,/,
+      /client\.uploadFile\(\s*channelId,\s*filePaths\[0\],\s*\{[\s\S]*?asUser:\s*opts\.asUser === true,/,
     );
   });
 
   it("messages post と同じ形式で asUser を渡している", () => {
     expect(cliSource).toContain("asUser: opts.asUser === true,");
-    // messages post と files upload の両方で同じ渡し方が使われている
-    expect(cliSource.match(/asUser: opts\.asUser === true,/g)).toHaveLength(2);
+    // messages post と files upload の単一・複数の経路で同じ渡し方を使う
+    expect(cliSource.match(/asUser: opts\.asUser === true,/g)).toHaveLength(3);
   });
 });

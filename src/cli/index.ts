@@ -899,31 +899,52 @@ threads
 const files = program.command("files").description("File operations");
 
 files
-  .command("upload <channel_id> <file_path>")
-  .description("Upload a file to a channel (channel ID or user ID)")
+  .command("upload <channel_id> <file_paths...>")
+  .description("Upload one or more files in a single post (channel ID or user ID)")
   .option("--thread-ts <ts>", "Thread timestamp")
   .option("--title <title>", "File title")
   .option("--filename <name>", "File name")
   .option("--initial-comment <text>", "Initial comment with the file")
   .option("--as-user", "Upload as the authenticated user (uses user token instead of bot token)")
-  .action(async (channelId, filePath, opts) => {
+  .action(async (channelId, filePaths, opts) => {
     try {
+      if (filePaths.length > 1 && (opts.title !== undefined || opts.filename !== undefined)) {
+        throw new Error("--title and --filename can be used only with a single file");
+      }
       const client = await createClient();
       const mode = getOutputMode();
-      await client.uploadFile(channelId, filePath, {
-        asUser: opts.asUser === true,
-        threadTs: opts.threadTs,
-        title: opts.title,
-        filename: opts.filename,
-        initialComment: opts.initialComment,
-      });
+      if (filePaths.length === 1) {
+        await client.uploadFile(channelId, filePaths[0], {
+          asUser: opts.asUser === true,
+          threadTs: opts.threadTs,
+          title: opts.title,
+          filename: opts.filename,
+          initialComment: opts.initialComment,
+        });
 
-      if (mode === "json") {
-        jsonOutput({ channel: channelId, file: filePath, uploaded: true });
-      } else if (mode === "plain") {
-        console.log(`${channelId}\t${filePath}\tuploaded`);
+        if (mode === "json") {
+          jsonOutput({ channel: channelId, file: filePaths[0], uploaded: true });
+        } else if (mode === "plain") {
+          console.log(`${channelId}\t${filePaths[0]}\tuploaded`);
+        } else {
+          console.log(`File uploaded to ${channelId}: ${filePaths[0]}`);
+        }
       } else {
-        console.log(`File uploaded to ${channelId}: ${filePath}`);
+        await client.uploadFiles(channelId, filePaths, {
+          asUser: opts.asUser === true,
+          threadTs: opts.threadTs,
+          initialComment: opts.initialComment,
+        });
+
+        if (mode === "json") {
+          jsonOutput({ channel: channelId, files: filePaths, uploaded: true });
+        } else if (mode === "plain") {
+          for (const filePath of filePaths) {
+            console.log(`${channelId}\t${filePath}\tuploaded`);
+          }
+        } else {
+          console.log(`Files uploaded to ${channelId}: ${filePaths.join(", ")}`);
+        }
       }
     } catch (err: any) {
       console.error(`Error: ${err.message}`);
