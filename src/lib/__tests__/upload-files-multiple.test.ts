@@ -131,3 +131,31 @@ describe("uploadFiles — 複数のファイルを 1 件の投稿にまとめる
     expect(botMock.files.uploadV2).not.toHaveBeenCalled();
   });
 });
+
+
+describe("uploadFiles — 境界条件", () => {
+  it("asUserのDMはuserClientで開く", async () => {
+    const { client, botMock, userMock } = await createTokenSeparatedMocks();
+    userMock.conversations.open.mockResolvedValue({ ok: true, channel: { id: "D123" } });
+    await client.uploadFiles("U12345", ["/a.txt", "/b.txt"], { asUser: true });
+    expect(userMock.conversations.open).toHaveBeenCalledExactlyOnceWith({ users: "U12345" });
+    expect(userMock.files.uploadV2).toHaveBeenCalledWith(expect.objectContaining({ channel_id: "D123" }));
+    expect(botMock.conversations.open).not.toHaveBeenCalled();
+    expect(botMock.files.uploadV2).not.toHaveBeenCalled();
+  });
+
+  it("空文字で明示したオプションも指定値のまま渡す", async () => {
+    const { client, botMock } = await createTokenSeparatedMocks();
+    await client.uploadFiles("C123", ["/a.txt"], { initialComment: "", threadTs: "" });
+    expect(botMock.files.uploadV2).toHaveBeenCalledWith(expect.objectContaining({ initial_comment: "", thread_ts: "" }));
+  });
+
+  it("読み込みに失敗したらDMも開かず元の例外を返す", async () => {
+    const { client, botMock } = await createTokenSeparatedMocks();
+    const error = new Error("ENOENT");
+    vi.mocked(readFileSync).mockImplementation(() => { throw error; });
+    await expect(client.uploadFiles("U12345", ["/missing.txt"])).rejects.toBe(error);
+    expect(botMock.conversations.open).not.toHaveBeenCalled();
+    expect(botMock.files.uploadV2).not.toHaveBeenCalled();
+  });
+});

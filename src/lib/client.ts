@@ -1,5 +1,6 @@
 import { WebClient, LogLevel } from "@slack/web-api";
 import { readFileSync } from "node:fs";
+import { basename } from "node:path";
 import { fixSlackMrkdwn } from "./mrkdwn.js";
 import {
   splitMessage,
@@ -653,6 +654,39 @@ export class SlamyClient {
       uploadArgs.initial_comment = opts.initialComment;
     }
     await client.files.uploadV2(uploadArgs as any);
+  }
+
+  async uploadFiles(
+    channel: string,
+    filePaths: string[],
+    opts?: { asUser?: boolean; threadTs?: string; initialComment?: string },
+  ): Promise<void> {
+    if (filePaths.length === 0) {
+      throw new Error("uploadFiles requires at least one file");
+    }
+    if (opts?.asUser && !this.canActAsUser()) {
+      throw new Error("--as-user requires a user token");
+    }
+    const client = opts?.asUser ? this.userClient : this.botClient;
+    // Read everything before opening a DM or sharing any files.
+    const fileUploads = filePaths.map((filePath) => ({
+      file: readFileSync(filePath),
+      filename: basename(filePath),
+      title: basename(filePath),
+    }));
+
+    let channelId = channel;
+    if (/^U[A-Z0-9]+$/.test(channel)) {
+      const dm = await client.conversations.open({ users: channel });
+      channelId = dm.channel!.id!;
+    }
+
+    await client.files.uploadV2({
+      channel_id: channelId,
+      file_uploads: fileUploads,
+      ...(opts?.initialComment !== undefined ? { initial_comment: opts.initialComment } : {}),
+      ...(opts?.threadTs !== undefined ? { thread_ts: opts.threadTs } : {}),
+    });
   }
 
   // --- Channel info ---
