@@ -1,6 +1,5 @@
 import { WebClient, LogLevel } from "@slack/web-api";
 import { readFileSync } from "node:fs";
-import { basename } from "node:path";
 import { fixSlackMrkdwn } from "./mrkdwn.js";
 import {
   splitMessage,
@@ -671,8 +670,8 @@ export class SlamyClient {
     // Read everything before opening a DM or sharing any files.
     const fileUploads = filePaths.map((filePath) => ({
       file: readFileSync(filePath),
-      filename: basename(filePath),
-      title: basename(filePath),
+      filename: filePath.split("/").pop() || "file",
+      title: filePath.split("/").pop() || "file",
     }));
 
     let channelId = channel;
